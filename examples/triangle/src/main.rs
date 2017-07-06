@@ -45,8 +45,8 @@ fn main() {
 
         embree::rtcCommit(scene);
 
-        let img_dims = 256;
-        let mut image: Vec<_> = iter::repeat(0u8).take(img_dims * img_dims).collect();
+        let img_dims = 512;
+        let mut image: Vec<_> = iter::repeat(0u8).take(img_dims * img_dims * 3).collect();
         // Render the scene
         for j in 0..img_dims {
             let y = -(j as f32 + 0.5) / img_dims as f32 + 0.5;
@@ -54,7 +54,7 @@ fn main() {
                 let x = (i as f32 + 0.5) / img_dims as f32 - 0.5;
                 let dir_len = f32::sqrt(x * x + y * y + 1.0);
                 let mut ray = embree::RTCRay {
-                    org: [0.0, 0.0, 2.0],
+                    org: [0.0, 0.5, 2.0],
                     align0: 0.0,
                     dir: [x / dir_len, y / dir_len, -1.0 / dir_len],
                     align1: 0.0,
@@ -73,14 +73,18 @@ fn main() {
                 };
                 embree::rtcIntersect(scene, &mut ray as *mut embree::RTCRay);
                 if ray.geomID != u32::MAX {
-                    image[j * img_dims + i] = 255;
+                    image[(j * img_dims + i) * 3] = (ray.u * 255.0) as u8;
+                    image[(j * img_dims + i) * 3 + 1] = (ray.v * 255.0) as u8;
+                    image[(j * img_dims + i) * 3 + 2] = 0;
                 }
             }
         }
         embree::rtcDeleteScene(scene);
         embree::rtcDeleteDevice(device);
 
-        match image::save_buffer("result.png", &image[..], img_dims as u32, img_dims as u32, image::Gray(8)) {
+        match image::save_buffer("result.png", &image[..], img_dims as u32, img_dims as u32,
+                                 image::RGB(8))
+        {
             Ok(_) => println!("Result saved to result.png"),
             Err(e) => panic!("Error saving image: {}", e),
         }
