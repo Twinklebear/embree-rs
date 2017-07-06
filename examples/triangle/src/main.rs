@@ -1,13 +1,9 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
 #![allow(dead_code)]
 
 extern crate image;
+extern crate embree;
 
 use std::{ptr, slice, f32, u32, iter};
-
-mod embree;
 
 #[repr(C)]
 struct Vertex {
@@ -30,21 +26,21 @@ fn main() {
                                               embree::RTCAlgorithmFlags::RTC_INTERSECT1);
 
         // Make a triangle
-        let geomID = embree::rtcNewTriangleMesh2(scene, embree::RTCGeometryFlags::RTC_GEOMETRY_STATIC,
+        let geom_id = embree::rtcNewTriangleMesh2(scene, embree::RTCGeometryFlags::RTC_GEOMETRY_STATIC,
                                                  1, 3, 1, 1);
         {
-            let mut buf = embree::rtcMapBuffer(scene, geomID, embree::RTCBufferType::RTC_VERTEX_BUFFER);
+            let buf = embree::rtcMapBuffer(scene, geom_id, embree::RTCBufferType::RTC_VERTEX_BUFFER);
             let mut verts: &mut [Vertex] = slice::from_raw_parts_mut(buf as *mut Vertex, 3);
             verts[0] = Vertex { x: -1.0, y: 0.0, z: 0.0, a: 0.0 };
             verts[1] = Vertex { x: 0.0, y: 1.0, z: 0.0, a: 0.0 };
             verts[2] = Vertex { x: 1.0, y: 0.0, z: 0.0, a: 0.0 };
-            embree::rtcUnmapBuffer(scene, geomID, embree::RTCBufferType::RTC_VERTEX_BUFFER);
+            embree::rtcUnmapBuffer(scene, geom_id, embree::RTCBufferType::RTC_VERTEX_BUFFER);
         }
         {
-            let mut buf = embree::rtcMapBuffer(scene, geomID, embree::RTCBufferType::RTC_INDEX_BUFFER);
+            let buf = embree::rtcMapBuffer(scene, geom_id, embree::RTCBufferType::RTC_INDEX_BUFFER);
             let mut tris: &mut [Triangle] = slice::from_raw_parts_mut(buf as *mut Triangle, 1);
             tris[0] = Triangle { v0: 0, v1: 1, v2: 2 };
-            embree::rtcUnmapBuffer(scene, geomID, embree::RTCBufferType::RTC_INDEX_BUFFER);
+            embree::rtcUnmapBuffer(scene, geom_id, embree::RTCBufferType::RTC_INDEX_BUFFER);
         }
 
         embree::rtcCommit(scene);
@@ -56,11 +52,11 @@ fn main() {
             let y = -(j as f32 + 0.5) / img_dims as f32 + 0.5;
             for i in 0..img_dims {
                 let x = (i as f32 + 0.5) / img_dims as f32 - 0.5;
-                let dirLength = f32::sqrt(x * x + y * y + 1.0);
+                let dir_len = f32::sqrt(x * x + y * y + 1.0);
                 let mut ray = embree::RTCRay {
                     org: [0.0, 0.0, 2.0],
                     align0: 0.0,
-                    dir: [x / dirLength, y / dirLength, -1.0 / dirLength],
+                    dir: [x / dir_len, y / dir_len, -1.0 / dir_len],
                     align1: 0.0,
                     tnear: 0.0,
                     tfar: f32::INFINITY,

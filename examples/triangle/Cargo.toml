@@ -1,6 +1,9 @@
 [package]
-name = "embree"
+name = "triangle"
 version = "0.1.0"
 authors = ["Will Usher <willusher.life@gmail.com>"]
+build = "build.rs"
 
 [dependencies]
+embree = { path = "../../" }
+image = "0.14.0"
