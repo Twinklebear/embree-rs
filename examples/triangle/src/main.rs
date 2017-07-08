@@ -53,24 +53,8 @@ fn main() {
             for i in 0..img_dims {
                 let x = (i as f32 + 0.5) / img_dims as f32 - 0.5;
                 let dir_len = f32::sqrt(x * x + y * y + 1.0);
-                let mut ray = embree::RTCRay {
-                    org: [0.0, 0.5, 2.0],
-                    align0: 0.0,
-                    dir: [x / dir_len, y / dir_len, -1.0 / dir_len],
-                    align1: 0.0,
-                    tnear: 0.0,
-                    tfar: f32::INFINITY,
-                    time: 0.0,
-                    mask: u32::MAX,
-                    Ng: [0.0; 3],
-                    align2: 0.0,
-                    u: 0.0,
-                    v: 0.0,
-                    geomID: u32::MAX,
-                    primID: u32::MAX,
-                    instID: u32::MAX,
-                    __bindgen_padding_0: [0; 3],
-                };
+                let mut ray = embree::RTCRay::new(&[0.0, 0.5, 2.0],
+                                                  &[x / dir_len, y / dir_len, -1.0 / dir_len]);
                 embree::rtcIntersect(scene, &mut ray as *mut embree::RTCRay);
                 if ray.geomID != u32::MAX {
                     image[(j * img_dims + i) * 3] = (ray.u * 255.0) as u8;
