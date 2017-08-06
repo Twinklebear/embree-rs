@@ -7,4 +7,4 @@ build = "build.rs"
 [dependencies]
 embree = { path = "../../" }
 support = { path = "../support" }
-image = "0.14.0"
+

@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 
-extern crate image;
 extern crate embree;
 extern crate support;
 
-use std::{ptr, slice, f32, u32, iter};
+use std::{ptr, slice, f32, u32};
 use support::{Vec3f, Camera};
 
 // TODO: Roll these types up into the Embree-rs library
@@ -107,6 +106,7 @@ fn make_ground_plane(scene: &embree::RTCScene) -> std::os::raw::c_uint {
 }
 
 fn main() {
+    let mut display = support::Display::new(512, 512, "triangle");
     unsafe {
         let device = embree::rtcNewDevice(ptr::null());
         let scene = embree::rtcDeviceNewScene(device, embree::RTCSceneFlags::RTC_SCENE_STATIC,
@@ -123,37 +123,29 @@ fn main() {
 
         embree::rtcCommit(scene);
 
-        let img_dims = 512usize;
-        let camera = Camera::look_at(Vec3f::new(1.5, 1.5, -1.5), Vec3f::new(0.0, 0.0, 0.0),
-                                     Vec3f::new(0.0, 1.0, 0.0), 75.0, (img_dims as u32, img_dims as u32));
-        let mut image: Vec<_> = iter::repeat(0u8).take(img_dims * img_dims * 3).collect();
-        // Render the scene
-        for j in 0..img_dims {
-            let y = -(j as f32 + 0.5) / img_dims as f32 + 0.5;
-            for i in 0..img_dims {
-                let x = (i as f32 + 0.5) / img_dims as f32 - 0.5;
-                let dir_len = f32::sqrt(x * x + y * y + 1.0);
-                let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let mut ray = embree::RTCRay::new(&[camera.pos.x, camera.pos.y, camera.pos.z],
-                                                  &[dir.x, dir.y, dir.z]);
-                embree::rtcIntersect(scene, &mut ray as *mut embree::RTCRay);
-                if ray.geomID != u32::MAX {
-                    let color = &face_colors[ray.primID as usize];
-                    image[(j * img_dims + i) * 3] = (color.x * 255.0) as u8;
-                    image[(j * img_dims + i) * 3 + 1] = (color.y * 255.0) as u8;
-                    image[(j * img_dims + i) * 3 + 2] = (color.z * 255.0) as u8;
+        display.run(|image| {
+            let img_dims = image.dimensions();
+            let camera = Camera::look_at(Vec3f::new(1.5, 1.5, -1.5), Vec3f::new(0.0, 0.0, 0.0),
+                                         Vec3f::new(0.0, 1.0, 0.0), 75.0, img_dims);
+            // Render the scene
+            for j in 0..img_dims.1 {
+                for i in 0..img_dims.0 {
+                    let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
+                    let mut ray = embree::RTCRay::new(&[camera.pos.x, camera.pos.y, camera.pos.z],
+                                                      &[dir.x, dir.y, dir.z]);
+                    embree::rtcIntersect(scene, &mut ray as *mut embree::RTCRay);
+                    if ray.geomID != u32::MAX {
+                        let color = &face_colors[ray.primID as usize];
+                        let mut p = image.get_pixel_mut(i, j);
+                        p.data[0] = (color.x * 255.0) as u8;
+                        p.data[1] = (color.y * 255.0) as u8;
+                        p.data[2] = (color.z * 255.0) as u8;
+                    }
                 }
             }
-        }
+        });
         embree::rtcDeleteScene(scene);
         embree::rtcDeleteDevice(device);
-
-        match image::save_buffer("result.png", &image[..], img_dims as u32, img_dims as u32,
-                                 image::RGB(8))
-        {
-            Ok(_) => println!("Result saved to result.png"),
-            Err(e) => panic!("Error saving image: {}", e),
-        }
     }
 }
 
