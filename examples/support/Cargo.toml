@@ -4,3 +4,6 @@ version = "0.1.0"
 authors = ["Will Usher <willusher.life@gmail.com>"]
 
 [dependencies]
+glium = "0.17.0"
+image = "0.15.0"
+
