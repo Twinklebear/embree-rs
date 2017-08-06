@@ -119,9 +119,7 @@ impl Display {
             let opengl_texture = Texture2d::new(&self.display, img).unwrap();
 
             // Upload and blit the rendered image to display it
-            let mut target = self.display.draw();
-            target.clear_color(0.0, 0.0, 0.0, 0.0);
-            target.clear_depth(1.0);
+            let target = self.display.draw();
             opengl_texture.as_surface().fill(&target, glium::uniforms::MagnifySamplerFilter::Linear);
             target.finish().unwrap();
         }
