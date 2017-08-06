@@ -30,6 +30,18 @@ impl Triangle {
         Triangle { v0: v0, v1: v1, v2: v2 }
     }
 }
+#[repr(C)]
+struct Quad {
+    v0: i32,
+    v1: i32,
+    v2: i32,
+    v3: i32,
+}
+impl Quad {
+    pub fn new(v0: i32, v1: i32, v2: i32, v3: i32) -> Quad {
+        Quad { v0: v0, v1: v1, v2: v2, v3: v3 }
+    }
+}
 
 fn make_cube(scene: &embree::RTCScene) -> std::os::raw::c_uint {
     unsafe {
@@ -83,22 +95,21 @@ fn make_cube(scene: &embree::RTCScene) -> std::os::raw::c_uint {
 }
 fn make_ground_plane(scene: &embree::RTCScene) -> std::os::raw::c_uint {
     unsafe {
-        let geom_id = embree::rtcNewTriangleMesh(*scene, embree::RTCGeometryFlags::RTC_GEOMETRY_STATIC,
-                                                 2, 4, 1);
+        let geom_id = embree::rtcNewQuadMesh(*scene, embree::RTCGeometryFlags::RTC_GEOMETRY_STATIC,
+                                             1, 4, 1);
         {
             let buf = embree::rtcMapBuffer(*scene, geom_id, embree::RTCBufferType::RTC_VERTEX_BUFFER);
             let mut verts: &mut [Vertex] = slice::from_raw_parts_mut(buf as *mut Vertex, 4);
             verts[0] = Vertex::new(-10.0, -2.0, -10.0);
             verts[1] = Vertex::new(-10.0, -2.0, 10.0);
-            verts[2] = Vertex::new(10.0, -2.0, -10.0);
-            verts[3] = Vertex::new(10.0, -2.0, 10.0);
+            verts[2] = Vertex::new(10.0, -2.0, 10.0);
+            verts[3] = Vertex::new(10.0, -2.0, -10.0);
             embree::rtcUnmapBuffer(*scene, geom_id, embree::RTCBufferType::RTC_VERTEX_BUFFER);
         }
         {
             let buf = embree::rtcMapBuffer(*scene, geom_id, embree::RTCBufferType::RTC_INDEX_BUFFER);
-            let mut tris: &mut [Triangle] = slice::from_raw_parts_mut(buf as *mut Triangle, 2);
-            tris[0] = Triangle::new(0, 2, 1);
-            tris[1] = Triangle::new(1, 2, 3);
+            let mut quads: &mut [Quad] = slice::from_raw_parts_mut(buf as *mut Quad, 1);
+            quads[0] = Quad::new(0, 1, 2, 3);
             embree::rtcUnmapBuffer(*scene, geom_id, embree::RTCBufferType::RTC_INDEX_BUFFER);
         }
         geom_id
@@ -144,6 +155,8 @@ fn main() {
                 }
             }
         });
+        embree::rtcDeleteGeometry(scene, cube);
+        embree::rtcDeleteGeometry(scene, ground);
         embree::rtcDeleteScene(scene);
         embree::rtcDeleteDevice(device);
     }
