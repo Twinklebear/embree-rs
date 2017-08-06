@@ -127,13 +127,23 @@ fn make_ground_plane(scene: &embree::RTCScene) -> std::os::raw::c_uint {
 }
 
 fn main() {
-    let mut display = support::Display::new(512, 512, "triangle geometry");
+    let mut display = support::Display::new(512, 512, "instancing");
     unsafe {
         let device = embree::rtcNewDevice(ptr::null());
         let scene = embree::rtcDeviceNewScene(device, embree::RTCSceneFlags::RTC_SCENE_STATIC,
                                               embree::RTCAlgorithmFlags::RTC_INTERSECT1);
         let ground = make_ground_plane(&scene);
-        let sphere = make_triangulated_sphere(&scene, Vec3f::new(1.0, 0.0, 0.0), 2.0);
+
+        // Make the scene we'll instance with 4 triangulated spheres
+        let instanced_scene = embree::rtcDeviceNewScene(device, embree::RTCSceneFlags::RTC_SCENE_STATIC,
+                                                        embree::RTCAlgorithmFlags::RTC_INTERSECT1);
+        let spheres = vec![make_triangulated_sphere(&instanced_scene, Vec3f::new(0.0, 0.0, 1.0), 0.5),
+                           make_triangulated_sphere(&instanced_scene, Vec3f::new(1.0, 0.0, 0.0), 0.5),
+                           make_triangulated_sphere(&instanced_scene, Vec3f::new(0.0, 0.0, -1.0), 0.5),
+                           make_triangulated_sphere(&instanced_scene, Vec3f::new(-1.0, 0.0, 0.0), 0.5)];
+        embree::rtcCommit(instanced_scene);
+
+        let instances = vec![embree::rtcNewInstance2(scene, instanced_scene, 1)];
 
         let instance_colors = vec![Vertex::new(1.0, 1.0, 1.0), Vertex::new(1.0, 0.0, 0.0),
                                    Vertex::new(0.0, 1.0, 0.0), Vertex::new(0.0, 1.0, 0.0),
@@ -187,6 +197,12 @@ fn main() {
                 }
             }
         });
+
+        for s in &spheres[..] {
+            embree::rtcDeleteGeometry(instanced_scene, *s);
+        }
+        embree::rtcDeleteScene(instanced_scene);
+
         embree::rtcDeleteGeometry(scene, ground);
         embree::rtcDeleteScene(scene);
         embree::rtcDeleteDevice(device);
