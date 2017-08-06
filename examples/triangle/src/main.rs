@@ -65,6 +65,7 @@ fn main() {
                 }
             }
         });
+        embree::rtcDeleteGeometry(scene, geom_id);
         embree::rtcDeleteScene(scene);
         embree::rtcDeleteDevice(device);
     }
