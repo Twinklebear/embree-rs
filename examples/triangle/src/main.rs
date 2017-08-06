@@ -45,7 +45,7 @@ fn main() {
         }
         embree::rtcCommit(scene);
 
-        display.run(|image| {
+        display.run(|image, _| {
             let img_dims = image.dimensions();
             // Render the scene
             for j in 0..img_dims.1 {

@@ -4,7 +4,7 @@ extern crate embree;
 extern crate support;
 
 use std::{ptr, slice, f32, u32};
-use support::{Vec3f, Camera};
+use support::Camera;
 
 // TODO: Roll these types up into the Embree-rs library
 #[repr(C)]
@@ -117,7 +117,7 @@ fn make_ground_plane(scene: &embree::RTCScene) -> std::os::raw::c_uint {
 }
 
 fn main() {
-    let mut display = support::Display::new(512, 512, "triangle");
+    let mut display = support::Display::new(512, 512, "triangle geometry");
     unsafe {
         let device = embree::rtcNewDevice(ptr::null());
         let scene = embree::rtcDeviceNewScene(device, embree::RTCSceneFlags::RTC_SCENE_STATIC,
@@ -134,10 +134,13 @@ fn main() {
 
         embree::rtcCommit(scene);
 
-        display.run(|image| {
+        display.run(|image, camera_pose| {
+            for p in image.iter_mut() {
+                *p = 0;
+            }
             let img_dims = image.dimensions();
-            let camera = Camera::look_at(Vec3f::new(1.5, 1.5, -1.5), Vec3f::new(0.0, 0.0, 0.0),
-                                         Vec3f::new(0.0, 1.0, 0.0), 75.0, img_dims);
+            let camera = Camera::look_dir(camera_pose.pos, camera_pose.dir,
+                                         camera_pose.up, 75.0, img_dims);
             // Render the scene
             for j in 0..img_dims.1 {
                 for i in 0..img_dims.0 {

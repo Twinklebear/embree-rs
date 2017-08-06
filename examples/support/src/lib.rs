@@ -1,5 +1,7 @@
 extern crate glium;
 extern crate image;
+extern crate arcball;
+extern crate cgmath;
 
 pub mod vec3f;
 pub mod camera;

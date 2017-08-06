@@ -10,8 +10,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn look_at(pos: Vec3f, at: Vec3f, up: Vec3f, fov: f32, img: (u32, u32)) -> Camera {
-        let dir = at - pos;
+    pub fn look_dir(pos: Vec3f, dir: Vec3f, up: Vec3f, fov: f32, img: (u32, u32)) -> Camera {
         let dz = dir.normalized();
         let dx = -dz.cross(&up).normalized();
         let dy = dx.cross(&dz).normalized();
@@ -23,7 +22,10 @@ impl Camera {
         let dir_top_left = dz - 0.5 * screen_du - 0.5 * screen_dv;
         Camera { pos: pos, dir_top_left: dir_top_left, screen_du: screen_du,
                  screen_dv: screen_dv, img: img }
-
+    }
+    pub fn look_at(pos: Vec3f, at: Vec3f, up: Vec3f, fov: f32, img: (u32, u32)) -> Camera {
+        let dir = at - pos;
+        Camera::look_dir(pos, dir, up, fov, img)
     }
     /// Compute the ray direction going through the pixel passed
     pub fn ray_dir(&self, px: (f32, f32)) -> Vec3f {

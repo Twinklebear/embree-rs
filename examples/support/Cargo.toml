@@ -6,4 +6,6 @@ authors = ["Will Usher <willusher.life@gmail.com>"]
 [dependencies]
 glium = "0.17.0"
 image = "0.15.0"
+arcball = "0.3.0"
+cgmath = "0.15.0"
 
