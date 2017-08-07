@@ -2,8 +2,10 @@
 
 extern crate embree;
 extern crate support;
+extern crate cgmath;
 
 use std::{ptr, slice, f32, u32};
+use cgmath::{Matrix4, Vector3};
 use support::{Camera, Vec3f};
 
 // TODO: Roll these types up into the Embree-rs library
@@ -144,7 +146,18 @@ fn main() {
 
         // Make the instances first so their ids will be 0-3 that we can then use
         // directly to index into the instance_colors
-        let instances = vec![embree::rtcNewInstance2(scene, instanced_scene, 1)];
+        let instances = vec![embree::rtcNewInstance2(scene, instanced_scene, 1),
+                             embree::rtcNewInstance2(scene, instanced_scene, 1),
+                             embree::rtcNewInstance2(scene, instanced_scene, 1),
+                             embree::rtcNewInstance2(scene, instanced_scene, 1)];
+
+        for i in 0..4 {
+            let mat = Matrix4::<f32>::from_translation(Vector3::<f32>::new(-2.0 + i as f32 * 2.0,
+                                                                           0.0, 1.0 - (i % 2) as f32));
+            let cols_mat: &[f32; 16] = mat.as_ref();
+            embree::rtcSetTransform2(scene, instances[i], embree::RTCMatrixType::RTC_MATRIX_COLUMN_MAJOR_ALIGNED16,
+                                     cols_mat.as_ptr(), 0);
+        }
 
         let instance_colors = vec![
             vec![Vec3f::new(0.25, 0.0, 0.0), Vec3f::new(0.5, 0.0, 0.0),
