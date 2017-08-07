@@ -132,7 +132,6 @@ fn main() {
         let device = embree::rtcNewDevice(ptr::null());
         let scene = embree::rtcDeviceNewScene(device, embree::RTCSceneFlags::RTC_SCENE_STATIC,
                                               embree::RTCAlgorithmFlags::RTC_INTERSECT1);
-        let ground = make_ground_plane(&scene);
 
         // Make the scene we'll instance with 4 triangulated spheres
         let instanced_scene = embree::rtcDeviceNewScene(device, embree::RTCSceneFlags::RTC_SCENE_STATIC,
@@ -143,15 +142,21 @@ fn main() {
                            make_triangulated_sphere(&instanced_scene, Vec3f::new(-1.0, 0.0, 0.0), 0.5)];
         embree::rtcCommit(instanced_scene);
 
+        // Make the instances first so their ids will be 0-3 that we can then use
+        // directly to index into the instance_colors
         let instances = vec![embree::rtcNewInstance2(scene, instanced_scene, 1)];
 
-        let instance_colors = vec![Vertex::new(1.0, 1.0, 1.0), Vertex::new(1.0, 0.0, 0.0),
-                                   Vertex::new(0.0, 1.0, 0.0), Vertex::new(0.0, 1.0, 0.0),
-                                   Vertex::new(0.5, 0.5, 0.5), Vertex::new(0.5, 0.5, 0.5),
-                                   Vertex::new(1.0, 1.0, 1.0), Vertex::new(1.0, 1.0, 1.0),
-                                   Vertex::new(0.0, 0.0, 1.0), Vertex::new(0.0, 0.0, 1.0),
-                                   Vertex::new(1.0, 1.0, 0.0), Vertex::new(1.0, 1.0, 0.0)];
+        let instance_colors = vec![
+            vec![Vec3f::new(0.25, 0.0, 0.0), Vec3f::new(0.5, 0.0, 0.0),
+                 Vec3f::new(0.75, 0.0, 0.0), Vec3f::new(1.00, 0.0, 0.0)],
+            vec![Vec3f::new(0.0, 0.25, 0.0), Vec3f::new(0.0, 0.50, 0.0),
+                 Vec3f::new(0.0, 0.75, 0.0), Vec3f::new(0.0, 1.00, 0.0)],
+            vec![Vec3f::new(0.0, 0.0, 0.25), Vec3f::new(0.0, 0.0, 0.50),
+                 Vec3f::new(0.0, 0.0, 0.75), Vec3f::new(0.0, 0.0, 1.00)],
+            vec![Vec3f::new(0.25, 0.25, 0.0), Vec3f::new(0.50, 0.50, 0.0),
+                 Vec3f::new(0.75, 0.75, 0.0), Vec3f::new(1.00, 1.00, 0.0)]];
 
+        let ground = make_ground_plane(&scene);
         embree::rtcCommit(scene);
 
         let light_dir = Vec3f::new(1.0, 1.0, -1.0).normalized();
@@ -181,7 +186,7 @@ fn main() {
                             illum = support::clamp(illum + f32::max(light_dir.dot(&normal), 0.0), 0.0, 1.0);
                         }
 
-                        if ray.geomID == ground {
+                        if ray.instID == u32::MAX && ray.geomID == ground {
                             let mut p = image.get_pixel_mut(i, j);
                             p.data[0] = (255.0 * illum) as u8;
                             p.data[1] = p.data[0];
@@ -189,9 +194,10 @@ fn main() {
                         } else {
                             // Shade the instances as we want
                             let mut p = image.get_pixel_mut(i, j);
-                            p.data[0] = (255.0 * illum) as u8;
-                            p.data[1] = 0;
-                            p.data[2] = 0;
+                            let color = &instance_colors[ray.instID as usize][ray.geomID as usize];
+                            p.data[0] = (255.0 * illum * color.x) as u8;
+                            p.data[1] = (255.0 * illum * color.y) as u8;
+                            p.data[2] = (255.0 * illum * color.z) as u8;
                         }
                     }
                 }
