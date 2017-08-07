@@ -84,7 +84,7 @@ impl Display {
                                                           Vector2::new(prev.0 as f32, prev.1 as f32));
                                 } else if mouse_pressed[1] {
                                     let mouse_delta = Vector2::new((prev.0 - position.0) as f32,
-                                                                   -(prev.1 - position.1) as f32);
+                                                                   (prev.1 - position.1) as f32);
                                     arcball_camera.pan(mouse_delta, 0.16);
                                 }
                                 prev_mouse = Some(position);
