@@ -231,14 +231,13 @@ fn main() {
                             illum = support::clamp(illum + f32::max(light_dir.dot(&normal), 0.0), 0.0, 1.0);
                         }
 
+                        let mut p = image.get_pixel_mut(i, j);
                         if ray.instID == u32::MAX && ray.geomID == ground {
-                            let mut p = image.get_pixel_mut(i, j);
                             p.data[0] = (255.0 * illum) as u8;
                             p.data[1] = p.data[0];
                             p.data[2] = p.data[0];
                         } else {
-                            // Shade the instances as we want
-                            let mut p = image.get_pixel_mut(i, j);
+                            // Shade the instances using their color
                             let color = &instance_colors[ray.instID as usize][ray.geomID as usize];
                             p.data[0] = (255.0 * illum * color.x) as u8;
                             p.data[1] = (255.0 * illum * color.y) as u8;
@@ -251,6 +250,9 @@ fn main() {
 
         for s in &spheres[..] {
             embree::rtcDeleteGeometry(instanced_scene, *s);
+        }
+        for i in &instances[..] {
+            embree::rtcDeleteGeometry(scene, *i);
         }
         embree::rtcDeleteScene(instanced_scene);
 
