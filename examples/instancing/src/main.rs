@@ -5,7 +5,7 @@ extern crate support;
 extern crate cgmath;
 
 use std::{ptr, slice, f32, u32};
-use cgmath::{Matrix4, Vector3};
+use cgmath::{Matrix4, SquareMatrix, Matrix, Vector3, Vector4};
 use support::{Camera, Vec3f};
 
 // TODO: Roll these types up into the Embree-rs library
@@ -46,7 +46,7 @@ impl Quad {
 }
 
 /// Make a triangulated sphere, from the Embree tutorial:
-/// https://github.com/embree/embree/blob/master/tutorials/instanced_geometry/instanced_geometry_device.cpp 
+/// https://github.com/embree/embree/blob/master/tutorials/instanced_geometry/instanced_geometry_device.cpp
 fn make_triangulated_sphere(scene: &embree::RTCScene, pos: Vec3f, radius: f32) -> std::os::raw::c_uint {
     let num_phi = 5;
     let num_theta = 2 * num_phi;
@@ -127,12 +127,34 @@ fn make_ground_plane(scene: &embree::RTCScene) -> std::os::raw::c_uint {
         geom_id
     }
 }
+// Animate like the Embree example, returns the (transforms, normal_transforms)
+fn animate_instances(time: f32, num_instances: usize) -> (Vec<Matrix4<f32>>, Vec<Matrix4<f32>>)
+{
+    let t0 = 0.7 * time;
+    let t1 = 1.5 * time;
+
+    let rot = Matrix4::from_cols(Vector4::new(f32::cos(t1), 0.0, f32::sin(t1), 0.0),
+                                 Vector4::new(0.0, 1.0, 0.0, 0.0),
+                                 Vector4::new(-f32::sin(t1), 0.0, f32::cos(t1), 0.0),
+                                 Vector4::new(0.0, 0.0, 0.0, 1.0));
+
+    let mut transforms = Vec::with_capacity(num_instances);
+    let mut normal_transforms = Vec::with_capacity(num_instances);
+    for i in 0..num_instances {
+        let t = t0 + i as f32 * 2.0 * f32::consts::PI / 4.0;
+        let trans = Matrix4::<f32>::from_translation(2.2 * Vector3::<f32>::new(f32::cos(t),
+                                                                               0.0, f32::sin(t)));
+        transforms.push(trans * rot);
+        normal_transforms.push(transforms[i].invert().unwrap().transpose());
+    }
+    (transforms, normal_transforms)
+}
 
 fn main() {
     let mut display = support::Display::new(512, 512, "instancing");
     unsafe {
         let device = embree::rtcNewDevice(ptr::null());
-        let scene = embree::rtcDeviceNewScene(device, embree::RTCSceneFlags::RTC_SCENE_STATIC,
+        let scene = embree::rtcDeviceNewScene(device, embree::RTCSceneFlags::RTC_SCENE_DYNAMIC,
                                               embree::RTCAlgorithmFlags::RTC_INTERSECT1);
 
         // Make the scene we'll instance with 4 triangulated spheres
@@ -150,12 +172,11 @@ fn main() {
                              embree::rtcNewInstance2(scene, instanced_scene, 1),
                              embree::rtcNewInstance2(scene, instanced_scene, 1),
                              embree::rtcNewInstance2(scene, instanced_scene, 1)];
-
-        for i in 0..4 {
-            let mat = Matrix4::<f32>::from_translation(Vector3::<f32>::new(-2.0 + i as f32 * 2.0,
-                                                                           0.0, 1.0 - (i % 2) as f32));
-            let cols_mat: &[f32; 16] = mat.as_ref();
-            embree::rtcSetTransform2(scene, instances[i], embree::RTCMatrixType::RTC_MATRIX_COLUMN_MAJOR_ALIGNED16,
+        let (transforms, normal_transforms) = animate_instances(0.0, instances.len());
+        for (i, t) in transforms.iter().enumerate() {
+            let cols_mat: &[f32; 16] = t.as_ref();
+            embree::rtcSetTransform2(scene, instances[i],
+                                     embree::RTCMatrixType::RTC_MATRIX_COLUMN_MAJOR_ALIGNED16,
                                      cols_mat.as_ptr(), 0);
         }
 
@@ -173,10 +194,20 @@ fn main() {
         embree::rtcCommit(scene);
 
         let light_dir = Vec3f::new(1.0, 1.0, -1.0).normalized();
-        display.run(|image, camera_pose| {
+        display.run(|image, camera_pose, time| {
             for p in image.iter_mut() {
                 *p = 0;
             }
+            let (transforms, normal_transforms) = animate_instances(time, instances.len());
+            for (i, t) in transforms.iter().enumerate() {
+                let cols_mat: &[f32; 16] = t.as_ref();
+                embree::rtcSetTransform2(scene, instances[i],
+                                         embree::RTCMatrixType::RTC_MATRIX_COLUMN_MAJOR_ALIGNED16,
+                                         cols_mat.as_ptr(), 0);
+                embree::rtcUpdate(scene, instances[i]);
+            }
+            embree::rtcCommit(scene);
+
             let img_dims = image.dimensions();
             let camera = Camera::look_dir(camera_pose.pos, camera_pose.dir,
                                          camera_pose.up, 75.0, img_dims);
@@ -188,6 +219,8 @@ fn main() {
                                                       &[dir.x, dir.y, dir.z]);
                     embree::rtcIntersect(scene, &mut ray as *mut embree::RTCRay);
                     if ray.geomID != u32::MAX {
+                        // TODO: Transform the normals of the instances into world space
+                        // with the normal_transforms
                         let normal = Vec3f::new(ray.Ng[0], ray.Ng[1], ray.Ng[2]).normalized();
                         let mut illum = 0.3;
                         let shadow_pos = camera.pos + dir * ray.tfar;

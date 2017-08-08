@@ -2,6 +2,7 @@ extern crate glium;
 extern crate image;
 extern crate arcball;
 extern crate cgmath;
+extern crate clock_ticks;
 
 pub mod vec3f;
 pub mod camera;

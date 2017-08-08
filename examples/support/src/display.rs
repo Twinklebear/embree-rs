@@ -5,6 +5,7 @@ use glium::Texture2d;
 use image::RgbImage;
 use arcball::ArcballCamera;
 use cgmath::{self, SquareMatrix};
+use clock_ticks;
 
 use vec3f::Vec3f;
 
@@ -52,15 +53,16 @@ impl Display {
     }
     /// The function passed should render and update the image to be displayed in the window,
     /// optionally using the camera pose information passed.
-    pub fn run<F>(&mut self, mut render: F) where F: FnMut(&mut RgbImage, CameraPose) {
+    pub fn run<F>(&mut self, mut render: F) where F: FnMut(&mut RgbImage, CameraPose, f32) {
         let mut embree_target = RgbImage::new(self.window_dims.0, self.window_dims.1);
 
         let mut arcball_camera = ArcballCamera::new(
-            &Mat4::look_at(CgPoint::new(0.0, 0.0, -3.0), CgPoint::new(0.0, 0.0, 0.0), CgVec::new(0.0, 1.0, 0.0)),
+            &Mat4::look_at(CgPoint::new(0.0, 1.0, -6.0), CgPoint::new(0.0, 0.0, 0.0), CgVec::new(0.0, 1.0, 0.0)),
             0.05, 1.0, [self.window_dims.0 as f32, self.window_dims.1 as f32]);
 
         let mut mouse_pressed = [false, false];
         let mut prev_mouse = None;
+        let t_start = clock_ticks::precise_time_s();
         loop {
             let mut should_quit = false;
             self.event_loop.poll_events(|e| {
@@ -114,7 +116,8 @@ impl Display {
                 return;
             }
 
-            render(&mut embree_target, CameraPose::new(&arcball_camera.get_mat4()));
+            render(&mut embree_target, CameraPose::new(&arcball_camera.get_mat4()),
+                   (clock_ticks::precise_time_s() - t_start) as f32);
             let img = RawImage2d::from_raw_rgb_reversed(embree_target.get(..).unwrap(), self.window_dims);
             let opengl_texture = Texture2d::new(&self.display, img).unwrap();
 

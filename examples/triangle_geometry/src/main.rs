@@ -134,7 +134,7 @@ fn main() {
 
         embree::rtcCommit(scene);
 
-        display.run(|image, camera_pose| {
+        display.run(|image, camera_pose, _| {
             for p in image.iter_mut() {
                 *p = 0;
             }
