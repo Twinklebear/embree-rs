@@ -172,13 +172,6 @@ fn main() {
                              embree::rtcNewInstance2(scene, instanced_scene, 1),
                              embree::rtcNewInstance2(scene, instanced_scene, 1),
                              embree::rtcNewInstance2(scene, instanced_scene, 1)];
-        let (transforms, normal_transforms) = animate_instances(0.0, instances.len());
-        for (i, t) in transforms.iter().enumerate() {
-            let cols_mat: &[f32; 16] = t.as_ref();
-            embree::rtcSetTransform2(scene, instances[i],
-                                     embree::RTCMatrixType::RTC_MATRIX_COLUMN_MAJOR_ALIGNED16,
-                                     cols_mat.as_ptr(), 0);
-        }
 
         let instance_colors = vec![
             vec![Vec3f::new(0.25, 0.0, 0.0), Vec3f::new(0.5, 0.0, 0.0),
@@ -219,9 +212,15 @@ fn main() {
                                                       &[dir.x, dir.y, dir.z]);
                     embree::rtcIntersect(scene, &mut ray as *mut embree::RTCRay);
                     if ray.geomID != u32::MAX {
-                        // TODO: Transform the normals of the instances into world space
-                        // with the normal_transforms
-                        let normal = Vec3f::new(ray.Ng[0], ray.Ng[1], ray.Ng[2]).normalized();
+                        // Transform the normals of the instances into world space with the normal_transforms
+                        let normal =
+                            if ray.instID == u32::MAX {
+                                Vec3f::new(ray.Ng[0], ray.Ng[1], ray.Ng[2]).normalized()
+                            } else {
+                                let v = normal_transforms[ray.instID as usize]
+                                        * Vector4::new(ray.Ng[0], ray.Ng[1], ray.Ng[2], 0.0);
+                                Vec3f::new(v.x, v.y, v.z).normalized()
+                            };
                         let mut illum = 0.3;
                         let shadow_pos = camera.pos + dir * ray.tfar;
                         let mut shadow_ray = embree::RTCRay::new(&[shadow_pos.x, shadow_pos.y, shadow_pos.z],
