@@ -1,15 +1,25 @@
 //! TODO: Docs
 
+extern crate cgmath;
+#[macro_use]
+extern crate bitflags;
+
 use std::{u32, f32};
-use std::iter::Iterator;
+use cgmath::Vector3;
 
 #[allow(non_upper_case_globals)]
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
 pub mod sys;
+pub mod device;
+pub mod scene;
+
+// TODO: Don't re-export sys like this, leave it under embree::sys
 pub use sys::*;
 
-impl sys::RTCRay {
+type Ray = RTCRay;
+
+impl Ray {
     /// Create a new ray starting at `origin` and heading in direction `dir`
     pub fn new(origin: &[f32; 3], dir: &[f32; 3]) -> sys::RTCRay {
         sys::RTCRay {
@@ -31,44 +41,49 @@ impl sys::RTCRay {
             __bindgen_padding_0: [0; 3],
         }
     }
-}
-
-/// This will need a bit more thought on how I really want to structure
-/// the API design for working with these buffers and the objects
-/// associated with them.
-pub struct BufferMapping<'a, T: 'a> {
-    slice: &'a mut [T],
-    // TODO: it also needs the scene, geom id and buffer type to unmap
-}
-impl<'a, T: 'a> BufferMapping<'a, T> {
-    pub fn iter<'b>(&'b self) -> BufferMappingIter<'b, T> {
-        BufferMappingIter::new(self.slice)
+    /*
+     * TODO: Migrate to cgmath types throughout
+    pub fn new(origin: &Vector3<f32>, dir: &Vector3<f32>) -> Ray {
+        sys::RTCRay {
+            org: [origin.x, origin.y, origin.z],
+            align0: 0.0,
+            dir: [dir.x, dir.y, dir.z],
+            align1: 0.0,
+            tnear: 0.0,
+            tfar: f32::INFINITY,
+            time: 0.0,
+            mask: u32::MAX,
+            Ng: [0.0; 3],
+            align2: 0.0,
+            u: 0.0,
+            v: 0.0,
+            geomID: u32::MAX,
+            primID: u32::MAX,
+            instID: u32::MAX,
+            __bindgen_padding_0: [0; 3],
+        }
     }
-}
-impl<'a, T: 'a> Drop for BufferMapping<'a, T> {
-    fn drop(&mut self) {
-        // TODO: unmap it
-        //embree::rtcUnmapBuffer(scene, geom_id, embree::RTCBufferType::RTC_INDEX_BUFFER);
+    pub fn segment(origin: &Vector3<f32>, dir: &Vector3<f32>,
+                   tnear: f32, tfar: f32) -> Ray {
+        sys::RTCRay {
+            org: [origin.x, origin.y, origin.z],
+            align0: 0.0,
+            dir: [dir.x, dir.y, dir.z],
+            align1: 0.0,
+            tnear: tnear,
+            tfar: tfar,
+            time: 0.0,
+            mask: u32::MAX,
+            Ng: [0.0; 3],
+            align2: 0.0,
+            u: 0.0,
+            v: 0.0,
+            geomID: u32::MAX,
+            primID: u32::MAX,
+            instID: u32::MAX,
+            __bindgen_padding_0: [0; 3],
+        }
     }
-}
-
-/// TODO: These should be working on the raw pointers, like the slice iterators.
-pub struct BufferMappingIter<'a, T: 'a> {
-    slice: &'a [T],
-    next: usize,
-}
-impl<'a, T: 'a> BufferMappingIter<'a, T> {
-    fn new(slice: &'a [T]) -> BufferMappingIter<'a, T> {
-        BufferMappingIter { slice: slice, next: 0 }
-    }
-}
-impl<'a, T: 'a> Iterator for BufferMappingIter<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<&'a T> {
-        let res = self.slice.get(self.next);
-        self.next = self.next + 1;
-        res
-    }
+    */
 }
 
