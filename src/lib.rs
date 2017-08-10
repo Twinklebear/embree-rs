@@ -13,9 +13,13 @@ use cgmath::Vector3;
 pub mod sys;
 pub mod device;
 pub mod scene;
+pub mod triangle_mesh;
 
 // TODO: Don't re-export sys like this, leave it under embree::sys
 pub use sys::*;
+pub use device::Device;
+pub use scene::Scene;
+pub use triangle_mesh::TriangleMesh;
 
 type Ray = RTCRay;
 
@@ -85,5 +89,34 @@ impl Ray {
         }
     }
     */
+}
+
+bitflags! {
+    pub struct GeometryFlags: u32 {
+        const STATIC = 0;
+        const DEFORMABLE = 1;
+        const DYNAMIC = 2;
+    }
+}
+bitflags! {
+    pub struct SceneFlags: u32 {
+        const SCENE_STATIC = 0;
+        const SCENE_DYNAMIC = 1;
+        const SCENE_COMPACT = 256;
+        const SCENE_COHERENT = 512;
+        const SCENE_INCOHERENT = 1024;
+        const SCENE_HIGH_QUALITY = 2048;
+        const SCENE_ROBUST = 65536;
+    }
+}
+bitflags! {
+    pub struct AlgorithmFlags: u32 {
+        const INTERSECT1 = 1;
+        const INTERSECT4 = 2;
+        const INTERSECT8 = 4;
+        const INTERSECT16 = 8;
+        const INTERPOLATE = 16;
+        const INTERSECT_STREAM = 32;
+    }
 }
 

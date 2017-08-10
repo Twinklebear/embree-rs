@@ -3,7 +3,7 @@ use std::ptr;
 use sys::*;
 
 pub struct Device {
-    handle: RTCDevice,
+    pub(crate) handle: RTCDevice,
 }
 impl Device {
     pub fn new() -> Device {
