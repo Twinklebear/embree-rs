@@ -63,6 +63,7 @@ impl<'a, T: 'a> Index<usize> for MappedBuffer<'a, T> {
     type Output = T;
 
     fn index(&self, index: usize) -> &T {
+        // TODO: We should only check in debug build
         if index >= self.len {
             panic!("MappedBuffer index out of bounds");
         }
