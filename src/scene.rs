@@ -4,7 +4,7 @@ use std::mem;
 
 use sys::*;
 use device::Device;
-use ::{SceneFlags, AlgorithmFlags};
+use ::{Ray, SceneFlags, AlgorithmFlags};
 
 pub struct Scene<'a> {
     pub(crate) handle: RefCell<RTCScene>,
@@ -23,7 +23,19 @@ impl<'a> Scene<'a> {
         };
         Scene { handle: RefCell::new(h), device: PhantomData }
     }
+    pub fn commit(&self) {
+        let h = self.handle.try_borrow_mut()
+            .expect("Scene already borrowed: All buffers must be unmapped before commit");
+        unsafe { rtcCommit(*h); }
+    }
+    pub fn intersect(&self, ray: &mut Ray) {
+        let h = self.handle.borrow();
+        unsafe {
+            rtcIntersect(*h, ray as *mut RTCRay);
+        }
+    }
 }
+
 impl<'a> Drop for Scene<'a> {
     fn drop(&mut self) {
         unsafe { rtcDeleteScene(*self.handle.borrow_mut()); }

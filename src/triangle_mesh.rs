@@ -1,9 +1,11 @@
 use std::os::raw::c_uint;
 use std::mem;
 
+use cgmath::{Vector3, Vector4};
+
 use sys::*;
 use scene::Scene;
-use ::GeometryFlags;
+use ::{GeometryFlags, Buffer, BufferType};
 
 pub struct TriangleMesh<'a> {
     // TODO: This is fine with the same lifetime bound right?
@@ -11,7 +13,8 @@ pub struct TriangleMesh<'a> {
     // least as long as the Scene's lifetime.
     scene: &'a Scene<'a>,
     handle: c_uint,
-    // TODO: Buffers
+    pub vertex_buffer: Buffer<'a, Vector4<f32>>,
+    pub index_buffer: Buffer<'a, Vector3<i32>>,
 }
 impl<'a> TriangleMesh<'a> {
     pub fn unanimated(scene: &'a Scene, flags: GeometryFlags,
@@ -21,7 +24,12 @@ impl<'a> TriangleMesh<'a> {
             rtcNewTriangleMesh(*scene.handle.borrow_mut(),
                                mem::transmute(flags), num_tris, num_verts, 1)
         };
-        TriangleMesh { scene: scene, handle: h }
+        TriangleMesh {
+            scene: scene,
+            handle: h,
+            vertex_buffer: Buffer::new(scene, h, num_verts, BufferType::VertexBuffer),
+            index_buffer: Buffer::new(scene, h, num_tris, BufferType::IndexBuffer)
+        }
     }
 }
 impl<'a> Drop for TriangleMesh<'a> {

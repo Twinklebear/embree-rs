@@ -14,14 +14,16 @@ pub mod sys;
 pub mod device;
 pub mod scene;
 pub mod triangle_mesh;
+pub mod buffer;
 
 // TODO: Don't re-export sys like this, leave it under embree::sys
 pub use sys::*;
 pub use device::Device;
 pub use scene::Scene;
 pub use triangle_mesh::TriangleMesh;
+pub use buffer::{Buffer, MappedBuffer, BufferType};
 
-type Ray = RTCRay;
+pub type Ray = RTCRay;
 
 impl Ray {
     /// Create a new ray starting at `origin` and heading in direction `dir`
@@ -110,6 +112,7 @@ bitflags! {
     }
 }
 bitflags! {
+    // TODO: Should prefix these
     pub struct AlgorithmFlags: u32 {
         const INTERSECT1 = 1;
         const INTERSECT4 = 2;
