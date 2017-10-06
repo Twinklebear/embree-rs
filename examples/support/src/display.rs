@@ -4,16 +4,10 @@ use glium::texture::RawImage2d;
 use glium::Texture2d;
 use image::RgbImage;
 use arcball::ArcballCamera;
-use cgmath::{self, SquareMatrix};
+use cgmath::SquareMatrix;
 use clock_ticks;
 
-use vec3f::Vec3f;
-
-type Mat4 = cgmath::Matrix4<f32>;
-type CgPoint = cgmath::Point3<f32>;
-type CgVec = cgmath::Vector3<f32>;
-type Vector2 = cgmath::Vector2<f32>;
-type Vector4 = cgmath::Vector4<f32>;
+use ::{Mat4, CgPoint, CgVec, Vector2, Vector3, Vector4};
 
 /// Manager to display the rendered image in an interactive window.
 pub struct Display {
@@ -24,17 +18,17 @@ pub struct Display {
 
 #[derive(Debug)]
 pub struct CameraPose {
-    pub pos: Vec3f,
-    pub dir: Vec3f,
-    pub up: Vec3f,
+    pub pos: Vector3,
+    pub dir: Vector3,
+    pub up: Vector3,
 }
 impl CameraPose {
     fn new(mat: &Mat4) -> CameraPose {
         let m = mat.invert().unwrap();
         let pos = m * Vector4::new(0.0, 0.0, 0.0, 1.0);
-        CameraPose { pos: Vec3f::new(pos.x, pos.y, pos.z),
-                     dir: -Vec3f::new(m.z.x, m.z.y, m.z.z),
-                     up: Vec3f::new(m.y.x, m.y.y, m.y.z)
+        CameraPose { pos: Vector3::new(pos.x, pos.y, pos.z),
+                     dir: -Vector3::new(m.z.x, m.z.y, m.z.z),
+                     up: Vector3::new(m.y.x, m.y.y, m.y.z)
         }
     }
 }
