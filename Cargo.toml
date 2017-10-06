@@ -5,5 +5,5 @@ authors = ["Will Usher <willusher.life@gmail.com>"]
 
 [dependencies]
 cgmath = "0.15.0"
-bitflags = "0.9.1"
+bitflags = "1.0.0"
 

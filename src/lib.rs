@@ -17,38 +17,15 @@ pub mod triangle_mesh;
 pub mod buffer;
 
 // TODO: Don't re-export sys like this, leave it under embree::sys
-pub use sys::*;
 pub use device::Device;
 pub use scene::Scene;
 pub use triangle_mesh::TriangleMesh;
 pub use buffer::{Buffer, MappedBuffer, BufferType};
 
-pub type Ray = RTCRay;
+pub type Ray = sys::RTCRay;
 
 impl Ray {
     /// Create a new ray starting at `origin` and heading in direction `dir`
-    pub fn new(origin: &[f32; 3], dir: &[f32; 3]) -> sys::RTCRay {
-        sys::RTCRay {
-            org: *origin,
-            align0: 0.0,
-            dir: *dir,
-            align1: 0.0,
-            tnear: 0.0,
-            tfar: f32::INFINITY,
-            time: 0.0,
-            mask: u32::MAX,
-            Ng: [0.0; 3],
-            align2: 0.0,
-            u: 0.0,
-            v: 0.0,
-            geomID: u32::MAX,
-            primID: u32::MAX,
-            instID: u32::MAX,
-            __bindgen_padding_0: [0; 3],
-        }
-    }
-    /*
-     * TODO: Migrate to cgmath types throughout
     pub fn new(origin: &Vector3<f32>, dir: &Vector3<f32>) -> Ray {
         sys::RTCRay {
             org: [origin.x, origin.y, origin.z],
@@ -90,7 +67,6 @@ impl Ray {
             __bindgen_padding_0: [0; 3],
         }
     }
-    */
 }
 
 bitflags! {
