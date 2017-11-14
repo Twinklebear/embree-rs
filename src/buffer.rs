@@ -9,9 +9,6 @@ use scene::Scene;
 
 pub struct Buffer<'a, T> {
     scene: &'a Scene<'a>,
-    // TODO: Because of how I'm thinking to design this, we really
-    // cant take a ref to the geometry itself? But can just be tied
-    // to it by the lifetime of the slice?
     geom: c_uint,
     len: usize,
     buffer_type: BufferType,
