@@ -8,15 +8,14 @@ use scene::Scene;
 use ::{GeometryFlags, Buffer, BufferType};
 
 pub struct TriangleMesh<'a> {
-    // TODO: This is fine with the same lifetime bound right?
-    // The device lifetime parameterized by the Scene will be at
-    // least as long as the Scene's lifetime.
     scene: &'a Scene<'a>,
     handle: c_uint,
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
     pub index_buffer: Buffer<'a, Vector3<i32>>,
 }
 impl<'a> TriangleMesh<'a> {
+    // TODO: It's awkward to be borrowing the scene as immutable all the
+    // time when we're actually doing mutations on the scene data
     pub fn unanimated(scene: &'a Scene, flags: GeometryFlags,
                       num_tris: usize, num_verts: usize) -> TriangleMesh<'a>
     {
