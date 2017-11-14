@@ -14,12 +14,13 @@ pub mod sys;
 pub mod device;
 pub mod scene;
 pub mod triangle_mesh;
+pub mod quad_mesh;
 pub mod buffer;
 
-// TODO: Don't re-export sys like this, leave it under embree::sys
 pub use device::Device;
 pub use scene::Scene;
 pub use triangle_mesh::TriangleMesh;
+pub use quad_mesh::QuadMesh;
 pub use buffer::{Buffer, MappedBuffer, BufferType};
 
 pub type Ray = sys::RTCRay;
