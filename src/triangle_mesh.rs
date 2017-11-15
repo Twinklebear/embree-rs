@@ -4,8 +4,7 @@ use std::mem;
 use cgmath::{Vector3, Vector4};
 
 use sys::*;
-use scene::Scene;
-use ::{GeometryFlags, Buffer, BufferType};
+use ::{Scene, GeometryFlags, Buffer, BufferType};
 
 pub struct TriangleMesh<'a> {
     scene: &'a Scene<'a>,
@@ -31,6 +30,7 @@ impl<'a> TriangleMesh<'a> {
         }
     }
 }
+
 impl<'a> Drop for TriangleMesh<'a> {
     fn drop(&mut self) {
         unsafe {

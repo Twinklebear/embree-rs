@@ -1,11 +1,10 @@
 use std::os::raw::c_uint;
 use std::mem;
 
-use cgmath::{Vector3, Vector4};
+use cgmath::Vector4;
 
 use sys::*;
-use scene::Scene;
-use ::{GeometryFlags, Buffer, BufferType};
+use ::{Scene, GeometryFlags, Buffer, BufferType};
 
 pub struct QuadMesh<'a> {
     scene: &'a Scene<'a>,
@@ -31,6 +30,7 @@ impl<'a> QuadMesh<'a> {
         }
     }
 }
+
 impl<'a> Drop for QuadMesh<'a> {
     fn drop(&mut self) {
         unsafe {
