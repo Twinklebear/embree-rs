@@ -13,15 +13,17 @@ use cgmath::Vector3;
 pub mod sys;
 pub mod device;
 pub mod scene;
+pub mod buffer;
 pub mod triangle_mesh;
 pub mod quad_mesh;
-pub mod buffer;
+pub mod instance;
 
 pub use device::Device;
 pub use scene::Scene;
+pub use buffer::{Buffer, MappedBuffer, BufferType};
 pub use triangle_mesh::TriangleMesh;
 pub use quad_mesh::QuadMesh;
-pub use buffer::{Buffer, MappedBuffer, BufferType};
+pub use instance::Instance;
 
 pub type Ray = sys::RTCRay;
 
