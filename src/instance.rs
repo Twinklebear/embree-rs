@@ -1,5 +1,7 @@
 use std::os::raw::c_uint;
 
+use cgmath::Matrix4;
+
 use sys::*;
 use ::Scene;
 
@@ -20,6 +22,14 @@ impl<'a> Instance<'a> {
             scene: scene,
             instance: instance,
             handle: h
+        }
+    }
+    pub fn set_transform(&mut self, transform: &Matrix4<f32>) {
+        let mat: &[f32; 16] = transform.as_ref();
+        unsafe {
+            rtcSetTransform2(*self.scene.handle.borrow(), self.handle,
+                             RTCMatrixType::RTC_MATRIX_COLUMN_MAJOR_ALIGNED16,
+                             mat.as_ptr(), 0);
         }
     }
 }
