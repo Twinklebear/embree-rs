@@ -8,19 +8,6 @@ use std::{f32, u32};
 use support::Camera;
 use cgmath::{Vector3, Vector4};
 
-#[repr(C)]
-struct Quad {
-    v0: i32,
-    v1: i32,
-    v2: i32,
-    v3: i32,
-}
-impl Quad {
-    pub fn new(v0: i32, v1: i32, v2: i32, v3: i32) -> Quad {
-        Quad { v0: v0, v1: v1, v2: v2, v3: v3 }
-    }
-}
-
 fn make_cube<'a>(scene: &'a embree::Scene) -> embree::TriangleMesh<'a> {
     let mut mesh = embree::TriangleMesh::unanimated(scene, embree::GeometryFlags::STATIC,
                                                 12, 8);
