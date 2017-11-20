@@ -4,7 +4,7 @@ use std::mem;
 use cgmath::Vector4;
 
 use sys::*;
-use ::{Scene, GeometryFlags, Buffer, BufferType};
+use ::{Scene, GeometryFlags, Buffer, BufferType, Geometry};
 
 pub struct QuadMesh<'a> {
     scene: &'a Scene<'a>,
@@ -28,6 +28,12 @@ impl<'a> QuadMesh<'a> {
             vertex_buffer: Buffer::new(scene, h, num_verts, BufferType::VertexBuffer),
             index_buffer: Buffer::new(scene, h, num_quads, BufferType::IndexBuffer)
         }
+    }
+}
+
+impl<'a> Geometry for QuadMesh<'a> {
+    fn geom_id(&self) -> u32 {
+        self.handle as u32
     }
 }
 

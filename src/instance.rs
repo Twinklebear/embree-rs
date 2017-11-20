@@ -3,7 +3,7 @@ use std::os::raw::c_uint;
 use cgmath::Matrix4;
 
 use sys::*;
-use ::Scene;
+use ::{Scene, Geometry};
 
 pub struct Instance<'a> {
     /// The scene we're instanced in
@@ -34,6 +34,12 @@ impl<'a> Instance<'a> {
     }
     pub fn update(&mut self) {
         unsafe { rtcUpdate(*self.scene.handle.borrow(), self.handle) };
+    }
+}
+
+impl<'a> Geometry for Instance<'a> {
+    fn geom_id(&self) -> u32 {
+        self.handle as u32
     }
 }
 

@@ -17,6 +17,7 @@ pub mod buffer;
 pub mod triangle_mesh;
 pub mod quad_mesh;
 pub mod instance;
+pub mod geometry;
 
 pub use device::Device;
 pub use scene::Scene;
@@ -24,6 +25,7 @@ pub use buffer::{Buffer, MappedBuffer, BufferType};
 pub use triangle_mesh::TriangleMesh;
 pub use quad_mesh::QuadMesh;
 pub use instance::Instance;
+pub use geometry::Geometry;
 
 pub type Ray = sys::RTCRay;
 
