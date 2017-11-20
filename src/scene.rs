@@ -29,10 +29,10 @@ impl<'a> Scene<'a> {
         unsafe { rtcCommit(*h); }
     }
     pub fn intersect(&self, ray: &mut Ray) {
-        let h = self.handle.borrow();
-        unsafe {
-            rtcIntersect(*h, ray as *mut RTCRay);
-        }
+        unsafe { rtcIntersect(*self.handle.borrow(), ray as *mut RTCRay) };
+    }
+    pub fn occluded(&self, ray: &mut Ray) {
+        unsafe { rtcOccluded(*self.handle.borrow(), ray as *mut RTCRay) };
     }
 }
 
