@@ -32,6 +32,9 @@ impl<'a> Instance<'a> {
                              mat.as_ptr(), 0);
         }
     }
+    pub fn update(&mut self) {
+        unsafe { rtcUpdate(*self.scene.handle.borrow(), self.handle) };
+    }
 }
 
 impl<'a> Drop for Instance<'a> {
