@@ -1,4 +1,4 @@
 # embree-rs
 
-Rust bindings to [Embree](http://embree.github.io/).
+Rust bindings to [Embree 3.0](http://embree.github.io/).
 
