@@ -1,44 +1,48 @@
-use std::cell::RefCell;
 use std::marker::PhantomData;
-use std::mem;
 
 use sys::*;
 use device::Device;
-use ::{Ray, SceneFlags, AlgorithmFlags};
+use triangle_mesh::TriangleMesh;
+use ray::{Ray, RayHit, IntersectContext};
 
 pub struct Scene<'a> {
-    pub(crate) handle: RefCell<RTCScene>,
+    pub(crate) handle: RTCScene,
     /// We don't need to actually keep a reference to the device,
     /// we just need to track its lifetime for correctness
     device: PhantomData<&'a Device>,
 }
 impl<'a> Scene<'a> {
-    pub fn new(device: &'a Device, scene_flags: SceneFlags,
-               algorithm_flags: AlgorithmFlags) -> Scene
-    {
-        let h = unsafe {
-            rtcDeviceNewScene(device.handle,
-                              mem::transmute(scene_flags.bits),
-                              mem::transmute(algorithm_flags.bits))
-        };
-        Scene { handle: RefCell::new(h), device: PhantomData }
+    pub fn new(device: &'a Device) -> Scene {
+        Scene {
+            handle: unsafe { rtcNewScene(device.handle) },
+            device: PhantomData
+        }
+    }
+    pub fn attach_geometry(&mut self, mesh: &TriangleMesh) -> u32 {
+        unsafe { rtcAttachGeometry(self.handle, mesh.handle) }
     }
     pub fn commit(&self) {
-        let h = self.handle.try_borrow_mut()
-            .expect("Scene already borrowed: All buffers must be unmapped before commit");
-        unsafe { rtcCommit(*h); }
+        unsafe { rtcCommitScene(self.handle); }
     }
-    pub fn intersect(&self, ray: &mut Ray) {
-        unsafe { rtcIntersect(*self.handle.borrow(), ray as *mut RTCRay) };
+    pub fn intersect(&self, ctx: &mut IntersectContext, ray: &mut RayHit) {
+        unsafe {
+            rtcIntersect1(self.handle,
+                          ctx as *mut RTCIntersectContext,
+                          ray as *mut RTCRayHit);
+        }
     }
-    pub fn occluded(&self, ray: &mut Ray) {
-        unsafe { rtcOccluded(*self.handle.borrow(), ray as *mut RTCRay) };
+    pub fn occluded(&self, ctx: &mut IntersectContext, ray: &mut Ray) {
+        unsafe { 
+            rtcOccluded1(self.handle,
+                         ctx as *mut RTCIntersectContext,
+                         ray as *mut RTCRay);
+        }
     }
 }
 
 impl<'a> Drop for Scene<'a> {
     fn drop(&mut self) {
-        unsafe { rtcDeleteScene(*self.handle.borrow_mut()); }
+        unsafe { rtcReleaseScene(self.handle); }
     }
 }
 

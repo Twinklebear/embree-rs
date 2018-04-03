@@ -4,7 +4,7 @@ use std::mem;
 use cgmath::Vector4;
 
 use sys::*;
-use ::{Scene, GeometryFlags, Buffer, BufferType, Geometry};
+use ::{Scene, Buffer, Geometry};
 
 pub struct QuadMesh<'a> {
     scene: &'a Scene<'a>,

@@ -1,5 +1,8 @@
 use std::cmp::{PartialEq, Eq};
 
+/// TODO: The geometry ids are per-scene now, so we must change
+/// how we handle this trait.
+
 /// Geometry trait implemented by all Embree Geometry types
 pub trait Geometry {
     fn geom_id(&self) -> u32;

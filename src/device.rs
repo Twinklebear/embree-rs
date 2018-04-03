@@ -1,4 +1,5 @@
 use std::ptr;
+use std::ffi::CString;
 
 use sys::*;
 
@@ -7,15 +8,18 @@ pub struct Device {
 }
 impl Device {
     pub fn new() -> Device {
-        // TODO: Call and set the flush zero and denormals modes
-        // as recommended by Embree
         Device { handle: unsafe { rtcNewDevice(ptr::null()) } }
     }
-    // TODO: function that makes a device with a config string
+    pub fn debug() -> Device {
+        let cfg = CString::new("verbose=4").unwrap();
+        Device { handle: unsafe { rtcNewDevice(cfg.as_ptr()) } }
+    }
+    // TODO: Setup the flush zero and denormals mode needed by Embree
+    // using the Rust SIMD when it's in core
 }
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { rtcDeleteDevice(self.handle); }
+        unsafe { rtcReleaseDevice(self.handle); }
     }
 }
 

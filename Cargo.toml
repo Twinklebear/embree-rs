@@ -4,6 +4,5 @@ version = "0.1.0"
 authors = ["Will Usher <willusher.life@gmail.com>"]
 
 [dependencies]
-cgmath = "0.15.0"
-bitflags = "1.0.0"
+cgmath = "0.16.1"
 
