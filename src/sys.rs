@@ -517,7 +517,7 @@ extern "C" {
 extern "C" {
     pub fn rtcReleaseBuffer(buffer: RTCBuffer);
 }
-#[repr(C)]
+#[repr(C,align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCRay {
     pub org_x: f32,
@@ -549,6 +549,11 @@ fn bindgen_test_layout_RTCRay() {
             "::",
             stringify!(org_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCRay>(),
+        16usize,
+        concat!("Alignment of ", stringify!(RTCRay))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCRay>())).org_y as *const _ as usize },
