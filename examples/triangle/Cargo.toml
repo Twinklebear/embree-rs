@@ -7,5 +7,5 @@ build = "build.rs"
 [dependencies]
 embree = { path = "../../" }
 support = { path = "../support" }
-cgmath = "0.15.0"
+cgmath = "0.16.1"
 

@@ -70,10 +70,10 @@ impl Display {
                                     _ => {},
                                 }
                             },
-                            WindowEvent::MouseMoved { position, .. } if prev_mouse.is_none() => {
+                            WindowEvent::CursorMoved { position, .. } if prev_mouse.is_none() => {
                                 prev_mouse = Some(position);
                             },
-                            WindowEvent::MouseMoved { position, .. } => {
+                            WindowEvent::CursorMoved { position, .. } => {
                                 let prev = prev_mouse.unwrap();
                                 if mouse_pressed[0] {
                                     arcball_camera.rotate(Vector2::new(position.0 as f32, position.1 as f32),
