@@ -87,7 +87,7 @@ pub enum RTCBuildQuality {
     HIGH = 2,
     REFIT = 3,
 }
-#[repr(C)]
+#[repr(C,align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCBounds {
     pub lower_x: f32,
@@ -115,6 +115,11 @@ fn bindgen_test_layout_RTCBounds() {
             "::",
             stringify!(lower_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCBounds>(),
+        16usize,
+        concat!("Alignment of ", stringify!(RTCBounds))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCBounds>())).lower_y as *const _ as usize },
@@ -187,7 +192,7 @@ fn bindgen_test_layout_RTCBounds() {
         )
     );
 }
-#[repr(C)]
+#[repr(C,align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCLinearBounds {
     pub bounds0: RTCBounds,
@@ -209,6 +214,11 @@ fn bindgen_test_layout_RTCLinearBounds() {
             "::",
             stringify!(bounds0)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCLinearBounds>(),
+        16usize,
+        concat!("Alignment of ", stringify!(RTCLinearBounds))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCLinearBounds>())).bounds1 as *const _ as usize },
@@ -795,7 +805,7 @@ fn bindgen_test_layout_RTCRayHit() {
         )
     );
 }
-#[repr(C)]
+#[repr(C,align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCRay4 {
     pub org_x: [f32; 4usize],
@@ -827,6 +837,11 @@ fn bindgen_test_layout_RTCRay4() {
             "::",
             stringify!(org_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCRay4>(),
+        16usize,
+        concat!("Alignment of ", stringify!(RTCRay4))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCRay4>())).org_y as *const _ as usize },
@@ -939,7 +954,7 @@ fn bindgen_test_layout_RTCRay4() {
         )
     );
 }
-#[repr(C)]
+#[repr(C,align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCHit4 {
     pub Ng_x: [f32; 4usize],
@@ -967,6 +982,11 @@ fn bindgen_test_layout_RTCHit4() {
             "::",
             stringify!(Ng_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCHit4>(),
+        16usize,
+        concat!("Alignment of ", stringify!(RTCHit4))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCHit4>())).Ng_y as *const _ as usize },
@@ -1073,7 +1093,7 @@ fn bindgen_test_layout_RTCRayHit4() {
         )
     );
 }
-#[repr(C)]
+#[repr(C,align(32))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCRay8 {
     pub org_x: [f32; 8usize],
@@ -1105,6 +1125,11 @@ fn bindgen_test_layout_RTCRay8() {
             "::",
             stringify!(org_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCRay8>(),
+        32usize,
+        concat!("Alignment of ", stringify!(RTCRay8))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCRay8>())).org_y as *const _ as usize },
@@ -1217,7 +1242,7 @@ fn bindgen_test_layout_RTCRay8() {
         )
     );
 }
-#[repr(C)]
+#[repr(C,align(32))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCHit8 {
     pub Ng_x: [f32; 8usize],
@@ -1245,6 +1270,11 @@ fn bindgen_test_layout_RTCHit8() {
             "::",
             stringify!(Ng_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCHit8>(),
+        32usize,
+        concat!("Alignment of ", stringify!(RTCHit8))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCHit8>())).Ng_y as *const _ as usize },
@@ -1351,7 +1381,7 @@ fn bindgen_test_layout_RTCRayHit8() {
         )
     );
 }
-#[repr(C)]
+#[repr(C,align(64))]
 #[derive(Copy, Clone)]
 pub struct RTCRay16 {
     pub org_x: [f32; 16usize],
@@ -1383,6 +1413,11 @@ fn bindgen_test_layout_RTCRay16() {
             "::",
             stringify!(org_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCRay16>(),
+        64usize,
+        concat!("Alignment of ", stringify!(RTCRay16))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCRay16>())).org_y as *const _ as usize },
@@ -1495,7 +1530,7 @@ fn bindgen_test_layout_RTCRay16() {
         )
     );
 }
-#[repr(C)]
+#[repr(C,align(64))]
 #[derive(Copy, Clone)]
 pub struct RTCHit16 {
     pub Ng_x: [f32; 16usize],
@@ -1523,6 +1558,11 @@ fn bindgen_test_layout_RTCHit16() {
             "::",
             stringify!(Ng_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCHit16>(),
+        64usize,
+        concat!("Alignment of ", stringify!(RTCHit16))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCHit16>())).Ng_y as *const _ as usize },
@@ -3234,7 +3274,7 @@ pub struct RTCBVHTy {
     _unused: [u8; 0],
 }
 pub type RTCBVH = *mut RTCBVHTy;
-#[repr(C)]
+#[repr(C,align(32))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCBuildPrimitive {
     pub lower_x: f32,
@@ -3262,6 +3302,11 @@ fn bindgen_test_layout_RTCBuildPrimitive() {
             "::",
             stringify!(lower_x)
         )
+    );
+    assert_eq!(
+        ::std::mem::align_of::<RTCBuildPrimitive>(),
+        32usize,
+        concat!("Alignment of ", stringify!(RTCBuildPrimitive))
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<RTCBuildPrimitive>())).lower_y as *const _ as usize },
