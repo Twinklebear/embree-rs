@@ -1,5 +1,7 @@
 //! TODO: Docs
 #![feature(asm)]
+#![feature(attr_literals)]
+#![feature(repr_align)] 
 
 extern crate cgmath;
 
