@@ -1,50 +1,51 @@
-use std::os::raw::c_uint;
-use std::mem;
-
 use cgmath::Vector4;
 
 use sys::*;
-use ::{Scene, Buffer, Geometry};
+use device::Device;
+use buffer::Buffer;
+use geometry::Geometry;
+use ::{Format, GeometryType, BufferType};
 
 pub struct QuadMesh<'a> {
-    scene: &'a Scene<'a>,
-    handle: c_uint,
+    device: &'a Device,
+    pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
-    pub index_buffer: Buffer<'a, Vector4<i32>>,
+    pub index_buffer: Buffer<'a, Vector4<u32>>,
 }
 impl<'a> QuadMesh<'a> {
-    // TODO: It's awkward to be borrowing the scene as immutable all the
-    // time when we're actually doing mutations on the scene data
-    pub fn unanimated(scene: &'a Scene, flags: GeometryFlags,
-                      num_quads: usize, num_verts: usize) -> QuadMesh<'a>
-    {
+    pub fn unanimated(device: &'a Device, num_quads: usize, num_verts: usize) -> QuadMesh<'a> {
         let h = unsafe {
-            rtcNewQuadMesh(*scene.handle.borrow_mut(),
-                            mem::transmute(flags), num_quads, num_verts, 1)
+            rtcNewGeometry(device.handle, GeometryType::QUAD)
         };
-        QuadMesh {
-            scene: scene,
-            handle: h,
-            vertex_buffer: Buffer::new(scene, h, num_verts, BufferType::VertexBuffer),
-            index_buffer: Buffer::new(scene, h, num_quads, BufferType::IndexBuffer)
-        }
-    }
-}
+        let vertex_buffer = Buffer::new(device, num_verts);
+        let index_buffer = Buffer::new(device, num_quads);
+        unsafe {
+            rtcSetGeometryBuffer(h, BufferType::VERTEX, 0, Format::FLOAT3,
+                                 vertex_buffer.handle, 0, 16, num_verts);
 
-impl<'a> Geometry for QuadMesh<'a> {
-    fn geom_id(&self) -> u32 {
-        self.handle as u32
+            rtcSetGeometryBuffer(h, BufferType::INDEX, 0, Format::UINT4,
+                                 index_buffer.handle, 0, 16, num_quads);
+        }
+        QuadMesh {
+            device: device,
+            handle: h,
+            vertex_buffer: vertex_buffer,
+            index_buffer: index_buffer,
+        }
     }
 }
 
 impl<'a> Drop for QuadMesh<'a> {
     fn drop(&mut self) {
         unsafe {
-            // TODO: Is borrowing mut here going to lead to tricky runtime issues?
-            // Drops on a single thread won't occur in parallel right?
-            rtcDeleteGeometry(*self.scene.handle.borrow_mut(), self.handle);
+            rtcReleaseGeometry(self.handle);
         }
     }
 }
 
+impl<'a> Geometry for QuadMesh<'a> {
+    fn handle(&self) -> RTCGeometry {
+        self.handle
+    }
+}
 
