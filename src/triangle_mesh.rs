@@ -1,21 +1,18 @@
-use std::os::raw::c_uint;
-use std::mem;
-
 use cgmath::{Vector3, Vector4};
 
 use sys::*;
 use device::Device;
 use buffer::Buffer;
+use geometry::Geometry;
 use ::{Format, GeometryType, BufferType};
 
 pub struct TriangleMesh<'a> {
     device: &'a Device,
     pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
-    pub index_buffer: Buffer<'a, Vector3<i32>>,
+    pub index_buffer: Buffer<'a, Vector3<u32>>,
 }
 impl<'a> TriangleMesh<'a> {
-    /// TODO: How to handle buffers now?
     pub fn unanimated(device: &'a Device, num_tris: usize, num_verts: usize) -> TriangleMesh<'a> {
         let h = unsafe {
             rtcNewGeometry(device.handle, GeometryType::TRIANGLE)
@@ -36,9 +33,6 @@ impl<'a> TriangleMesh<'a> {
             index_buffer: index_buffer,
         }
     }
-    pub fn commit(&mut self) {
-        unsafe { rtcCommitGeometry(self.handle); }
-    }
 }
 
 impl<'a> Drop for TriangleMesh<'a> {
@@ -47,5 +41,9 @@ impl<'a> Drop for TriangleMesh<'a> {
             rtcReleaseGeometry(self.handle);
         }
     }
+}
+
+impl<'a> Geometry for TriangleMesh<'a> {
+    fn handle(&self) -> RTCGeometry { self.handle }
 }
 
