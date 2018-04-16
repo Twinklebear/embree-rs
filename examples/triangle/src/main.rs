@@ -4,16 +4,16 @@ extern crate embree;
 extern crate support;
 extern crate cgmath;
 
-use std::{f32, u32};
 use cgmath::{Vector3, Vector4};
+use embree::{Device, Geometry, TriangleMesh, Scene,
+             IntersectContext, Ray, RayHit};
 
 fn main() {
     let mut display = support::Display::new(512, 512, "triangle");
-    let device = embree::Device::new();
-    let mut scene = embree::Scene::new(&device);
+    let device = Device::new();
 
     // Make a triangle
-    let mut triangle = embree::TriangleMesh::unanimated(&device, 1, 3);
+    let mut triangle = TriangleMesh::unanimated(&device, 1, 3);
     {
         let mut verts = triangle.vertex_buffer.map();
         let mut tris = triangle.index_buffer.map();
@@ -24,10 +24,12 @@ fn main() {
         tris[0] = Vector3::new(0, 1, 2);
     }
     triangle.commit();
+
+    let mut scene = Scene::new(&device);
     scene.attach_geometry(&triangle);
     scene.commit();
 
-    let mut intersection_ctx = embree::IntersectContext::coherent();
+    let mut intersection_ctx = IntersectContext::coherent();
 
     display.run(|image, _, _| {
         let img_dims = image.dimensions();
@@ -37,11 +39,11 @@ fn main() {
             for i in 0..img_dims.0 {
                 let x = (i as f32 + 0.5) / img_dims.0 as f32 - 0.5;
                 let dir_len = f32::sqrt(x * x + y * y + 1.0);
-                let ray = embree::Ray::new(Vector3::new(0.0, 0.5, 2.0),
-                                            Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len));
-                let mut ray_hit = embree::RayHit::new(ray);
+                let ray = Ray::new(Vector3::new(0.0, 0.5, 2.0),
+                                   Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len));
+                let mut ray_hit = RayHit::new(ray);
                 scene.intersect(&mut intersection_ctx, &mut ray_hit);
-                if ray_hit.hit.geomID != u32::MAX {
+                if ray_hit.hit.hit() {
                     let p = image.get_pixel_mut(i, j);
                     p.data[0] = (ray_hit.hit.u * 255.0) as u8;
                     p.data[1] = (ray_hit.hit.v * 255.0) as u8;
