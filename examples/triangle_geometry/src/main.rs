@@ -4,13 +4,13 @@ extern crate embree;
 extern crate support;
 extern crate cgmath;
 
-use std::{f32, u32};
 use support::Camera;
 use cgmath::{Vector3, Vector4};
+use embree::{Device, Geometry, TriangleMesh, Scene,
+             IntersectContext, Ray, RayHit, QuadMesh};
 
-fn make_cube<'a>(scene: &'a embree::Scene) -> embree::TriangleMesh<'a> {
-    let mut mesh = embree::TriangleMesh::unanimated(scene, embree::GeometryFlags::STATIC,
-                                                12, 8);
+fn make_cube<'a>(device: &'a Device) -> TriangleMesh<'a> {
+    let mut mesh = TriangleMesh::unanimated(&device, 12, 8);
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut tris = mesh.index_buffer.map();
@@ -48,11 +48,11 @@ fn make_cube<'a>(scene: &'a embree::Scene) -> embree::TriangleMesh<'a> {
         tris[10] = Vector3::new(1, 3, 5);
         tris[11] = Vector3::new(3, 7, 5);
     }
+    mesh.commit();
     mesh
 }
-fn make_ground_plane<'a>(scene: &'a embree::Scene) -> embree::QuadMesh<'a> {
-    let mut mesh = embree::QuadMesh::unanimated(scene, embree::GeometryFlags::STATIC,
-                                                1, 4);
+fn make_ground_plane<'a>(device: &'a Device) -> QuadMesh<'a> {
+    let mut mesh = QuadMesh::unanimated(&device, 1, 4);
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut quads = mesh.index_buffer.map();
@@ -61,27 +61,32 @@ fn make_ground_plane<'a>(scene: &'a embree::Scene) -> embree::QuadMesh<'a> {
         verts[2] = Vector4::new(10.0, -2.0, 10.0, 0.0);
         verts[3] = Vector4::new(10.0, -2.0, -10.0, 0.0);
 
-        quads[0] = Vector4::<i32>::new(0, 1, 2, 3);
+        quads[0] = Vector4::new(0, 1, 2, 3);
     }
+    mesh.commit();
     mesh
 }
 
 fn main() {
     let mut display = support::Display::new(512, 512, "triangle geometry");
-    let device = embree::Device::new();
-    let scene = embree::Scene::new(&device, embree::SceneFlags::SCENE_STATIC,
-                                   embree::AlgorithmFlags::INTERSECT1);
-    let cube = make_cube(&scene);
-    let ground = make_ground_plane(&scene);
+    let device = Device::new();
+    let cube = make_cube(&device);
+    let ground = make_ground_plane(&device);
 
+    // TODO: Support for Embree3's new vertex attributes
     let face_colors = vec![Vector3::new(1.0, 0.0, 0.0), Vector3::new(1.0, 0.0, 0.0),
                             Vector3::new(0.0, 1.0, 0.0), Vector3::new(0.0, 1.0, 0.0),
-                            Vector3::new(0.5, 0.5, 0.5), Vector3::new(0.5, 0.5, 0.5),
+                            Vector3::new(1.0, 0.0, 1.0), Vector3::new(1.0, 0.0, 1.0),
                             Vector3::new(1.0, 1.0, 1.0), Vector3::new(1.0, 1.0, 1.0),
                             Vector3::new(0.0, 0.0, 1.0), Vector3::new(0.0, 0.0, 1.0),
                             Vector3::new(1.0, 1.0, 0.0), Vector3::new(1.0, 1.0, 0.0)];
 
+    let mut scene = Scene::new(&device);
+    let cube_id = scene.attach_geometry(&cube);
+    let ground_id = scene.attach_geometry(&ground);
     scene.commit();
+
+    let mut intersection_ctx = IntersectContext::coherent();
 
     display.run(|image, camera_pose, _| {
         for p in image.iter_mut() {
@@ -94,11 +99,17 @@ fn main() {
         for j in 0..img_dims.1 {
             for i in 0..img_dims.0 {
                 let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let mut ray = embree::Ray::new(&camera.pos, &dir);
-                scene.intersect(&mut ray);
-                if ray.geomID != u32::MAX {
-                    let color = &face_colors[ray.primID as usize];
+                let ray = Ray::new(camera.pos, dir);
+                let mut ray_hit = RayHit::new(ray);
+                scene.intersect(&mut intersection_ctx, &mut ray_hit);
+                if ray_hit.hit.hit() {
                     let mut p = image.get_pixel_mut(i, j);
+                    let color =
+                        if ray_hit.hit.geomID == ground_id {
+                            Vector3::new(0.6, 0.6, 0.6)
+                        } else {
+                            face_colors[ray_hit.hit.primID as usize]
+                        };
                     p.data[0] = (color.x * 255.0) as u8;
                     p.data[1] = (color.y * 255.0) as u8;
                     p.data[2] = (color.z * 255.0) as u8;
