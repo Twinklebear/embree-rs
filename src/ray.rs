@@ -45,6 +45,9 @@ impl Hit {
             instID: [u32::MAX; 1],
         }
     }
+    pub fn hit(&self) -> bool {
+        self.geomID != u32::MAX
+    }
 }
 
 impl RayHit {
