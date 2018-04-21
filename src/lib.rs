@@ -15,7 +15,7 @@ pub mod buffer;
 pub mod geometry;
 pub mod triangle_mesh;
 pub mod quad_mesh;
-//pub mod instance;
+pub mod instance;
 
 pub use ray::{Ray, Hit, RayHit, IntersectContext};
 pub use device::Device;
@@ -24,7 +24,7 @@ pub use buffer::{Buffer, MappedBuffer};
 pub use geometry::Geometry;
 pub use triangle_mesh::TriangleMesh;
 pub use quad_mesh::QuadMesh;
-//pub use instance::Instance;
+pub use instance::Instance;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases

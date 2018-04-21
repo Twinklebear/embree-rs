@@ -1,53 +1,50 @@
-use std::os::raw::c_uint;
+use std::os::raw;
 
 use cgmath::Matrix4;
 
 use sys::*;
-use ::{Scene, Geometry};
+use device::Device;
+use scene::Scene;
+use geometry::Geometry;
+use ::{Format, GeometryType, BufferType};
 
 pub struct Instance<'a> {
-    /// The scene we're instanced in
-    scene: &'a Scene<'a>,
+    device: &'a Device,
+    pub(crate) handle: RTCGeometry,
     /// The scene being instanced
-    instance: &'a Scene<'a>,
-    handle: c_uint,
+    scene: &'a Scene<'a>,
 }
 
 impl<'a> Instance<'a> {
-    pub fn unanimated(scene: &'a Scene, instance: &'a Scene) -> Instance<'a> {
-        let h = unsafe {
-            rtcNewInstance2(*scene.handle.borrow_mut(), *instance.handle.borrow(), 1)
-        };
+    pub fn unanimated(device: &'a Device, scene: &'a Scene) -> Instance<'a> {
+        let h = unsafe { rtcNewGeometry(device.handle, GeometryType::INSTANCE) };
+        unsafe { rtcSetGeometryInstancedScene(h, scene.handle); }
         Instance {
+            device: device,
+            handle: h,
             scene: scene,
-            instance: instance,
-            handle: h
         }
     }
     pub fn set_transform(&mut self, transform: &Matrix4<f32>) {
         let mat: &[f32; 16] = transform.as_ref();
+        // Will this be fine if we don't set the number of timesteps? Default should be 1?
         unsafe {
-            rtcSetTransform2(*self.scene.handle.borrow(), self.handle,
-                             RTCMatrixType::RTC_MATRIX_COLUMN_MAJOR_ALIGNED16,
-                             mat.as_ptr(), 0);
+            rtcSetGeometryTransform(self.handle, 0,
+                                    Format::FLOAT4X4_COLUMN_MAJOR,
+                                    mat.as_ptr() as *const raw::c_void);
         }
-    }
-    pub fn update(&mut self) {
-        unsafe { rtcUpdate(*self.scene.handle.borrow(), self.handle) };
-    }
-}
-
-impl<'a> Geometry for Instance<'a> {
-    fn geom_id(&self) -> u32 {
-        self.handle as u32
     }
 }
 
 impl<'a> Drop for Instance<'a> {
     fn drop(&mut self) {
         unsafe {
-            rtcDeleteGeometry(*self.scene.handle.borrow_mut(), self.handle);
+            rtcReleaseGeometry(self.handle);
         }
     }
+}
+
+impl<'a> Geometry for Instance<'a> {
+    fn handle(&self) -> RTCGeometry { self.handle }
 }
 
