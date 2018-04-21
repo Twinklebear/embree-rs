@@ -65,10 +65,10 @@ fn make_ground_plane<'a>(device: &'a Device) -> QuadMesh<'a> {
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut quads = mesh.index_buffer.map();
-        verts[0] = Vector4::new(-10.0, -1.0, -10.0, 0.0);
-        verts[1] = Vector4::new(-10.0, -1.0, 10.0, 0.0);
-        verts[2] = Vector4::new(10.0, -1.0, 10.0, 0.0);
-        verts[3] = Vector4::new(10.0, -1.0, -10.0, 0.0);
+        verts[0] = Vector4::new(-10.0, -2.0, -10.0, 0.0);
+        verts[1] = Vector4::new(-10.0, -2.0, 10.0, 0.0);
+        verts[2] = Vector4::new(10.0, -2.0, 10.0, 0.0);
+        verts[3] = Vector4::new(10.0, -2.0, -10.0, 0.0);
 
         quads[0] = Vector4::new(0, 1, 2, 3);
     }
@@ -180,8 +180,7 @@ fn main() {
         for j in 0..img_dims.1 {
             for i in 0..img_dims.0 {
                 let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let mut ray = Ray::new(camera.pos, dir);
-                let mut ray_hit = RayHit::new(ray);
+                let mut ray_hit = RayHit::new(Ray::new(camera.pos, dir));
                 scene.intersect(&mut intersection_ctx, &mut ray_hit);
 
                 if ray_hit.hit.hit() {
@@ -199,7 +198,7 @@ fn main() {
                             -Vector3::new(v.x, v.y, v.z).normalize()
                         };
                     let mut illum = 0.3;
-                    let shadow_pos = camera.pos + dir * ray.tfar;
+                    let shadow_pos = camera.pos + dir * ray_hit.ray.tfar;
                     let mut shadow_ray = Ray::segment(shadow_pos, light_dir, 0.001, f32::INFINITY);
                     scene.occluded(&mut intersection_ctx, &mut shadow_ray);
 
