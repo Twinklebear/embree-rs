@@ -4,19 +4,18 @@ extern crate embree;
 extern crate support;
 extern crate cgmath;
 
-use std::{ptr, slice, f32, u32};
+use std::{f32, u32};
 use cgmath::{Matrix4, SquareMatrix, Matrix, Vector3, Vector4, InnerSpace};
+use embree::{Device, Geometry, TriangleMesh, Scene,
+             IntersectContext, Ray, RayHit, QuadMesh, Instance};
 use support::Camera;
-
-use embree::Geometry;
 
 /// Make a triangulated sphere, from the Embree tutorial:
 /// https://github.com/embree/embree/blob/master/tutorials/instanced_geometry/instanced_geometry_device.cpp
-fn make_triangulated_sphere<'a>(scene: &'a embree::Scene, pos: &Vector3<f32>, radius: f32) -> embree::TriangleMesh<'a> {
+fn make_triangulated_sphere<'a>(device: &'a Device, pos: Vector3<f32>, radius: f32) -> TriangleMesh<'a> {
     let num_phi = 5;
     let num_theta = 2 * num_phi;
-    let mut mesh = embree::TriangleMesh::unanimated(scene, embree::GeometryFlags::STATIC,
-                                                    2 * num_theta * (num_phi - 1), num_theta * (num_phi + 1));
+    let mut mesh = TriangleMesh::unanimated(device, 2 * num_theta * (num_phi - 1), num_theta * (num_phi + 1));
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut tris = mesh.index_buffer.map();
@@ -44,35 +43,36 @@ fn make_triangulated_sphere<'a>(scene: &'a embree::Scene, pos: &Vector3<f32>, ra
                 let p11 = phi * num_theta + theta % num_theta;
 
                 if phi > 1 {
-                    tris[tri].x = p10 as i32;
-                    tris[tri].y = p00 as i32;
-                    tris[tri].z = p01 as i32;
+                    tris[tri].x = p10 as u32;
+                    tris[tri].y = p00 as u32;
+                    tris[tri].z = p01 as u32;
                     tri += 1;
                 }
                 if phi < num_phi {
-                    tris[tri].x = p11 as i32;
-                    tris[tri].y = p10 as i32;
-                    tris[tri].z = p01 as i32;
+                    tris[tri].x = p11 as u32;
+                    tris[tri].y = p10 as u32;
+                    tris[tri].z = p01 as u32;
                     tri += 1;
                 }
             }
         }
     }
+    mesh.commit();
     mesh
 }
-fn make_ground_plane<'a>(scene: &'a embree::Scene) -> embree::QuadMesh<'a> {
-    let mut mesh = embree::QuadMesh::unanimated(scene, embree::GeometryFlags::STATIC,
-                                                1, 4);
+fn make_ground_plane<'a>(device: &'a Device) -> QuadMesh<'a> {
+    let mut mesh = QuadMesh::unanimated(device, 1, 4);
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut quads = mesh.index_buffer.map();
-        verts[0] = Vector4::new(-10.0, -2.0, -10.0, 0.0);
-        verts[1] = Vector4::new(-10.0, -2.0, 10.0, 0.0);
-        verts[2] = Vector4::new(10.0, -2.0, 10.0, 0.0);
-        verts[3] = Vector4::new(10.0, -2.0, -10.0, 0.0);
+        verts[0] = Vector4::new(-10.0, -1.0, -10.0, 0.0);
+        verts[1] = Vector4::new(-10.0, -1.0, 10.0, 0.0);
+        verts[2] = Vector4::new(10.0, -1.0, 10.0, 0.0);
+        verts[3] = Vector4::new(10.0, -1.0, -10.0, 0.0);
 
-        quads[0] = Vector4::<i32>::new(0, 1, 2, 3);
+        quads[0] = Vector4::new(0, 1, 2, 3);
     }
+    mesh.commit();
     mesh
 }
 // Animate like the Embree example, returns the (transforms, normal_transforms)
@@ -99,25 +99,28 @@ fn animate_instances(time: f32, num_instances: usize) -> (Vec<Matrix4<f32>>, Vec
 
 fn main() {
     let mut display = support::Display::new(512, 512, "instancing");
-    let device = embree::Device::new();
-    let scene = embree::Scene::new(&device, embree::SceneFlags::SCENE_DYNAMIC,
-                                   embree::AlgorithmFlags::INTERSECT1);
+    let device = Device::new();
 
-    // Make the scene we'll instance with 4 triangulated spheres
-    let instanced_scene = embree::Scene::new(&device, embree::SceneFlags::SCENE_STATIC,
-                                             embree::AlgorithmFlags::INTERSECT1);
-    let spheres = vec![make_triangulated_sphere(&instanced_scene, &Vector3::new(0.0, 0.0, 1.0), 0.5),
-                       make_triangulated_sphere(&instanced_scene, &Vector3::new(1.0, 0.0, 0.0), 0.5),
-                       make_triangulated_sphere(&instanced_scene, &Vector3::new(0.0, 0.0, -1.0), 0.5),
-                       make_triangulated_sphere(&instanced_scene, &Vector3::new(-1.0, 0.0, 0.0), 0.5)];
+    // Make the scene we'll instance with 4 triangulated spheres.
+    let spheres = vec![make_triangulated_sphere(&device, Vector3::new(0.0, 0.0, 1.0), 0.5),
+                       make_triangulated_sphere(&device, Vector3::new(1.0, 0.0, 0.0), 0.5),
+                       make_triangulated_sphere(&device, Vector3::new(0.0, 0.0, -1.0), 0.5),
+                       make_triangulated_sphere(&device, Vector3::new(-1.0, 0.0, 0.0), 0.5)];
+    let mut instanced_scene = Scene::new(&device);
+    for s in &spheres[..] {
+        instanced_scene.attach_geometry(s);
+    }
     instanced_scene.commit();
 
     // Make the instances first so their ids will be 0-3 that we can then use
     // directly to index into the instance_colors
-    let mut instances = vec![embree::Instance::unanimated(&scene, &instanced_scene),
-                         embree::Instance::unanimated(&scene, &instanced_scene),
-                         embree::Instance::unanimated(&scene, &instanced_scene),
-                         embree::Instance::unanimated(&scene, &instanced_scene)];
+    let mut instances = vec![Instance::unanimated(&device, &instanced_scene),
+                             Instance::unanimated(&device, &instanced_scene),
+                             Instance::unanimated(&device, &instanced_scene),
+                             Instance::unanimated(&device, &instanced_scene)];
+    for i in &mut instances[..] {
+        i.commit();
+    }
 
     let instance_colors = vec![
         vec![Vector3::new(0.25, 0.0, 0.0), Vector3::new(0.5, 0.0, 0.0),
@@ -129,10 +132,24 @@ fn main() {
         vec![Vector3::new(0.25, 0.25, 0.0), Vector3::new(0.50, 0.50, 0.0),
              Vector3::new(0.75, 0.75, 0.0), Vector3::new(1.00, 1.00, 0.0)]];
 
-    let ground = make_ground_plane(&scene);
+    let ground = make_ground_plane(&device);
+
+    // TODO The commit and set_transform taking &mut self make it not possible
+    // to modify them while they're part of a scene. Maybe need to switch to
+    // a runtime checked borrowing? E.g. you should only avoid modifying
+    // the geometry if the scene is being rendered.
+    /*
+    let mut scene = Scene::new(&device);
+    let ground_id = scene.attach_geometry(&ground);
+    for i in &instances[..] {
+        scene.attach_geometry(i);
+    }
     scene.commit();
+    */
 
     let light_dir = Vector3::new(1.0, 1.0, -1.0).normalize();
+    let mut intersection_ctx = IntersectContext::coherent();
+
     display.run(|image, camera_pose, time| {
         for p in image.iter_mut() {
             *p = 0;
@@ -140,8 +157,20 @@ fn main() {
         let (transforms, normal_transforms) = animate_instances(time, instances.len());
         for (i, t) in transforms.iter().enumerate() {
             instances[i].set_transform(&t);
-            instances[i].update();
+            instances[i].commit();
         }
+        // TODO The commit and set_transform taking &mut self make it not possible
+        // to modify them while they're part of a scene. Maybe need to switch to
+        // a runtime checked borrowing? E.g. you should only avoid modifying
+        // the geometry if the scene is being rendered.
+        let mut scene = Scene::new(&device);
+        // TODO VERY BAD
+        for i in &instances[..] {
+            scene.attach_geometry(i);
+        }
+        // TODO VERY BAD
+        let ground_id = scene.attach_geometry(&ground);
+        // TODO VERY BAD
         scene.commit();
 
         let img_dims = image.dimensions();
@@ -151,38 +180,41 @@ fn main() {
         for j in 0..img_dims.1 {
             for i in 0..img_dims.0 {
                 let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let mut ray = embree::Ray::new(&camera.pos, &dir);
-                scene.intersect(&mut ray);
+                let mut ray = Ray::new(camera.pos, dir);
+                let mut ray_hit = RayHit::new(ray);
+                scene.intersect(&mut intersection_ctx, &mut ray_hit);
 
-                if ray.geomID != u32::MAX {
+                if ray_hit.hit.hit() {
                     // Transform the normals of the instances into world space with the normal_transforms
+                    let hit = &ray_hit.hit;
+                    let geom_id = hit.geomID;
+                    let inst_id = hit.instID[0];
                     let normal =
-                        if ray.instID == u32::MAX {
-                            Vector3::new(ray.Ng[0], ray.Ng[1], ray.Ng[2]).normalize()
+                        if inst_id == u32::MAX {
+                            Vector3::new(hit.Ng_x, hit.Ng_y, hit.Ng_z).normalize()
                         } else {
-                            let v = normal_transforms[ray.instID as usize]
-                                    * Vector4::new(ray.Ng[0], ray.Ng[1], ray.Ng[2], 0.0);
-                            Vector3::new(v.x, v.y, v.z).normalize()
+                            let v = normal_transforms[inst_id as usize]
+                                    * Vector4::new(hit.Ng_x, hit.Ng_y, hit.Ng_z, 0.0);
+                            // TODO Why are the normals coming out negative for the instances?
+                            -Vector3::new(v.x, v.y, v.z).normalize()
                         };
                     let mut illum = 0.3;
                     let shadow_pos = camera.pos + dir * ray.tfar;
-                    let mut shadow_ray = embree::Ray::new(&shadow_pos, &light_dir);
-                    shadow_ray.tnear = 0.001;
-                    scene.occluded(&mut shadow_ray);
+                    let mut shadow_ray = Ray::segment(shadow_pos, light_dir, 0.001, f32::INFINITY);
+                    scene.occluded(&mut intersection_ctx, &mut shadow_ray);
 
-                    if shadow_ray.geomID != 0 {
+                    if shadow_ray.tfar >= 0.0 {
                         illum = support::clamp(illum + f32::max(light_dir.dot(normal), 0.0), 0.0, 1.0);
                     }
 
                     let mut p = image.get_pixel_mut(i, j);
-                    // TODO: Why is the operator overload not picked up for this?
-                    if ray.instID == u32::MAX && ray.geomID == ground.geom_id() {
+                    if inst_id == u32::MAX && geom_id == ground_id {
                         p.data[0] = (255.0 * illum) as u8;
                         p.data[1] = p.data[0];
                         p.data[2] = p.data[0];
                     } else {
                         // Shade the instances using their color
-                        let color = &instance_colors[ray.instID as usize][ray.geomID as usize];
+                        let color = &instance_colors[inst_id as usize][geom_id as usize];
                         p.data[0] = (255.0 * illum * color.x) as u8;
                         p.data[1] = (255.0 * illum * color.y) as u8;
                         p.data[2] = (255.0 * illum * color.z) as u8;
