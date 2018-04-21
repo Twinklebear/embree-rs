@@ -44,14 +44,14 @@ fn make_triangulated_sphere<'a>(device: &'a Device, pos: Vector3<f32>, radius: f
 
                 if phi > 1 {
                     tris[tri].x = p10 as u32;
-                    tris[tri].y = p00 as u32;
-                    tris[tri].z = p01 as u32;
+                    tris[tri].y = p01 as u32;
+                    tris[tri].z = p00 as u32;
                     tri += 1;
                 }
                 if phi < num_phi {
                     tris[tri].x = p11 as u32;
-                    tris[tri].y = p10 as u32;
-                    tris[tri].z = p01 as u32;
+                    tris[tri].y = p01 as u32;
+                    tris[tri].z = p10 as u32;
                     tri += 1;
                 }
             }
@@ -188,15 +188,12 @@ fn main() {
                     let hit = &ray_hit.hit;
                     let geom_id = hit.geomID;
                     let inst_id = hit.instID[0];
-                    let normal =
-                        if inst_id == u32::MAX {
-                            Vector3::new(hit.Ng_x, hit.Ng_y, hit.Ng_z).normalize()
-                        } else {
-                            let v = normal_transforms[inst_id as usize]
-                                    * Vector4::new(hit.Ng_x, hit.Ng_y, hit.Ng_z, 0.0);
-                            // TODO Why are the normals coming out negative for the instances?
-                            -Vector3::new(v.x, v.y, v.z).normalize()
-                        };
+                    let mut normal = Vector3::new(hit.Ng_x, hit.Ng_y, hit.Ng_z).normalize();
+                    if inst_id != u32::MAX {
+                        let v = normal_transforms[inst_id as usize]
+                            * Vector4::new(normal.x, normal.y, normal.z, 0.0);
+                        normal = Vector3::new(v.x, v.y, v.z).normalize()
+                    }
                     let mut illum = 0.3;
                     let shadow_pos = camera.pos + dir * ray_hit.ray.tfar;
                     let mut shadow_ray = Ray::segment(shadow_pos, light_dir, 0.001, f32::INFINITY);
