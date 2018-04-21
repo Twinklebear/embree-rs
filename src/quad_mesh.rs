@@ -14,9 +14,7 @@ pub struct QuadMesh<'a> {
 }
 impl<'a> QuadMesh<'a> {
     pub fn unanimated(device: &'a Device, num_quads: usize, num_verts: usize) -> QuadMesh<'a> {
-        let h = unsafe {
-            rtcNewGeometry(device.handle, GeometryType::QUAD)
-        };
+        let h = unsafe { rtcNewGeometry(device.handle, GeometryType::QUAD) };
         let vertex_buffer = Buffer::new(device, num_verts);
         let index_buffer = Buffer::new(device, num_quads);
         unsafe {

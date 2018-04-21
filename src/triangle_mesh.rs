@@ -14,9 +14,7 @@ pub struct TriangleMesh<'a> {
 }
 impl<'a> TriangleMesh<'a> {
     pub fn unanimated(device: &'a Device, num_tris: usize, num_verts: usize) -> TriangleMesh<'a> {
-        let h = unsafe {
-            rtcNewGeometry(device.handle, GeometryType::TRIANGLE)
-        };
+        let h = unsafe { rtcNewGeometry(device.handle, GeometryType::TRIANGLE) };
         let vertex_buffer = Buffer::new(device, num_verts);
         let index_buffer = Buffer::new(device, num_tris);
         unsafe {

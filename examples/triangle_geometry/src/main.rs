@@ -10,7 +10,7 @@ use embree::{Device, Geometry, TriangleMesh, Scene,
              IntersectContext, Ray, RayHit, QuadMesh};
 
 fn make_cube<'a>(device: &'a Device) -> TriangleMesh<'a> {
-    let mut mesh = TriangleMesh::unanimated(&device, 12, 8);
+    let mut mesh = TriangleMesh::unanimated(device, 12, 8);
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut tris = mesh.index_buffer.map();
@@ -52,14 +52,14 @@ fn make_cube<'a>(device: &'a Device) -> TriangleMesh<'a> {
     mesh
 }
 fn make_ground_plane<'a>(device: &'a Device) -> QuadMesh<'a> {
-    let mut mesh = QuadMesh::unanimated(&device, 1, 4);
+    let mut mesh = QuadMesh::unanimated(device, 1, 4);
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut quads = mesh.index_buffer.map();
-        verts[0] = Vector4::new(-10.0, -2.0, -10.0, 0.0);
-        verts[1] = Vector4::new(-10.0, -2.0, 10.0, 0.0);
-        verts[2] = Vector4::new(10.0, -2.0, 10.0, 0.0);
-        verts[3] = Vector4::new(10.0, -2.0, -10.0, 0.0);
+        verts[0] = Vector4::new(-10.0, -1.0, -10.0, 0.0);
+        verts[1] = Vector4::new(-10.0, -1.0, 10.0, 0.0);
+        verts[2] = Vector4::new(10.0, -1.0, 10.0, 0.0);
+        verts[3] = Vector4::new(10.0, -1.0, -10.0, 0.0);
 
         quads[0] = Vector4::new(0, 1, 2, 3);
     }
