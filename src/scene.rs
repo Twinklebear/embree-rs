@@ -1,10 +1,10 @@
-use std::marker::PhantomData;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
-use sys::*;
 use device::Device;
 use geometry::Geometry;
-use ray::{Ray, RayHit, IntersectContext};
+use ray::{IntersectContext, Ray, RayHit};
+use sys::*;
 
 pub struct Scene<'a> {
     pub(crate) handle: RTCScene,
@@ -19,7 +19,7 @@ impl<'a> Scene<'a> {
         Scene {
             handle: unsafe { rtcNewScene(device.handle) },
             device: PhantomData,
-            geometry: HashMap::new(),                
+            geometry: HashMap::new(),
         }
     }
     /// Attach a new geometry to the scene. Returns the scene local ID which
@@ -37,27 +37,34 @@ impl<'a> Scene<'a> {
         }
     }
     pub fn commit(&self) {
-        unsafe { rtcCommitScene(self.handle); }
+        unsafe {
+            rtcCommitScene(self.handle);
+        }
     }
     pub fn intersect(&self, ctx: &mut IntersectContext, ray: &mut RayHit) {
         unsafe {
-            rtcIntersect1(self.handle,
-                          ctx as *mut RTCIntersectContext,
-                          ray as *mut RTCRayHit);
+            rtcIntersect1(
+                self.handle,
+                ctx as *mut RTCIntersectContext,
+                ray as *mut RTCRayHit,
+            );
         }
     }
     pub fn occluded(&self, ctx: &mut IntersectContext, ray: &mut Ray) {
-        unsafe { 
-            rtcOccluded1(self.handle,
-                         ctx as *mut RTCIntersectContext,
-                         ray as *mut RTCRay);
+        unsafe {
+            rtcOccluded1(
+                self.handle,
+                ctx as *mut RTCIntersectContext,
+                ray as *mut RTCRay,
+            );
         }
     }
 }
 
 impl<'a> Drop for Scene<'a> {
     fn drop(&mut self) {
-        unsafe { rtcReleaseScene(self.handle); }
+        unsafe {
+            rtcReleaseScene(self.handle);
+        }
     }
 }
-

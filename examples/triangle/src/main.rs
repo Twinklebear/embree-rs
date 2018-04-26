@@ -1,12 +1,11 @@
 #![allow(dead_code)]
 
+extern crate cgmath;
 extern crate embree;
 extern crate support;
-extern crate cgmath;
 
 use cgmath::{Vector3, Vector4};
-use embree::{Device, Geometry, TriangleMesh, Scene,
-             IntersectContext, Ray, RayHit};
+use embree::{Device, Geometry, IntersectContext, Ray, RayHit, Scene, TriangleMesh};
 
 fn main() {
     let mut display = support::Display::new(512, 512, "triangle");
@@ -39,8 +38,10 @@ fn main() {
             for i in 0..img_dims.0 {
                 let x = (i as f32 + 0.5) / img_dims.0 as f32 - 0.5;
                 let dir_len = f32::sqrt(x * x + y * y + 1.0);
-                let ray = Ray::new(Vector3::new(0.0, 0.5, 2.0),
-                                   Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len));
+                let ray = Ray::new(
+                    Vector3::new(0.0, 0.5, 2.0),
+                    Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len),
+                );
                 let mut ray_hit = RayHit::new(ray);
                 scene.intersect(&mut intersection_ctx, &mut ray_hit);
                 if ray_hit.hit.hit() {
@@ -53,4 +54,3 @@ fn main() {
         }
     });
 }
-

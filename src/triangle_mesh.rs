@@ -1,10 +1,10 @@
 use cgmath::{Vector3, Vector4};
 
-use sys::*;
-use device::Device;
 use buffer::Buffer;
+use device::Device;
 use geometry::Geometry;
-use ::{Format, GeometryType, BufferType};
+use sys::*;
+use {BufferType, Format, GeometryType};
 
 pub struct TriangleMesh<'a> {
     device: &'a Device,
@@ -18,11 +18,27 @@ impl<'a> TriangleMesh<'a> {
         let vertex_buffer = Buffer::new(device, num_verts);
         let index_buffer = Buffer::new(device, num_tris);
         unsafe {
-            rtcSetGeometryBuffer(h, BufferType::VERTEX, 0, Format::FLOAT3,
-                                 vertex_buffer.handle, 0, 16, num_verts);
+            rtcSetGeometryBuffer(
+                h,
+                BufferType::VERTEX,
+                0,
+                Format::FLOAT3,
+                vertex_buffer.handle,
+                0,
+                16,
+                num_verts,
+            );
 
-            rtcSetGeometryBuffer(h, BufferType::INDEX, 0, Format::UINT3,
-                                 index_buffer.handle, 0, 12, num_tris);
+            rtcSetGeometryBuffer(
+                h,
+                BufferType::INDEX,
+                0,
+                Format::UINT3,
+                index_buffer.handle,
+                0,
+                12,
+                num_tris,
+            );
         }
         TriangleMesh {
             device: device,
@@ -42,6 +58,7 @@ impl<'a> Drop for TriangleMesh<'a> {
 }
 
 impl<'a> Geometry for TriangleMesh<'a> {
-    fn handle(&self) -> RTCGeometry { self.handle }
+    fn handle(&self) -> RTCGeometry {
+        self.handle
+    }
 }
-

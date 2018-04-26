@@ -87,7 +87,7 @@ pub enum RTCBuildQuality {
     HIGH = 2,
     REFIT = 3,
 }
-#[repr(C,align(16))]
+#[repr(C, align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCBounds {
     pub lower_x: f32,
@@ -192,7 +192,7 @@ fn bindgen_test_layout_RTCBounds() {
         )
     );
 }
-#[repr(C,align(16))]
+#[repr(C, align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCLinearBounds {
     pub bounds0: RTCBounds,
@@ -231,12 +231,10 @@ fn bindgen_test_layout_RTCLinearBounds() {
         )
     );
 }
-pub const RTCIntersectContextFlags_NONE: RTCIntersectContextFlags =
-    RTCIntersectContextFlags(0);
+pub const RTCIntersectContextFlags_NONE: RTCIntersectContextFlags = RTCIntersectContextFlags(0);
 pub const RTCIntersectContextFlags_INCOHERENT: RTCIntersectContextFlags =
     RTCIntersectContextFlags(0);
-pub const RTCIntersectContextFlags_COHERENT: RTCIntersectContextFlags =
-    RTCIntersectContextFlags(1);
+pub const RTCIntersectContextFlags_COHERENT: RTCIntersectContextFlags = RTCIntersectContextFlags(1);
 impl ::std::ops::BitOr<RTCIntersectContextFlags> for RTCIntersectContextFlags {
     type Output = Self;
     #[inline]
@@ -527,7 +525,7 @@ extern "C" {
 extern "C" {
     pub fn rtcReleaseBuffer(buffer: RTCBuffer);
 }
-#[repr(C,align(16))]
+#[repr(C, align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCRay {
     pub org_x: f32,
@@ -805,7 +803,7 @@ fn bindgen_test_layout_RTCRayHit() {
         )
     );
 }
-#[repr(C,align(16))]
+#[repr(C, align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCRay4 {
     pub org_x: [f32; 4usize],
@@ -954,7 +952,7 @@ fn bindgen_test_layout_RTCRay4() {
         )
     );
 }
-#[repr(C,align(16))]
+#[repr(C, align(16))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCHit4 {
     pub Ng_x: [f32; 4usize],
@@ -1093,7 +1091,7 @@ fn bindgen_test_layout_RTCRayHit4() {
         )
     );
 }
-#[repr(C,align(32))]
+#[repr(C, align(32))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCRay8 {
     pub org_x: [f32; 8usize],
@@ -1242,7 +1240,7 @@ fn bindgen_test_layout_RTCRay8() {
         )
     );
 }
-#[repr(C,align(32))]
+#[repr(C, align(32))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCHit8 {
     pub Ng_x: [f32; 8usize],
@@ -1381,7 +1379,7 @@ fn bindgen_test_layout_RTCRayHit8() {
         )
     );
 }
-#[repr(C,align(64))]
+#[repr(C, align(64))]
 #[derive(Copy, Clone)]
 pub struct RTCRay16 {
     pub org_x: [f32; 16usize],
@@ -1530,7 +1528,7 @@ fn bindgen_test_layout_RTCRay16() {
         )
     );
 }
-#[repr(C,align(64))]
+#[repr(C, align(64))]
 #[derive(Copy, Clone)]
 pub struct RTCHit16 {
     pub Ng_x: [f32; 16usize],
@@ -3274,7 +3272,7 @@ pub struct RTCBVHTy {
     _unused: [u8; 0],
 }
 pub type RTCBVH = *mut RTCBVHTy;
-#[repr(C,align(32))]
+#[repr(C, align(32))]
 #[derive(Debug, Copy, Clone)]
 pub struct RTCBuildPrimitive {
     pub lower_x: f32,

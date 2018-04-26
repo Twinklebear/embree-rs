@@ -1,5 +1,5 @@
-use std::{u32, f32};
 use cgmath::Vector3;
+use std::{f32, u32};
 
 use sys;
 
@@ -13,8 +13,7 @@ impl Ray {
     pub fn new(origin: Vector3<f32>, dir: Vector3<f32>) -> Ray {
         Ray::segment(origin, dir, 0.0, f32::INFINITY)
     }
-    pub fn segment(origin: Vector3<f32>, dir: Vector3<f32>,
-                   tnear: f32, tfar: f32) -> Ray {
+    pub fn segment(origin: Vector3<f32>, dir: Vector3<f32>, tnear: f32, tfar: f32) -> Ray {
         sys::RTCRay {
             org_x: origin.x,
             org_y: origin.y,
@@ -70,8 +69,7 @@ impl IntersectContext {
         sys::RTCIntersectContext {
             flags: flags,
             filter: None,
-            instID : [u32::MAX; 1],
+            instID: [u32::MAX; 1],
         }
     }
 }
-

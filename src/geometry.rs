@@ -4,7 +4,9 @@ use sys::*;
 pub trait Geometry {
     fn handle(&self) -> RTCGeometry;
     fn commit(&mut self) {
-        unsafe { rtcCommitGeometry(self.handle()); }
+        unsafe {
+            rtcCommitGeometry(self.handle());
+        }
     }
 }
 
@@ -15,5 +17,3 @@ impl PartialEq<Geometry> for Geometry {
 }
 
 impl Eq for Geometry {}
-
-

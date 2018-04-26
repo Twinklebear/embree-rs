@@ -10,4 +10,3 @@ fn main() {
     println!("cargo:rerun-if-env-changed=EMBREE_DIR");
     println!("cargo:rustc-link-lib=embree3");
 }
-

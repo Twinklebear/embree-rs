@@ -2,14 +2,14 @@ use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Index, IndexMut};
 
-use sys::*;
 use device::Device;
+use sys::*;
 
 pub struct Buffer<'a, T> {
     device: &'a Device,
-    pub (crate) handle: RTCBuffer,
+    pub(crate) handle: RTCBuffer,
     bytes: usize,
-    marker: PhantomData<T>
+    marker: PhantomData<T>,
 }
 
 impl<'a, T> Buffer<'a, T> {
@@ -19,7 +19,7 @@ impl<'a, T> Buffer<'a, T> {
             device: device,
             handle: unsafe { rtcNewBuffer(device.handle, bytes) },
             bytes: bytes,
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
     pub fn new(device: &'a Device, len: usize) -> Buffer<'a, T> {
@@ -28,7 +28,7 @@ impl<'a, T> Buffer<'a, T> {
             device: device,
             handle: unsafe { rtcNewBuffer(device.handle, bytes) },
             bytes: bytes,
-            marker: PhantomData
+            marker: PhantomData,
         }
     }
     pub fn map<'b>(&'b mut self) -> MappedBuffer<'b, T> {
@@ -44,7 +44,9 @@ impl<'a, T> Buffer<'a, T> {
 
 impl<'a, T> Drop for Buffer<'a, T> {
     fn drop(&mut self) {
-        unsafe { rtcReleaseBuffer(self.handle); }
+        unsafe {
+            rtcReleaseBuffer(self.handle);
+        }
     }
 }
 
@@ -80,4 +82,3 @@ impl<'a, T: 'a> IndexMut<usize> for MappedBuffer<'a, T> {
         unsafe { &mut *self.slice.offset(index as isize) }
     }
 }
-

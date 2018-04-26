@@ -1,13 +1,12 @@
 #![allow(dead_code)]
 
+extern crate cgmath;
 extern crate embree;
 extern crate support;
-extern crate cgmath;
 
-use support::Camera;
 use cgmath::{Vector3, Vector4};
-use embree::{Device, Geometry, TriangleMesh, Scene,
-             IntersectContext, Ray, RayHit, QuadMesh};
+use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh};
+use support::Camera;
 
 fn make_cube<'a>(device: &'a Device) -> TriangleMesh<'a> {
     let mut mesh = TriangleMesh::unanimated(device, 12, 8);
@@ -74,12 +73,20 @@ fn main() {
     let ground = make_ground_plane(&device);
 
     // TODO: Support for Embree3's new vertex attributes
-    let face_colors = vec![Vector3::new(1.0, 0.0, 0.0), Vector3::new(1.0, 0.0, 0.0),
-                            Vector3::new(0.0, 1.0, 0.0), Vector3::new(0.0, 1.0, 0.0),
-                            Vector3::new(1.0, 0.0, 1.0), Vector3::new(1.0, 0.0, 1.0),
-                            Vector3::new(1.0, 1.0, 1.0), Vector3::new(1.0, 1.0, 1.0),
-                            Vector3::new(0.0, 0.0, 1.0), Vector3::new(0.0, 0.0, 1.0),
-                            Vector3::new(1.0, 1.0, 0.0), Vector3::new(1.0, 1.0, 0.0)];
+    let face_colors = vec![
+        Vector3::new(1.0, 0.0, 0.0),
+        Vector3::new(1.0, 0.0, 0.0),
+        Vector3::new(0.0, 1.0, 0.0),
+        Vector3::new(0.0, 1.0, 0.0),
+        Vector3::new(1.0, 0.0, 1.0),
+        Vector3::new(1.0, 0.0, 1.0),
+        Vector3::new(1.0, 1.0, 1.0),
+        Vector3::new(1.0, 1.0, 1.0),
+        Vector3::new(0.0, 0.0, 1.0),
+        Vector3::new(0.0, 0.0, 1.0),
+        Vector3::new(1.0, 1.0, 0.0),
+        Vector3::new(1.0, 1.0, 0.0),
+    ];
 
     let mut scene = Scene::new(&device);
     let cube_id = scene.attach_geometry(&cube);
@@ -93,8 +100,13 @@ fn main() {
             *p = 0;
         }
         let img_dims = image.dimensions();
-        let camera = Camera::look_dir(camera_pose.pos, camera_pose.dir,
-                                     camera_pose.up, 75.0, img_dims);
+        let camera = Camera::look_dir(
+            camera_pose.pos,
+            camera_pose.dir,
+            camera_pose.up,
+            75.0,
+            img_dims,
+        );
         // Render the scene
         for j in 0..img_dims.1 {
             for i in 0..img_dims.0 {
@@ -104,12 +116,11 @@ fn main() {
                 scene.intersect(&mut intersection_ctx, &mut ray_hit);
                 if ray_hit.hit.hit() {
                     let mut p = image.get_pixel_mut(i, j);
-                    let color =
-                        if ray_hit.hit.geomID == ground_id {
-                            Vector3::new(0.6, 0.6, 0.6)
-                        } else {
-                            face_colors[ray_hit.hit.primID as usize]
-                        };
+                    let color = if ray_hit.hit.geomID == ground_id {
+                        Vector3::new(0.6, 0.6, 0.6)
+                    } else {
+                        face_colors[ray_hit.hit.primID as usize]
+                    };
                     p.data[0] = (color.x * 255.0) as u8;
                     p.data[1] = (color.y * 255.0) as u8;
                     p.data[2] = (color.z * 255.0) as u8;
@@ -118,4 +129,3 @@ fn main() {
         }
     });
 }
-
