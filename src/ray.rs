@@ -60,10 +60,10 @@ impl RayHit {
 
 impl IntersectContext {
     pub fn coherent() -> IntersectContext {
-        IntersectContext::new(sys::RTCIntersectContextFlags_COHERENT)
+        IntersectContext::new(sys::RTCIntersectContextFlags::COHERENT)
     }
     pub fn incoherent() -> IntersectContext {
-        IntersectContext::new(sys::RTCIntersectContextFlags_INCOHERENT)
+        IntersectContext::new(sys::RTCIntersectContextFlags::INCOHERENT)
     }
     fn new(flags: sys::RTCIntersectContextFlags) -> IntersectContext {
         sys::RTCIntersectContext {

@@ -1,5 +1,4 @@
 //! TODO: Docs
-#![feature(attr_literals)]
 
 extern crate cgmath;
 
