@@ -123,19 +123,16 @@ fn main() {
     for s in &spheres[..] {
         instanced_scene.attach_geometry(s);
     }
-    instanced_scene.commit();
+    let committed_instance = instanced_scene.commit();
 
     // Make the instances first so their ids will be 0-3 that we can then use
     // directly to index into the instance_colors
     let mut instances = vec![
-        Instance::unanimated(&device, &instanced_scene),
-        Instance::unanimated(&device, &instanced_scene),
-        Instance::unanimated(&device, &instanced_scene),
-        Instance::unanimated(&device, &instanced_scene),
+        Instance::unanimated(&device, &committed_instance),
+        Instance::unanimated(&device, &committed_instance),
+        Instance::unanimated(&device, &committed_instance),
+        Instance::unanimated(&device, &committed_instance),
     ];
-    for i in &mut instances[..] {
-        i.commit();
-    }
 
     let instance_colors = vec![
         vec![
@@ -165,19 +162,6 @@ fn main() {
     ];
 
     let ground = make_ground_plane(&device);
-
-    // TODO The commit and set_transform taking &mut self make it not possible
-    // to modify them while they're part of a scene. Maybe need to switch to
-    // a runtime checked borrowing? E.g. you should only avoid modifying
-    // the geometry if the scene is being rendered.
-    /*
-    let mut scene = Scene::new(&device);
-    let ground_id = scene.attach_geometry(&ground);
-    for i in &instances[..] {
-        scene.attach_geometry(i);
-    }
-    scene.commit();
-    */
 
     let light_dir = Vector3::new(1.0, 1.0, -1.0).normalize();
     let mut intersection_ctx = IntersectContext::coherent();

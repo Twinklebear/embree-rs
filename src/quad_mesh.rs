@@ -49,16 +49,3 @@ impl<'a> QuadMesh<'a> {
     }
 }
 
-impl<'a> Drop for QuadMesh<'a> {
-    fn drop(&mut self) {
-        unsafe {
-            rtcReleaseGeometry(self.handle);
-        }
-    }
-}
-
-impl<'a> Geometry for QuadMesh<'a> {
-    fn handle(&self) -> RTCGeometry {
-        self.handle
-    }
-}

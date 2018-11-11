@@ -11,12 +11,11 @@ pub struct Scene<'a> {
     /// We don't need to actually keep a reference to the device,
     /// we just need to track its lifetime for correctness
     device: PhantomData<&'a Device>,
-    geometry: HashMap<u32, &'a Geometry>,
+    geometry: HashMap<u32, Geometry<'a>>,
 }
 
 pub struct CommittedScene<'a> {
-    scene: &'a Scene,
-    geometry: HashMap<u32, &'a Geometry>,
+    pub (crate) scene: &'a Scene<'a>,
 }
 
 impl<'a> Scene<'a> {
@@ -29,17 +28,35 @@ impl<'a> Scene<'a> {
     }
     /// Attach a new geometry to the scene. Returns the scene local ID which
     /// can than be used to find the hit geometry from the ray ID member.
-    pub fn attach_geometry(&mut self, mesh: &'a Geometry) -> u32 {
+    /// A geometry can only be attached to one Scene at a time, per the Embree
+    /// documentation. The geometry can be detached from the scene to move
+    /// it to another one.
+    pub fn attach_geometry(&mut self, mesh: Geometry<'a>) -> u32 {
         let id = unsafe { rtcAttachGeometry(self.handle, mesh.handle()) };
         self.geometry.insert(id, mesh);
         id
     }
+    /// Detach the geometry from the scene
+    pub fn deattach_geometry(&mut self, id: u32) -> Option<Geometry<'a>> {
+        self.geometry.remove(&id)
+    }
     /// Look up a geometry in the scene by the ID returned from `attach_geometry`
-    pub fn get_geometry(&self, id: u32) -> Option<&'a Geometry> {
+    pub fn get_geometry(&self, id: u32) -> Option<&Geometry<'a>> {
         match self.geometry.get(&id) {
-            Some(g) => Some(*g),
+            Some(g) => Some(g),
             None => None,
         }
+    }
+    /// Look up a geometry in the scene by the ID returned from `attach_geometry`
+    pub fn get_geometry_mut(&mut self, id: u32) -> Option<&mut Geometry<'a>> {
+        match self.geometry.get_mut(&id) {
+            Some(g) => Some(g),
+            None => None,
+        }
+    }
+    // Get an iterator over the geometry map
+    pub fn iter(&self) -> std::collections::hash_map::Iter<u32, Geometry<'a>> {
+        self.geometry.iter()
     }
     // TODO: It makes sense to actually force the user to not
     // be able to modify the scene, after it's been committed. Since
@@ -65,7 +82,7 @@ impl<'a> Scene<'a> {
         // back without keeping the geometry locked out of being modified
         // because it remains borrowed by the scene again.
         // Runtime ownership may be the only option here unfortunately
-        CommittedScene { scene: &self, geometry: self.geometry }
+        CommittedScene { scene: &self }
     }
 }
 
@@ -96,4 +113,5 @@ impl<'a> CommittedScene<'a> {
             );
         }
     }
+}
 

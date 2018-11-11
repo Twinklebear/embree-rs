@@ -22,11 +22,12 @@ fn main() {
 
         tris[0] = Vector3::new(0, 1, 2);
     }
-    triangle.commit();
+    let mut tri_geom = Geometry::Triangle(triangle);
+    tri_geom.commit();
 
     let mut scene = Scene::new(&device);
-    scene.attach_geometry(&triangle);
-    scene.commit();
+    scene.attach_geometry(tri_geom);
+    let rtscene = scene.commit();
 
     let mut intersection_ctx = IntersectContext::coherent();
 
@@ -41,9 +42,9 @@ fn main() {
                 let ray = Ray::new(
                     Vector3::new(0.0, 0.5, 2.0),
                     Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len),
-                );
+                    );
                 let mut ray_hit = RayHit::new(ray);
-                scene.intersect(&mut intersection_ctx, &mut ray_hit);
+                rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
                 if ray_hit.hit.hit() {
                     let p = image.get_pixel_mut(i, j);
                     p.data[0] = (ray_hit.hit.u * 255.0) as u8;
@@ -54,3 +55,4 @@ fn main() {
         }
     });
 }
+

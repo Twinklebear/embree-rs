@@ -4,7 +4,7 @@ use cgmath::Matrix4;
 
 use device::Device;
 use geometry::Geometry;
-use scene::Scene;
+use scene::{Scene, CommittedScene};
 use sys::*;
 use {BufferType, Format, GeometryType};
 
@@ -12,14 +12,14 @@ pub struct Instance<'a> {
     device: &'a Device,
     pub(crate) handle: RTCGeometry,
     /// The scene being instanced
-    scene: &'a Scene<'a>,
+    scene: &'a CommittedScene<'a>,
 }
 
 impl<'a> Instance<'a> {
-    pub fn unanimated(device: &'a Device, scene: &'a Scene) -> Instance<'a> {
+    pub fn unanimated(device: &'a Device, scene: &'a CommittedScene) -> Instance<'a> {
         let h = unsafe { rtcNewGeometry(device.handle, GeometryType::INSTANCE) };
         unsafe {
-            rtcSetGeometryInstancedScene(h, scene.handle);
+            rtcSetGeometryInstancedScene(h, scene.scene.handle);
         }
         Instance {
             device: device,
@@ -41,16 +41,3 @@ impl<'a> Instance<'a> {
     }
 }
 
-impl<'a> Drop for Instance<'a> {
-    fn drop(&mut self) {
-        unsafe {
-            rtcReleaseGeometry(self.handle);
-        }
-    }
-}
-
-impl<'a> Geometry for Instance<'a> {
-    fn handle(&self) -> RTCGeometry {
-        self.handle
-    }
-}
