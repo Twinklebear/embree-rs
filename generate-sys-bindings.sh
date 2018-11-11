@@ -17,7 +17,8 @@ bindgen $1 -o $2 \
 	--rustified-enum "RTCSubdivisionMode" \
 	--rustified-enum "RTCFormat" \
 	--rustified-enum "RTCBuildQuality" \
-	--bitfield-enum "RTC.*Flags"
+	--bitfield-enum "RTC.*Flags" \
+	--rust-target nightly
 
 # Run some sed to polish up the enums
 sed -i "s/RTC_FORMAT_//g" $2
