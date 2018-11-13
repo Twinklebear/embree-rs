@@ -1,0 +1,37 @@
+dist: xenial
+sudo: false
+language: rust
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+rust:
+    - stable
+    - beta
+cache: cargo
+matrix:
+    allow_failures:
+        - rust: nightly
+before_script:
+    - wget https://github.com/embree/embree/releases/download/v3.2.4/embree-${EMBREE_VERSION}.x86_64.linux.tar.gz 
+    - tar -xf embree-${EMBREE_VERSION}.x86_64.linux.tar.gz 
+    - source embree-${EMBREE_VERSION}.x86_64.linux/embree-vars.sh
+    - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+script:
+    - travis-cargo build
+    - travis-cargo test
+    - travis-cargo doc
+    - for d in `ls examples/`; do
+      cd examples/${d}/;
+      cargo build;
+      cd ../../;
+      done
+after_success:
+    - git config user.name "Travis-CI Doc Bot"
+    - git config user.email "willusher.life@gmail.com"
+      #    - travis-cargo --only stable doc-upload
+env:
+  matrix:
+  - EMBREE_VERSION=3.2.4
+
+

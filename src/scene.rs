@@ -6,6 +6,10 @@ use geometry::Geometry;
 use ray::{IntersectContext, Ray, RayHit};
 use sys::*;
 
+/// A scene containing various geometry for rendering. Geometry
+/// can be added and removed by attaching and detaching it, after
+/// which the scene BVH can be built via `commit` which will
+/// return a `CommittedScene` which can be used for ray queries.
 pub struct Scene<'a> {
     pub(crate) handle: RTCScene,
     /// We don't need to actually keep a reference to the device,
@@ -14,6 +18,8 @@ pub struct Scene<'a> {
     geometry: HashMap<u32, Geometry<'a>>,
 }
 
+/// A committed scene with a BVH built over the geometry
+/// which can be used for ray queries.
 pub struct CommittedScene<'a> {
     pub (crate) scene: &'a Scene<'a>,
 }
@@ -62,7 +68,10 @@ impl<'a> Scene<'a> {
     pub fn iter_mut(&mut self) -> std::collections::hash_map::IterMut<u32, Geometry<'a>> {
         self.geometry.iter_mut()
     }
-    /// TODO DOC
+    /// Commit the scene to build the BVH on top of the geometry to allow
+    /// for ray tracing the scene. The returned `CommittedScene` can be
+    /// used for intersection and occlusion tests. The `Scene` can't
+    /// be modified while the `CommittedScene` is active.
     pub fn commit(&'a self) -> CommittedScene<'a> {
         unsafe {
             rtcCommitScene(self.handle);
