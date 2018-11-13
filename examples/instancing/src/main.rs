@@ -12,18 +12,15 @@ use support::Camera;
 
 /// Make a triangulated sphere, from the Embree tutorial:
 /// https://github.com/embree/embree/blob/master/tutorials/instanced_geometry/instanced_geometry_device.cpp
-fn make_triangulated_sphere<'a>(
-    device: &'a Device,
-    pos: Vector3<f32>,
-    radius: f32,
-) -> TriangleMesh<'a> {
+fn make_triangulated_sphere<'a>(device: &'a Device,
+                                pos: Vector3<f32>,
+                                radius: f32) -> Geometry<'a>
+{
     let num_phi = 5;
     let num_theta = 2 * num_phi;
-    let mut mesh = TriangleMesh::unanimated(
-        device,
-        2 * num_theta * (num_phi - 1),
-        num_theta * (num_phi + 1),
-    );
+    let mut mesh = TriangleMesh::unanimated(device,
+                                            2 * num_theta * (num_phi - 1),
+                                            num_theta * (num_phi + 1));
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut tris = mesh.index_buffer.map();
@@ -65,10 +62,11 @@ fn make_triangulated_sphere<'a>(
             }
         }
     }
+    let mut mesh = Geometry::Triangle(mesh);
     mesh.commit();
     mesh
 }
-fn make_ground_plane<'a>(device: &'a Device) -> QuadMesh<'a> {
+fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
     let mut mesh = QuadMesh::unanimated(device, 1, 4);
     {
         let mut verts = mesh.vertex_buffer.map();
@@ -80,6 +78,7 @@ fn make_ground_plane<'a>(device: &'a Device) -> QuadMesh<'a> {
 
         quads[0] = Vector4::new(0, 1, 2, 3);
     }
+    let mut mesh = Geometry::Quad(mesh);
     mesh.commit();
     mesh
 }
@@ -117,22 +116,28 @@ fn main() {
         make_triangulated_sphere(&device, Vector3::new(0.0, 0.0, 1.0), 0.5),
         make_triangulated_sphere(&device, Vector3::new(1.0, 0.0, 0.0), 0.5),
         make_triangulated_sphere(&device, Vector3::new(0.0, 0.0, -1.0), 0.5),
-        make_triangulated_sphere(&device, Vector3::new(-1.0, 0.0, 0.0), 0.5),
+        make_triangulated_sphere(&device, Vector3::new(-1.0, 0.0, 0.0), 0.5)
     ];
     let mut instanced_scene = Scene::new(&device);
-    for s in &spheres[..] {
+    for s in spheres.into_iter() {
         instanced_scene.attach_geometry(s);
     }
     let committed_instance = instanced_scene.commit();
 
     // Make the instances first so their ids will be 0-3 that we can then use
     // directly to index into the instance_colors
-    let mut instances = vec![
+    let instances = vec![
         Instance::unanimated(&device, &committed_instance),
         Instance::unanimated(&device, &committed_instance),
         Instance::unanimated(&device, &committed_instance),
-        Instance::unanimated(&device, &committed_instance),
+        Instance::unanimated(&device, &committed_instance)
     ];
+    let num_instances = instances.len();
+
+    let mut scene = Scene::new(&device);
+    for i in instances.into_iter() {
+        scene.attach_geometry(Geometry::Instance(i));
+    }
 
     let instance_colors = vec![
         vec![
@@ -162,6 +167,7 @@ fn main() {
     ];
 
     let ground = make_ground_plane(&device);
+    let ground_id = scene.attach_geometry(ground);
 
     let light_dir = Vector3::new(1.0, 1.0, -1.0).normalize();
     let mut intersection_ctx = IntersectContext::coherent();
@@ -170,24 +176,20 @@ fn main() {
         for p in image.iter_mut() {
             *p = 0;
         }
-        let (transforms, normal_transforms) = animate_instances(time, instances.len());
-        for (i, t) in transforms.iter().enumerate() {
-            instances[i].set_transform(&t);
-            instances[i].commit();
+
+        // Update scene transformations
+        let (transforms, normal_transforms) = animate_instances(time, num_instances);
+        let mut tfm_iter = transforms.iter();
+        for g in scene.iter_mut() {
+            if let Geometry::Instance(ref mut inst) = g.1 {
+                inst.set_transform(tfm_iter.next().expect("out of bounds tfm"));
+            }
+            // A bit annoying here that we can't call the mut on the geometry
+            // part because we borred the inner instance piece as mutable
+            g.1.commit();
         }
-        // TODO The commit and set_transform taking &mut self make it not possible
-        // to modify them while they're part of a scene. Maybe need to switch to
-        // a runtime checked borrowing? E.g. you should only avoid modifying
-        // the geometry if the scene is being rendered.
-        let mut scene = Scene::new(&device);
-        // TODO VERY BAD
-        for i in &instances[..] {
-            scene.attach_geometry(i);
-        }
-        // TODO VERY BAD
-        let ground_id = scene.attach_geometry(&ground);
-        // TODO VERY BAD
-        scene.commit();
+
+        let rtscene = scene.commit();
 
         let img_dims = image.dimensions();
         let camera = Camera::look_dir(
@@ -202,7 +204,7 @@ fn main() {
             for i in 0..img_dims.0 {
                 let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
                 let mut ray_hit = RayHit::new(Ray::new(camera.pos, dir));
-                scene.intersect(&mut intersection_ctx, &mut ray_hit);
+                rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
 
                 if ray_hit.hit.hit() {
                     // Transform the normals of the instances into world space with the normal_transforms
@@ -218,7 +220,7 @@ fn main() {
                     let mut illum = 0.3;
                     let shadow_pos = camera.pos + dir * ray_hit.ray.tfar;
                     let mut shadow_ray = Ray::segment(shadow_pos, light_dir, 0.001, f32::INFINITY);
-                    scene.occluded(&mut intersection_ctx, &mut shadow_ray);
+                    rtscene.occluded(&mut intersection_ctx, &mut shadow_ray);
 
                     if shadow_ray.tfar >= 0.0 {
                         illum =

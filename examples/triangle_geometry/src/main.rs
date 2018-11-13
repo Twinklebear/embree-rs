@@ -8,7 +8,7 @@ use cgmath::{Vector3, Vector4};
 use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh};
 use support::Camera;
 
-fn make_cube<'a>(device: &'a Device) -> TriangleMesh<'a> {
+fn make_cube<'a>(device: &'a Device) -> Geometry<'a> {
     let mut mesh = TriangleMesh::unanimated(device, 12, 8);
     {
         let mut verts = mesh.vertex_buffer.map();
@@ -47,10 +47,11 @@ fn make_cube<'a>(device: &'a Device) -> TriangleMesh<'a> {
         tris[10] = Vector3::new(1, 3, 5);
         tris[11] = Vector3::new(3, 7, 5);
     }
+    let mut mesh = Geometry::Triangle(mesh);
     mesh.commit();
     mesh
 }
-fn make_ground_plane<'a>(device: &'a Device) -> QuadMesh<'a> {
+fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
     let mut mesh = QuadMesh::unanimated(device, 1, 4);
     {
         let mut verts = mesh.vertex_buffer.map();
@@ -62,6 +63,7 @@ fn make_ground_plane<'a>(device: &'a Device) -> QuadMesh<'a> {
 
         quads[0] = Vector4::new(0, 1, 2, 3);
     }
+    let mut mesh = Geometry::Quad(mesh);
     mesh.commit();
     mesh
 }
@@ -89,9 +91,9 @@ fn main() {
     ];
 
     let mut scene = Scene::new(&device);
-    let cube_id = scene.attach_geometry(&cube);
-    let ground_id = scene.attach_geometry(&ground);
-    scene.commit();
+    scene.attach_geometry(cube);
+    let ground_id = scene.attach_geometry(ground);
+    let rtscene = scene.commit();
 
     let mut intersection_ctx = IntersectContext::coherent();
 
@@ -113,7 +115,7 @@ fn main() {
                 let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
                 let ray = Ray::new(camera.pos, dir);
                 let mut ray_hit = RayHit::new(ray);
-                scene.intersect(&mut intersection_ctx, &mut ray_hit);
+                rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
                 if ray_hit.hit.hit() {
                     let mut p = image.get_pixel_mut(i, j);
                     let color = if ray_hit.hit.geomID == ground_id {

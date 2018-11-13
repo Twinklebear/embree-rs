@@ -54,34 +54,19 @@ impl<'a> Scene<'a> {
             None => None,
         }
     }
-    // Get an iterator over the geometry map
+    /// Get an iterator over the geometry map
     pub fn iter(&self) -> std::collections::hash_map::Iter<u32, Geometry<'a>> {
         self.geometry.iter()
     }
-    // TODO: It makes sense to actually force the user to not
-    // be able to modify the scene, after it's been committed. Since
-    // at this point we consider the scene "built" b/c the BVH is built.
-    // The "built" scene can then be used for intersect and occluded tests.
-    // If the user wants to update the geometry in the scene they should
-    // let the "built" scene go out of scope and be destroyed, then can
-    // modify the geometry in the scene and re-commit it again to get
-    // a "built" scene back for rendering again. This is sort of what I have
-    // expressed (very badly) by right now having it require destroying
-    // and re-creating the scene from scratch. I'm not sure how I can
-    // do this built vs. non-built scene builder stuff without resorting to
-    // runtime ownership checking though.
-    // Maybe we can have this function return some object which takes ownership
-    // of the map of geometry? It's a bit awkward because then as you attach
-    // but haven't commited you can't modify anymore.
+    /// Get an iterator over the geometry map
+    pub fn iter_mut(&mut self) -> std::collections::hash_map::IterMut<u32, Geometry<'a>> {
+        self.geometry.iter_mut()
+    }
+    /// TODO DOC
     pub fn commit(&'a self) -> CommittedScene<'a> {
         unsafe {
             rtcCommitScene(self.handle);
         }
-        // TODO: This idea doesn't work, because the Scene then
-        // loses the map of geometry IDs, and we can't give it
-        // back without keeping the geometry locked out of being modified
-        // because it remains borrowed by the scene again.
-        // Runtime ownership may be the only option here unfortunately
         CommittedScene { scene: &self }
     }
 }
