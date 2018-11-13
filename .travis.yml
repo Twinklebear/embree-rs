@@ -6,32 +6,28 @@ addons:
     sources:
     - ubuntu-toolchain-r-test
 rust:
-    - stable
-    - beta
+- stable
+- beta
 cache: cargo
 matrix:
-    allow_failures:
-        - rust: nightly
+  allow_failures:
+  - rust: nightly
 before_script:
-    - wget https://github.com/embree/embree/releases/download/v3.2.4/embree-${EMBREE_VERSION}.x86_64.linux.tar.gz 
-    - tar -xf embree-${EMBREE_VERSION}.x86_64.linux.tar.gz 
-    - source embree-${EMBREE_VERSION}.x86_64.linux/embree-vars.sh
-    - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+- wget https://github.com/embree/embree/releases/download/v3.2.4/embree-${EMBREE_VERSION}.x86_64.linux.tar.gz
+- tar -xf embree-${EMBREE_VERSION}.x86_64.linux.tar.gz
+- source embree-${EMBREE_VERSION}.x86_64.linux/embree-vars.sh
+- pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 script:
-    - travis-cargo build
-    - travis-cargo test
-    - travis-cargo doc
-    - for d in `ls examples/`; do
-      cd examples/${d}/;
-      cargo build;
-      cd ../../;
-      done
+- travis-cargo build
+- travis-cargo test
+- travis-cargo doc
+- for d in `ls examples/`; do cd examples/${d}/; cargo build; cd ../../; done
 after_success:
-    - git config user.name "Travis-CI Doc Bot"
-    - git config user.email "willusher.life@gmail.com"
-      #    - travis-cargo --only stable doc-upload
+- git config user.name "Travis-CI Doc Bot"
+- git config user.email "willusher.life@gmail.com"
+- travis-cargo --only stable doc-upload
 env:
   matrix:
   - EMBREE_VERSION=3.2.4
-
-
+  global:
+    secure: jdyo2YJrD1heiHRebeg5/Cj50DghBTRcFIiRbXPJy+dCIZ226CoYKS5TyrIzq/u2LAjaOrIfMuCOppyoPgGctp6tefZ48860KN/TTDnqn26C2XaFdEtZLd1/1n1J5pZnUvq/xRvuWQmsiMmdtHXgAMFpqF1u7RKy2FDHvYkWmdTSb4Hoj+tSEaykH6Wvs5MbNEXXjp+cj5eXfTkfuSZZn5dhtgDRxEoLXJ4+QoBAGRH0UMXZI8jBe7Ao0CiPUfWVpvMeLudcXchcZmKO1w7zu5hAu2E0v9GL9kfQj9ECs6TVIUOLkb3utHhlZRVvDhYOVjBS8Qyb8ZS8EcnwcZgaRzA06thWk4JNnEh37rKWHpM+sIC1H1rW+sWdpzD2hhGDB4V4YMA1zOeAgj+Gzrj/X4Ka1bWTgEehAI5O14V8QOQbdvH7tpcNJKTDfW132jc2Yad/6hR/ai04vxrX6JLHor64Tf2DfdAm4XB7H4kjWXhmCoDaVQG2vfq3tWYvVgJna8tPHJ9uYoWQyEcptPRoTqaCKLqLWpJ+3BOJ5bkTRZA2VAbuigdJjfBMdhC0cDBhyP8zeMwuVoXYhILHsmWj5DCBaT2ChkYOpkgMlZHWPZz08lVZYIsKzqgp/cCzDmH9U+yb3WQf7WzfaDQ3IQB6LZ7H/HIRohwkLU24f1kbAYQ=
