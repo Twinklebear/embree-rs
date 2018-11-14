@@ -61,7 +61,7 @@ impl<'a, T> Drop for Buffer<'a, T> {
     }
 }
 
-pub struct MappedBuffer<'a, 'b, T: 'a> {
+pub struct MappedBuffer<'a, 'b: 'a, T: 'a> {
     buffer: &'b mut Buffer<'a, T>,
     slice: *mut T,
     len: usize,
@@ -75,11 +75,11 @@ impl<'a, 'b, T: 'a> MappedBuffer<'a, 'b, T> {
 
 impl<'a, 'b, T> Drop for MappedBuffer<'a, 'b, T> {
     fn drop(&mut self) {
-        unsafe {
+        //unsafe {
             // TODO: We should call the rtcSetGeometryBufferUpdated function
             // but we need to know the geometry we're attached to now.
             // Can we be attached to multiple?
-        }
+        //}
     }
 }
 
