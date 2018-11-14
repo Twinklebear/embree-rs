@@ -21,7 +21,7 @@ pub use geometry::Geometry;
 pub use instance::Instance;
 pub use quad_mesh::QuadMesh;
 pub use ray::{Hit, IntersectContext, Ray, RayHit};
-pub use scene::Scene;
+pub use scene::{Scene, CommittedScene};
 pub use triangle_mesh::TriangleMesh;
 
 // Pull in some cleaned up enum and bitfield types directly,

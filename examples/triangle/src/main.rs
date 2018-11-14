@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
 extern crate cgmath;
-extern crate embree;
+extern crate sol;
 extern crate support;
 
 use cgmath::{Vector3, Vector4};
-use embree::{Device, Geometry, IntersectContext, Ray, RayHit, Scene, TriangleMesh};
+use sol::{Device, Geometry, IntersectContext, Ray, RayHit, Scene, TriangleMesh};
 
 fn main() {
     let mut display = support::Display::new(512, 512, "triangle");

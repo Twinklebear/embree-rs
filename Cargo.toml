@@ -1,7 +1,24 @@
 [package]
-name = "embree"
+name = "sol"
 version = "0.1.0"
 authors = ["Will Usher <willusher.life@gmail.com>"]
+homepage = "https://github.com/Twinklebear/sol"
+documentation = "http://www.willusher.io/sol/sol/"
+repository = "https://github.com/Twinklebear/sol"
+readme = "README.md"
+license = "MIT"
+description = """
+A wrapper for the Embree ray tracing kernels.
+"""
+keywords = ["embree", "ray", "simd", "bvh", "path tracing",
+"ray tracing", "mesh"]
+
+exclude = [
+	".travis.yml",
+	"*.png",
+	".gitignore",
+	"examples/*"
+]
 
 [dependencies]
 cgmath = "0.16.1"
