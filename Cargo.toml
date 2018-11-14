@@ -10,8 +10,7 @@ license = "MIT"
 description = """
 A wrapper for the Embree ray tracing kernels.
 """
-keywords = ["embree", "ray", "simd", "bvh", "path tracing",
-"ray tracing", "mesh"]
+keywords = ["embree", "ray", "simd", "bvh"]
 
 exclude = [
 	".travis.yml",
