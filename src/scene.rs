@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::arch::x86_64;
 
 use device::Device;
 use geometry::Geometry;
@@ -26,6 +27,12 @@ pub struct CommittedScene<'a> {
 
 impl<'a> Scene<'a> {
     pub fn new(device: &'a Device) -> Scene {
+        // Set the flush zero and denormals modes from Embrees's perf. recommendations
+        // https://embree.github.io/api.html#performance-recommendations
+        // Though, in Rust I think we just call the below function to do both
+        unsafe {
+            x86_64::_MM_SET_FLUSH_ZERO_MODE(x86_64::_MM_FLUSH_ZERO_ON);
+        }
         Scene {
             handle: unsafe { rtcNewScene(device.handle) },
             device: PhantomData,
