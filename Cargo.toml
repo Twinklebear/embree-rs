@@ -1,6 +1,6 @@
 [package]
 name = "sol"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Will Usher <willusher.life@gmail.com>"]
 homepage = "https://github.com/Twinklebear/sol"
 documentation = "http://www.willusher.io/sol/sol/"
