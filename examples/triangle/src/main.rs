@@ -36,16 +36,17 @@ fn main() {
         // Render the scene
         for j in 0..img_dims.1 {
             let y = -(j as f32 + 0.5) / img_dims.1 as f32 + 0.5;
+
+            // Try out packets of 4 rays
             for i in 0..img_dims.0 / 4 {
-                let mut origs = [Vector3::new(0.0, 0.0, 0.0); 4];
-                let mut dirs = [Vector3::new(0.0, 0.0, 0.0); 4];
-                for k in 0..4 {
-                    let x = ((i * 4 + k) as f32 + 0.5) / img_dims.0 as f32 - 0.5;
+                let mut rays = Ray4::empty();
+                for (k, mut ray) in rays.iter_mut().enumerate() {
+                    let x = ((i * 4 + k as u32) as f32 + 0.5) / img_dims.0 as f32 - 0.5;
                     let dir_len = f32::sqrt(x * x + y * y + 1.0);
-                    origs[k as usize] = Vector3::new(0.0, 0.5, 2.0);
-                    dirs[k as usize] = Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len);
+                    ray.set_origin(Vector3::new(0.0, 0.5, 2.0));
+                    ray.set_dir(Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len));
                 }
-                let rays = Ray4::new(origs, dirs);
+
                 let mut ray_hit = RayHit4::new(rays);
                 let valid = [-1; 4];
                 rtscene.intersect4(&mut intersection_ctx, &mut ray_hit, &valid);

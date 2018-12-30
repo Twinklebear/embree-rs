@@ -10,6 +10,11 @@ pub type Hit4 = sys::RTCHit4;
 pub type RayHit4 = sys::RTCRayHit4;
 
 impl Ray4 {
+    pub fn empty() -> Ray4 {
+        Ray4::segment([Vector3::new(0.0, 0.0, 0.0); 4],
+                      [Vector3::new(0.0, 0.0, 0.0); 4],
+                      [0.0; 4], [f32::INFINITY; 4])
+    }
     pub fn new(origin: [Vector3<f32>; 4], dir: [Vector3<f32>; 4]) -> Ray4 {
         Ray4::segment(origin, dir, [0.0; 4], [f32::INFINITY; 4])
     }
@@ -32,6 +37,9 @@ impl Ray4 {
     }
     pub fn iter(&self) -> Ray4Iter {
         Ray4Iter::new(self)
+    }
+    pub fn iter_mut(&mut self) -> Ray4IterMut {
+        Ray4IterMut::new(self)
     }
 }
 
@@ -212,8 +220,8 @@ pub struct Ray4IterMut<'a> {
 }
 
 impl<'a> Ray4IterMut<'a> {
-    fn new(packet: &'a mut Ray4) -> Ray4Iter<'a> {
-        Ray4Iter{ packet: packet, cur: 0 }
+    fn new(packet: &'a mut Ray4) -> Ray4IterMut<'a> {
+        Ray4IterMut { packet: packet, cur: 0 }
     }
 }
 
