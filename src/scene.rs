@@ -5,6 +5,7 @@ use std::arch::x86_64;
 use device::Device;
 use geometry::Geometry;
 use ray::{IntersectContext, Ray, RayHit};
+use ray_packet::{Ray4, RayHit4};
 use sys::*;
 
 /// A scene containing various geometry for rendering. Geometry
@@ -101,7 +102,7 @@ impl<'a> CommittedScene<'a> {
             rtcIntersect1(
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRayHit,
+                ray as *mut RTCRayHit
             );
         }
     }
@@ -110,7 +111,27 @@ impl<'a> CommittedScene<'a> {
             rtcOccluded1(
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRay,
+                ray as *mut RTCRay
+            );
+        }
+    }
+    pub fn intersect4(&self, ctx: &mut IntersectContext, ray: &mut RayHit4, valid: [i32; 4]) {
+        unsafe {
+            rtcIntersect4(
+                valid.as_ptr(),
+                self.scene.handle,
+                ctx as *mut RTCIntersectContext,
+                ray as *mut RTCRayHit4
+            );
+        }
+    }
+    pub fn occluded4(&self, ctx: &mut IntersectContext, ray: &mut Ray4, valid: [i32; 4]) {
+        unsafe {
+            rtcOccluded4(
+                valid.as_ptr(),
+                self.scene.handle,
+                ctx as *mut RTCIntersectContext,
+                ray as *mut RTCRay4
             );
         }
     }
