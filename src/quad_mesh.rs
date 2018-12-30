@@ -15,8 +15,8 @@ pub struct QuadMesh<'a> {
 impl<'a> QuadMesh<'a> {
     pub fn unanimated(device: &'a Device, num_quads: usize, num_verts: usize) -> QuadMesh<'a> {
         let h = unsafe { rtcNewGeometry(device.handle, GeometryType::QUAD) };
-        let vertex_buffer = Buffer::new(device, num_verts);
-        let index_buffer = Buffer::new(device, num_quads);
+        let mut vertex_buffer = Buffer::new(device, num_verts);
+        let mut index_buffer = Buffer::new(device, num_quads);
         unsafe {
             rtcSetGeometryBuffer(
                 h,
@@ -28,6 +28,7 @@ impl<'a> QuadMesh<'a> {
                 16,
                 num_verts,
             );
+            vertex_buffer.set_attachment(h, BufferType::VERTEX, 0);
 
             rtcSetGeometryBuffer(
                 h,
@@ -39,6 +40,7 @@ impl<'a> QuadMesh<'a> {
                 16,
                 num_quads,
             );
+            index_buffer.set_attachment(h, BufferType::INDEX, 0);
         }
         QuadMesh {
             device: device,

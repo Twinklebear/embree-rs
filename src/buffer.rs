@@ -1,9 +1,34 @@
 use std::marker::PhantomData;
-use std::mem;
+use std::{mem, ptr};
 use std::ops::{Index, IndexMut};
 
 use device::Device;
 use sys::*;
+use BufferType;
+
+#[derive(Copy, Clone)]
+struct BufferAttachment {
+    geom: RTCGeometry,
+    buf_type: BufferType,
+    slot: u32,
+}
+
+impl BufferAttachment {
+    fn none() -> BufferAttachment {
+        BufferAttachment {
+            geom: ptr::null_mut(),
+            buf_type: BufferType::VERTEX,
+            slot: std::u32::MAX,
+        }
+    }
+    fn is_attached(&self) -> bool {
+        self.geom != ptr::null_mut()
+    }
+}
+
+// TODO: To handle this nicely for sharing/re-using/changing buffer views
+// we basically need an API/struct for making buffer views of existing
+// larger buffers.
 
 pub struct Buffer<'a, T> {
     device: &'a Device,
@@ -12,12 +37,9 @@ pub struct Buffer<'a, T> {
     // that we're attached to to mark buffers as updated on
     // the geometries.
     bytes: usize,
+    attachment: BufferAttachment,
     marker: PhantomData<T>,
 }
-
-// TODO: To handle this nicely for sharing/re-using/changing buffer views
-// we basically need an API/struct for making buffer views of existing
-// larger buffers.
 
 impl<'a, T> Buffer<'a, T> {
     /// Allocate a buffer with some raw capacity in bytes
@@ -28,6 +50,7 @@ impl<'a, T> Buffer<'a, T> {
             device: device,
             handle: unsafe { rtcNewBuffer(device.handle, bytes) },
             bytes: bytes,
+            attachment: BufferAttachment::none(),
             marker: PhantomData,
         }
     }
@@ -39,17 +62,26 @@ impl<'a, T> Buffer<'a, T> {
             device: device,
             handle: unsafe { rtcNewBuffer(device.handle, bytes) },
             bytes: bytes,
+            attachment: BufferAttachment::none(),
             marker: PhantomData,
         }
     }
-    pub fn map<'b>(&'b mut self) -> MappedBuffer<'a, 'b, T> {
+    pub fn map(&mut self) -> MappedBuffer<'a, T> {
         let len = self.bytes / mem::size_of::<T>();
         let slice = unsafe { rtcGetBufferData(self.handle) as *mut T };
         MappedBuffer {
-            buffer: self,
+            buffer: PhantomData,
+            attachment: self.attachment,
             slice: slice,
             len: len,
         }
+    }
+    pub(crate) fn set_attachment(&mut self, geom: RTCGeometry,
+                          buf_type: BufferType, slot: u32)
+    {
+        self.attachment.geom = geom;
+        self.attachment.buf_type = buf_type;
+        self.attachment.slot = slot;
     }
 }
 
@@ -61,29 +93,35 @@ impl<'a, T> Drop for Buffer<'a, T> {
     }
 }
 
-pub struct MappedBuffer<'a, 'b: 'a, T: 'a> {
-    buffer: &'b mut Buffer<'a, T>,
+pub struct MappedBuffer<'a, T: 'a> {
+    buffer: PhantomData<&'a mut Buffer<'a, T>>,
+    attachment: BufferAttachment,
     slice: *mut T,
     len: usize,
 }
 
-impl<'a, 'b, T: 'a> MappedBuffer<'a, 'b, T> {
+impl<'a, T: 'a> MappedBuffer<'a, T> {
     pub fn len(&self) -> usize {
         self.len
     }
 }
 
-impl<'a, 'b, T> Drop for MappedBuffer<'a, 'b, T> {
+impl<'a, T: 'a> Drop for MappedBuffer<'a, T> {
     fn drop(&mut self) {
-        //unsafe {
-            // TODO: We should call the rtcSetGeometryBufferUpdated function
-            // but we need to know the geometry we're attached to now.
-            // Can we be attached to multiple?
-        //}
+        if self.attachment.is_attached() {
+            // TODO: support for attaching one buffer to multiple geoms?
+            unsafe {
+                rtcUpdateGeometryBuffer(
+                    self.attachment.geom,
+                    self.attachment.buf_type,
+                    self.attachment.slot
+                );
+            }
+        }
     }
 }
 
-impl<'a, 'b, T: 'a> Index<usize> for MappedBuffer<'a, 'b, T> {
+impl<'a, T: 'a> Index<usize> for MappedBuffer<'a, T> {
     type Output = T;
 
     fn index(&self, index: usize) -> &T {
@@ -95,7 +133,7 @@ impl<'a, 'b, T: 'a> Index<usize> for MappedBuffer<'a, 'b, T> {
     }
 }
 
-impl<'a, 'b, T: 'a> IndexMut<usize> for MappedBuffer<'a, 'b, T> {
+impl<'a, T: 'a> IndexMut<usize> for MappedBuffer<'a, T> {
     fn index_mut(&mut self, index: usize) -> &mut T {
         if index >= self.len {
             panic!("MappedBuffer index out of bounds");
