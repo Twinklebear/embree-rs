@@ -73,3 +73,11 @@ fn aligned_vector_init<T: Copy>(len: usize, align: usize, init: T) -> Vec<T> {
     v
 }
 
+#[test]
+fn test_aligned_vector_alloc() {
+    let v = aligned_vector_init::<f32>(24, 16, 1.0);
+    for x in v.iter() {
+        assert_eq!(*x, 1.0);
+    }
+}
+

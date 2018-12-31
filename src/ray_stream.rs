@@ -26,7 +26,7 @@ pub struct RayN {
 
 impl RayN {
     /// Allocate a new Ray stream with room for `n` rays
-    pub fn with_capacity(n: usize) -> RayN {
+    pub fn new(n: usize) -> RayN {
         RayN {
             org_x: aligned_vector::<f32>(n, 16),
             org_y: aligned_vector::<f32>(n, 16),
@@ -132,14 +132,14 @@ pub struct HitN {
 impl HitN {
     pub fn new(n: usize) -> HitN {
         HitN {
-            ng_x: vec![0.0; n],
-            ng_y: vec![0.0; n],
-            ng_z: vec![0.0; n],
-            u: vec![0.0; n],
-            v: vec![0.0; n],
-            prim_id: vec![u32::MAX; n],
-            geom_id: vec![u32::MAX; n],
-            inst_id: vec![u32::MAX; n],
+            ng_x: aligned_vector::<f32>(n, 16),
+            ng_y: aligned_vector::<f32>(n, 16),
+            ng_z: aligned_vector::<f32>(n, 16),
+            u: aligned_vector::<f32>(n, 16),
+            v: aligned_vector::<f32>(n, 16),
+            prim_id: aligned_vector_init::<u32>(n, 16, u32::MAX),
+            geom_id: aligned_vector_init::<u32>(n, 16, u32::MAX),
+            inst_id: aligned_vector_init::<u32>(n, 16, u32::MAX),
         }
     }
     pub fn any_hit(&self) -> bool {
@@ -204,21 +204,21 @@ impl SoAHit for HitN {
 }
 
 pub struct RayHitN {
-    pub rays: RayN,
-    pub hits: HitN,
+    pub ray: RayN,
+    pub hit: HitN,
 }
 
 impl RayHitN {
-    pub fn new(rays: RayN) -> RayHitN {
-        let n = rays.len();
+    pub fn new(ray: RayN) -> RayHitN {
+        let n = ray.len();
         RayHitN {
-            rays: rays,
-            hits: HitN::new(n),
+            ray: ray,
+            hit: HitN::new(n),
         }
     }
     pub fn iter(&self) -> std::iter::Zip<SoARayIter<RayN>, SoAHitIter<HitN>> {
-        self.rays.iter().zip(self.hits.iter())
+        self.ray.iter().zip(self.hit.iter())
     }
-    pub fn len(&self) -> usize { self.rays.len() }
+    pub fn len(&self) -> usize { self.ray.len() }
 }
 

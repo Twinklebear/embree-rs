@@ -164,7 +164,7 @@ impl<'a> CommittedScene<'a> {
     pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitN) {
         let n = rays.len();
         unsafe {
-            let mut rayhit = RTCRayHitNp { ray: rays.rays.as_raynp(), hit: rays.hits.as_hitnp() };
+            let mut rayhit = RTCRayHitNp { ray: rays.ray.as_raynp(), hit: rays.hit.as_hitnp() };
             rtcIntersectNp(
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
