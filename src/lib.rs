@@ -1,5 +1,7 @@
 //! TODO: Docs
 
+use std::{mem, alloc};
+
 extern crate cgmath;
 
 pub mod buffer;
@@ -46,3 +48,28 @@ pub use sys::RTCBuildFlags as BuildFlags;
 pub use sys::RTCCurveFlags as CurveFlags;
 pub use sys::RTCIntersectContextFlags as IntersectContextFlags;
 pub use sys::RTCSceneFlags as SceneFlags;
+
+/// Utility for making specifically aligned vectors
+fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
+    let t_size = mem::size_of::<T>();
+    let t_align = mem::align_of::<T>();
+    let layout =
+        if t_align >= align {
+            alloc::Layout::from_size_align(t_size * len, t_align).unwrap()
+        } else {
+            alloc::Layout::from_size_align(t_size * len, align).unwrap()
+        };
+    unsafe {
+        let mem = alloc::alloc(layout);
+        assert_eq!((mem as usize) % 16, 0);
+        Vec::<T>::from_raw_parts(mem as *mut T, len, len)
+    }
+}
+fn aligned_vector_init<T: Copy>(len: usize, align: usize, init: T) -> Vec<T> {
+    let mut v = aligned_vector::<T>(len, align);
+    for x in v.iter_mut() {
+        *x = init;
+    }
+    v
+}
+

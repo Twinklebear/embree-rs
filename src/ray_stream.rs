@@ -3,10 +3,10 @@ use std::{f32, u32};
 use std::iter::Iterator;
 use std::marker::PhantomData;
 
-pub use soa_ray::{SoARay, SoAHit, SoARayRef, SoARayRefMut,
-                    SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter,
-                    SoAHitIterMut};
+use ::{aligned_vector, aligned_vector_init};
 use sys;
+use soa_ray::{SoARay, SoAHit, SoARayRef, SoARayRefMut,
+                SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter, SoAHitIterMut};
 
 /// A ray stream stored in SoA format
 pub struct RayN {
@@ -28,60 +28,18 @@ impl RayN {
     /// Allocate a new Ray stream with room for `n` rays
     pub fn with_capacity(n: usize) -> RayN {
         RayN {
-            org_x: vec![0.0; n],
-            org_y: vec![0.0; n],
-            org_z: vec![0.0; n],
-            dir_x: vec![0.0; n],
-            dir_y: vec![0.0; n],
-            dir_z: vec![0.0; n],
-            tnear: vec![0.0; n],
-            tfar: vec![f32::INFINITY; n],
-            time: vec![0.0; n],
-            mask: vec![u32::MAX; n],
-            id: vec![0; n],
-            flags: vec![0; n],
-        }
-    }
-    pub fn new(origin: Vec<Vector3<f32>>, dir: Vec<Vector3<f32>>) -> RayN {
-        let n = origin.len();
-        RayN::segment(origin, dir, vec![0.0; n], vec![f32::INFINITY; n])
-    }
-    pub fn segment(origin: Vec<Vector3<f32>>, dir: Vec<Vector3<f32>>,
-                   tnear: Vec<f32>, tfar: Vec<f32>) -> RayN {
-        assert_eq!(origin.len(), dir.len());
-
-        let n = origin.len();
-        let mut org_x = Vec::with_capacity(n);
-        let mut org_y = Vec::with_capacity(n);
-        let mut org_z = Vec::with_capacity(n);
-        for v in origin.iter() {
-            org_x.push(v.x);
-            org_y.push(v.y);
-            org_z.push(v.z);
-        }
-
-        let mut dir_x = Vec::with_capacity(n);
-        let mut dir_y = Vec::with_capacity(n);
-        let mut dir_z = Vec::with_capacity(n);
-        for v in dir.iter() {
-            dir_x.push(v.x);
-            dir_y.push(v.y);
-            dir_z.push(v.z);
-        }
-
-        RayN {
-            org_x: org_x,
-            org_y: org_y,
-            org_z: org_z,
-            dir_x: dir_x,
-            dir_y: dir_y,
-            dir_z: dir_z,
-            tnear: tnear,
-            tfar: tfar,
-            time: vec![0.0; n],
-            mask: vec![u32::MAX; n],
-            id: vec![0; n],
-            flags: vec![0; n],
+            org_x: aligned_vector::<f32>(n, 16),
+            org_y: aligned_vector::<f32>(n, 16),
+            org_z: aligned_vector::<f32>(n, 16),
+            tnear: aligned_vector_init::<f32>(n, 16, 0.0),
+            dir_x: aligned_vector::<f32>(n, 16),
+            dir_y: aligned_vector::<f32>(n, 16),
+            dir_z: aligned_vector::<f32>(n, 16),
+            time: aligned_vector_init::<f32>(n, 16, 0.0),
+            tfar: aligned_vector_init::<f32>(n, 16, f32::INFINITY),
+            mask: aligned_vector_init::<u32>(n, 16, u32::MAX),
+            id: aligned_vector_init::<u32>(n, 16, 0),
+            flags: aligned_vector_init::<u32>(n, 16, 0)
         }
     }
     pub fn iter(&self) -> SoARayIter<RayN> {

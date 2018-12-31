@@ -3,9 +3,9 @@ use std::{f32, u32};
 use std::marker::PhantomData;
 
 use sys;
-pub use soa_ray::{SoARay, SoAHit, SoARayRef, SoARayRefMut,
-                    SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter,
-                    SoAHitIterMut};
+use soa_ray::{SoARay, SoAHit, SoARayRef, SoARayRefMut,
+                SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter,
+                SoAHitIterMut};
 
 pub type Ray4 = sys::RTCRay4;
 pub type Hit4 = sys::RTCHit4;
