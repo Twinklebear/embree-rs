@@ -1,9 +1,10 @@
 use cgmath::Vector3;
 use std::{f32, u32};
-use std::iter::Iterator;
 use std::marker::PhantomData;
 
 use sys;
+pub use soa_ray::{SoARay, SoAHit, SoARayRef, SoARayRefMut,
+                    SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter};
 
 pub type Ray4 = sys::RTCRay4;
 pub type Hit4 = sys::RTCHit4;
@@ -35,11 +36,61 @@ impl Ray4 {
             flags: [0; 4],
         }
     }
-    pub fn iter(&self) -> Ray4Iter {
-        Ray4Iter::new(self)
+    pub fn iter(&self) -> SoARayIter<Ray4> {
+        SoARayIter::new(self, 4)
     }
-    pub fn iter_mut(&mut self) -> Ray4IterMut {
-        Ray4IterMut::new(self)
+    pub fn iter_mut(&mut self) -> SoARayIterMut<Ray4> {
+        SoARayIterMut::new(self, 4)
+    }
+}
+
+impl SoARay for Ray4 {
+    fn org(&self, i: usize) -> Vector3<f32> {
+        Vector3::new(self.org_x[i], self.org_y[i], self.org_z[i])
+    }
+    fn set_org(&mut self, i: usize, o: Vector3<f32>) {
+        self.org_x[i] = o.x;
+        self.org_y[i] = o.y;
+        self.org_z[i] = o.z;
+    }
+
+    fn dir(&self, i: usize) -> Vector3<f32> {
+        Vector3::new(self.dir_x[i], self.dir_y[i], self.dir_z[i])
+    }
+    fn set_dir(&mut self, i: usize, d: Vector3<f32>) {
+        self.dir_x[i] = d.x;
+        self.dir_y[i] = d.y;
+        self.dir_z[i] = d.z;
+    }
+
+    fn tnear(&self, i: usize) -> f32 { self.tnear[i] }
+    fn set_tnear(&mut self, i: usize, near: f32) {
+        self.tnear[i] = near;
+    }
+
+    fn tfar(&self, i: usize) -> f32 { self.tfar[i] }
+    fn set_tfar(&mut self, i: usize, far: f32) {
+        self.tfar[i] = far;
+    }
+
+    fn time(&self, i: usize) -> f32 { self.time[i] }
+    fn set_time(&mut self, i: usize, time: f32) {
+        self.time[i] = time;
+    }
+
+    fn mask(&self, i: usize) -> u32 { self.mask[i] }
+    fn set_mask(&mut self, i: usize, mask: u32) {
+        self.mask[i] = mask;
+    }
+
+    fn id(&self, i: usize) -> u32 { self.id[i] }
+    fn set_id(&mut self, i: usize, id: u32) {
+        self.id[i] = id;
+    }
+
+    fn flags(&self, i: usize) -> u32 { self.flags[i] }
+    fn set_flags(&mut self, i: usize, flags: u32) {
+        self.flags[i] = flags;
     }
 }
 
@@ -62,11 +113,45 @@ impl Hit4 {
     pub fn hits<'a>(&'a self) -> impl Iterator<Item=bool> + 'a {
         self.geomID.iter().map(|g| *g != u32::MAX)
     }
-    pub fn iter(&self) -> Hit4Iter {
-        Hit4Iter::new(self)
+    pub fn iter(&self) -> SoAHitIter<Hit4> {
+        SoAHitIter::new(self, 4)
     }
-    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item=HitRef> + 'a {
-        Hit4Iter::new(self).filter(|h| h.hit())
+    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item=SoAHitRef<Hit4>> + 'a {
+        SoAHitIter::new(self, 4).filter(|h| h.hit())
+    }
+}
+
+impl SoAHit for Hit4 {
+    fn normal(&self, i: usize) -> Vector3<f32> {
+        Vector3::new(self.Ng_x[i], self.Ng_y[i], self.Ng_z[i])
+    }
+    fn set_normal(&mut self, i: usize, n: Vector3<f32>) {
+        self.Ng_x[i] = n.x;
+        self.Ng_y[i] = n.y;
+        self.Ng_z[i] = n.z;
+    }
+
+    fn uv(&self, i: usize) -> (f32, f32) { (self.u[i], self.v[i]) }
+    fn set_u(&mut self, i: usize, u: f32) {
+        self.u[i] = u;
+    }
+    fn set_v(&mut self, i: usize, v: f32) {
+        self.v[i] = v;
+    }
+
+    fn prim_id(&self, i: usize) -> u32 { self.primID[i] }
+    fn set_prim_id(&mut self, i: usize, id: u32) {
+        self.primID[i] = id;
+    }
+
+    fn geom_id(&self, i: usize) -> u32 { self.geomID[i] }
+    fn set_geom_id(&mut self, i: usize, id: u32) {
+        self.geomID[i] = id;
+    }
+
+    fn inst_id(&self, i: usize) -> u32 { self.instID[0][i] }
+    fn set_inst_id(&mut self, i: usize, id: u32) {
+        self.instID[0][i] = id;
     }
 }
 
@@ -77,222 +162,10 @@ impl RayHit4 {
             hit: Hit4::new(),
         }
     }
+    /*
     pub fn iter(&self) -> std::iter::Zip<Ray4Iter, Hit4Iter> {
         self.ray.iter().zip(self.hit.iter())
     }
-}
-
-pub struct RayRef<'a> {
-    packet: &'a Ray4,
-    ray: usize,
-}
-
-impl<'a> RayRef<'a> {
-    pub fn origin(&self) -> Vector3<f32> {
-        Vector3::new(self.packet.org_x[self.ray],
-                     self.packet.org_y[self.ray],
-                     self.packet.org_z[self.ray])
-    }
-    pub fn dir(&self) -> Vector3<f32> {
-        Vector3::new(self.packet.dir_x[self.ray],
-                     self.packet.dir_y[self.ray],
-                     self.packet.dir_z[self.ray])
-    }
-    pub fn tnear(&self) -> f32 {
-        self.packet.tnear[self.ray]
-    }
-    pub fn tfar(&self) -> f32 {
-        self.packet.tfar[self.ray]
-    }
-    pub fn mask(&self) -> u32 {
-        self.packet.mask[self.ray] as u32
-    }
-    pub fn id(&self) -> u32 {
-        self.packet.id[self.ray] as u32
-    }
-    pub fn flags(&self) -> u32 {
-        self.packet.flags[self.ray] as u32
-    }
-}
-
-pub struct Ray4Iter<'a> {
-    packet: &'a Ray4,
-    cur: usize,
-}
-
-impl<'a> Ray4Iter<'a> {
-    fn new(packet: &'a Ray4) -> Ray4Iter<'a> {
-        Ray4Iter { packet: packet, cur: 0 }
-    }
-}
-
-impl<'a> Iterator for Ray4Iter<'a> {
-    type Item = RayRef<'a>;
-
-    fn next(&mut self) -> Option<RayRef<'a>> {
-        if self.cur == 4 {
-            None
-        } else {
-            let i = self.cur;
-            self.cur = self.cur + 1;
-            Some(RayRef { packet: self.packet, ray: i})
-        }
-    }
-}
-
-// TODO: Is this going to work well?
-pub struct RayRefMut<'a> {
-    packet: *mut Ray4,
-    ray: usize,
-    marker: PhantomData<&'a mut Ray4>
-}
-
-impl<'a> RayRefMut<'a> {
-    pub fn origin(&self) -> Vector3<f32> {
-        let packet = unsafe { self.packet.as_ref().expect("should never be null!") };
-        Vector3::new(packet.org_x[self.ray],
-                     packet.org_y[self.ray],
-                     packet.org_z[self.ray])
-    }
-    pub fn set_origin(&mut self, o: Vector3<f32>) {
-        let packet = unsafe { self.packet.as_mut().expect("should never be null!") };
-        packet.org_x[self.ray] = o.x;
-        packet.org_y[self.ray] = o.y;
-        packet.org_z[self.ray] = o.z;
-    }
-    pub fn dir(&self) -> Vector3<f32> {
-        let packet = unsafe { self.packet.as_ref().expect("should never be null!") };
-        Vector3::new(packet.dir_x[self.ray],
-                     packet.dir_y[self.ray],
-                     packet.dir_z[self.ray])
-    }
-    pub fn set_dir(&mut self, d: Vector3<f32>) {
-        let packet = unsafe { self.packet.as_mut().expect("should never be null!") };
-        packet.dir_x[self.ray] = d.x;
-        packet.dir_y[self.ray] = d.y;
-        packet.dir_z[self.ray] = d.z;
-    }
-    pub fn tnear(&self) -> f32 {
-        let packet = unsafe { self.packet.as_ref().expect("should never be null!") };
-        packet.tnear[self.ray]
-    }
-    pub fn set_tnear(&mut self, tnear: f32) {
-        let packet = unsafe { self.packet.as_mut().expect("should never be null!") };
-        packet.tnear[self.ray] = tnear;
-    }
-    pub fn tfar(&self) -> f32 {
-        let packet = unsafe { self.packet.as_ref().expect("should never be null!") };
-        packet.tfar[self.ray]
-    }
-    pub fn set_tfar(&mut self, tfar: f32) {
-        let packet = unsafe { self.packet.as_mut().expect("should never be null!") };
-        packet.tfar[self.ray] = tfar;
-    }
-    pub fn mask(&self) -> u32 {
-        let packet = unsafe { self.packet.as_ref().expect("should never be null!") };
-        packet.mask[self.ray] as u32
-    }
-    pub fn set_mask(&mut self, mask: u32) {
-        let packet = unsafe { self.packet.as_mut().expect("should never be null!") };
-        packet.mask[self.ray] = mask;
-    }
-    pub fn id(&self) -> u32 {
-        let packet = unsafe { self.packet.as_ref().expect("should never be null!") };
-        packet.id[self.ray] as u32
-    }
-    pub fn set_id(&mut self, id: u32) {
-        let packet = unsafe { self.packet.as_mut().expect("should never be null!") };
-        packet.id[self.ray] = id;
-    }
-    pub fn flags(&self) -> u32 {
-        let packet = unsafe { self.packet.as_ref().expect("should never be null!") };
-        packet.flags[self.ray] as u32
-    }
-    pub fn set_flags(&mut self, flags: u32) {
-        let packet = unsafe { self.packet.as_mut().expect("should never be null!") };
-        packet.flags[self.ray] = flags;
-    }
-}
-
-pub struct Ray4IterMut<'a> {
-    packet: &'a mut Ray4,
-    cur: usize,
-}
-
-impl<'a> Ray4IterMut<'a> {
-    fn new(packet: &'a mut Ray4) -> Ray4IterMut<'a> {
-        Ray4IterMut { packet: packet, cur: 0 }
-    }
-}
-
-impl<'a> Iterator for Ray4IterMut<'a> {
-    type Item = RayRefMut<'a>;
-
-    fn next(&mut self) -> Option<RayRefMut<'a>> {
-        if self.cur == 4 {
-            None
-        } else {
-            let i = self.cur;
-            self.cur = self.cur + 1;
-            Some(RayRefMut {
-                packet: self.packet as *mut Ray4,
-                ray: i,
-                marker: PhantomData
-            })
-        }
-    }
-}
-
-pub struct HitRef<'a> {
-    hit: &'a Hit4,
-    idx: usize,
-}
-
-impl<'a> HitRef<'a> {
-    pub fn normal(&self) -> Vector3<f32> {
-        Vector3::new(self.hit.Ng_x[self.idx],
-                     self.hit.Ng_y[self.idx],
-                     self.hit.Ng_z[self.idx])
-    }
-    pub fn uv(&self) -> (f32, f32) {
-        (self.hit.u[self.idx], self.hit.v[self.idx])
-    }
-    pub fn prim_id(&self) -> u32 {
-        self.hit.primID[self.idx]
-    }
-    pub fn geom_id(&self) -> u32 {
-        self.hit.geomID[self.idx]
-    }
-    pub fn inst_id(&self) -> u32 {
-        self.hit.instID[0][self.idx]
-    }
-    pub fn hit(&self) -> bool {
-        self.hit.geomID[self.idx] != u32::MAX
-    }
-}
-
-pub struct Hit4Iter<'a> {
-    hit: &'a Hit4,
-    cur: usize,
-}
-
-impl<'a> Hit4Iter<'a> {
-    fn new(hit: &'a Hit4) -> Hit4Iter<'a> {
-        Hit4Iter{ hit: hit, cur: 0 }
-    }
-}
-
-impl<'a> Iterator for Hit4Iter<'a> {
-    type Item = HitRef<'a>;
-
-    fn next(&mut self) -> Option<HitRef<'a>> {
-        if self.cur == 4 {
-            None
-        } else {
-            let i = self.cur;
-            self.cur = self.cur + 1;
-            Some(HitRef { hit: self.hit, idx: i})
-        }
-    }
+    */
 }
 
