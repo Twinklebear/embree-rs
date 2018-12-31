@@ -1,0 +1,12 @@
+[package]
+name = "obj_viewer"
+version = "0.1.0"
+authors = ["Will Usher <willusher.life@gmail.com>"]
+build = "build.rs"
+
+[dependencies]
+sol = { path = "../../" }
+support = { path = "../support" }
+cgmath = "0.16.1"
+tobj = "0.1.6"
+
