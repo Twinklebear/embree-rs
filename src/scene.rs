@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::arch::x86_64;
+use std::mem;
 
 use device::Device;
 use geometry::Geometry;
 use ray::{IntersectContext, Ray, RayHit};
 use ray_packet::{Ray4, RayHit4};
+use ray_stream::{RayN, RayHitN};
 use sys::*;
 
 /// A scene containing various geometry for rendering. Geometry
@@ -132,6 +134,54 @@ impl<'a> CommittedScene<'a> {
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
                 ray as *mut RTCRay4
+            );
+        }
+    }
+    pub fn intersect_stream_aos(&self, ctx: &mut IntersectContext, rays: &mut Vec<RayHit>) {
+        let m = rays.len();
+        unsafe {
+            rtcIntersect1M(
+                self.scene.handle,
+                ctx as *mut RTCIntersectContext,
+                rays.as_mut_ptr(),
+                m as u32,
+                mem::size_of::<RayHit>()
+            );
+        }
+    }
+    pub fn occluded_stream_aos(&self, ctx: &mut IntersectContext, rays: &mut Vec<Ray>) {
+        let m = rays.len();
+        unsafe {
+            rtcOccluded1M(
+                self.scene.handle,
+                ctx as *mut RTCIntersectContext,
+                rays.as_mut_ptr(),
+                m as u32,
+                mem::size_of::<Ray>()
+            );
+        }
+    }
+    pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitN) {
+        let n = rays.len();
+        unsafe {
+            let mut rayhit = RTCRayHitNp { ray: rays.rays.as_raynp(), hit: rays.hits.as_hitnp() };
+            rtcIntersectNp(
+                self.scene.handle,
+                ctx as *mut RTCIntersectContext,
+                &mut rayhit as *mut RTCRayHitNp,
+                n as u32
+            );
+        }
+    }
+    pub fn occluded_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayN) {
+        let n = rays.len();
+        unsafe {
+            let mut r = rays.as_raynp();
+            rtcOccludedNp(
+                self.scene.handle,
+                ctx as *mut RTCIntersectContext,
+                &mut r as *mut RTCRayNp,
+                n as u32
             );
         }
     }
