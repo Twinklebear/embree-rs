@@ -5,7 +5,7 @@ extern crate sol;
 extern crate support;
 
 use cgmath::{Vector3, Vector4};
-use sol::{Device, Geometry, IntersectContext, Ray4, RayHit4, Scene, TriangleMesh};
+use sol::{Device, Geometry, IntersectContext, RayN, RayHitN, Scene, TriangleMesh};
 
 fn main() {
     let mut display = support::Display::new(512, 512, "triangle");
@@ -37,26 +37,23 @@ fn main() {
         for j in 0..img_dims.1 {
             let y = -(j as f32 + 0.5) / img_dims.1 as f32 + 0.5;
 
-            // Try out packets of 4 rays
-            for i in 0..img_dims.0 / 4 {
-                let mut rays = Ray4::empty();
-                for (k, mut ray) in rays.iter_mut().enumerate() {
-                    let x = ((i * 4 + k as u32) as f32 + 0.5) / img_dims.0 as f32 - 0.5;
-                    let dir_len = f32::sqrt(x * x + y * y + 1.0);
-                    ray.set_origin(Vector3::new(0.0, 0.5, 2.0));
-                    ray.set_dir(Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len));
-                }
+            // Try out streams of scanlines across x
+            let mut rays = RayN::new(img_dims.0 as usize);
+            for (i, mut ray) in rays.iter_mut().enumerate() {
+                let x = (i as f32 + 0.5) / img_dims.0 as f32 - 0.5;
+                let dir_len = f32::sqrt(x * x + y * y + 1.0);
+                ray.set_origin(Vector3::new(0.0, 0.5, 2.0));
+                ray.set_dir(Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len));
+            }
 
-                let mut ray_hit = RayHit4::new(rays);
-                let valid = [-1; 4];
-                rtscene.intersect4(&mut intersection_ctx, &mut ray_hit, &valid);
-                for (k, hit) in ray_hit.hit.iter().enumerate().filter(|(_k, h)| h.hit()) {
-                    let p = image.get_pixel_mut(i * 4 + k as u32, j);
-                    let uv = hit.uv();
-                    p.data[0] = (uv.0 * 255.0) as u8;
-                    p.data[1] = (uv.1 * 255.0) as u8;
-                    p.data[2] = 0;
-                }
+            let mut ray_hit = RayHitN::new(rays);
+            rtscene.intersect_stream_soa(&mut intersection_ctx, &mut ray_hit);
+            for (i, hit) in ray_hit.hit.iter().enumerate().filter(|(_i, h)| h.hit()) {
+                let p = image.get_pixel_mut(i as u32, j);
+                let uv = hit.uv();
+                p.data[0] = (uv.0 * 255.0) as u8;
+                p.data[1] = (uv.1 * 255.0) as u8;
+                p.data[2] = 0;
             }
         }
     });
