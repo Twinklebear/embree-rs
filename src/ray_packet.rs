@@ -4,7 +4,8 @@ use std::marker::PhantomData;
 
 use sys;
 pub use soa_ray::{SoARay, SoAHit, SoARayRef, SoARayRefMut,
-                    SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter};
+                    SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter,
+                    SoAHitIterMut};
 
 pub type Ray4 = sys::RTCRay4;
 pub type Hit4 = sys::RTCHit4;
@@ -162,10 +163,8 @@ impl RayHit4 {
             hit: Hit4::new(),
         }
     }
-    /*
-    pub fn iter(&self) -> std::iter::Zip<Ray4Iter, Hit4Iter> {
+    pub fn iter(&self) -> std::iter::Zip<SoARayIter<Ray4>, SoAHitIter<Hit4>> {
         self.ray.iter().zip(self.hit.iter())
     }
-    */
 }
 
