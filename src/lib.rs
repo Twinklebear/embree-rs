@@ -50,7 +50,7 @@ pub use sys::RTCIntersectContextFlags as IntersectContextFlags;
 pub use sys::RTCSceneFlags as SceneFlags;
 
 /// Utility for making specifically aligned vectors
-fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
+pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
     let t_size = mem::size_of::<T>();
     let t_align = mem::align_of::<T>();
     let layout =
@@ -65,7 +65,7 @@ fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
         Vec::<T>::from_raw_parts(mem as *mut T, len, len)
     }
 }
-fn aligned_vector_init<T: Copy>(len: usize, align: usize, init: T) -> Vec<T> {
+pub fn aligned_vector_init<T: Copy>(len: usize, align: usize, init: T) -> Vec<T> {
     let mut v = aligned_vector::<T>(len, align);
     for x in v.iter_mut() {
         *x = init;
