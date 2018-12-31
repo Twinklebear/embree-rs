@@ -7,7 +7,7 @@ extern crate tobj;
 
 use std::path::Path;
 
-use cgmath::{Vector3, Vector4};
+use cgmath::{Vector3, Vector4, InnerSpace};
 use sol::{Device, Geometry, IntersectContext, Ray, RayHit, Scene, TriangleMesh};
 use support::Camera;
 
@@ -72,9 +72,36 @@ fn main() {
                 rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
                 if ray_hit.hit.hit() {
                     let mut p = image.get_pixel_mut(i, j);
-                    p.data[0] = (ray_hit.hit.u * 255.0) as u8;
-                    p.data[1] = (ray_hit.hit.v * 255.0) as u8;
-                    p.data[2] = 0;
+                    if !mesh.normals.is_empty() {
+                        let prim = ray_hit.hit.primID as usize;
+                        let tri = [mesh.indices[prim * 3] as usize,
+                                    mesh.indices[prim * 3 + 1] as usize,
+                                    mesh.indices[prim * 3 + 2] as usize];
+
+                        let na = Vector3::new(mesh.normals[tri[0] * 3],
+                                              mesh.normals[tri[0] * 3 + 1],
+                                              mesh.normals[tri[0] * 3 + 2]);
+
+                        let nb = Vector3::new(mesh.normals[tri[1] * 3],
+                                              mesh.normals[tri[1] * 3 + 1],
+                                              mesh.normals[tri[1] * 3 + 2]);
+
+                        let nc = Vector3::new(mesh.normals[tri[2] * 3],
+                                              mesh.normals[tri[2] * 3 + 1],
+                                              mesh.normals[tri[2] * 3 + 2]);
+
+                        let w = 1.0 - ray_hit.hit.u - ray_hit.hit.v;
+                        let mut n = (na * w + nb * ray_hit.hit.u + nc * ray_hit.hit.v).normalize();
+                        n = (n + Vector3::new(1.0, 1.0, 1.0)) * 0.5;
+
+                        p.data[0] = (n.x * 255.0) as u8;
+                        p.data[1] = (n.y * 255.0) as u8;
+                        p.data[2] = (n.z * 255.0) as u8;
+                    } else {
+                        p.data[0] = (ray_hit.hit.u * 255.0) as u8;
+                        p.data[1] = (ray_hit.hit.v * 255.0) as u8;
+                        p.data[2] = 0;
+                    }
                 }
             }
         }
