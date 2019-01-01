@@ -41,3 +41,5 @@ impl<'a> Instance<'a> {
     }
 }
 
+unsafe impl<'a> Sync for Instance<'a> {}
+

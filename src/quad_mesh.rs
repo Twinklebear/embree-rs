@@ -12,6 +12,7 @@ pub struct QuadMesh<'a> {
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
     pub index_buffer: Buffer<'a, Vector4<u32>>,
 }
+
 impl<'a> QuadMesh<'a> {
     pub fn unanimated(device: &'a Device, num_quads: usize, num_verts: usize) -> QuadMesh<'a> {
         let h = unsafe { rtcNewGeometry(device.handle, GeometryType::QUAD) };
@@ -50,4 +51,6 @@ impl<'a> QuadMesh<'a> {
         }
     }
 }
+
+unsafe impl<'a> Sync for QuadMesh<'a> {}
 

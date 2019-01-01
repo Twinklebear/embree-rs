@@ -29,7 +29,6 @@ impl BufferAttachment {
 // TODO: To handle this nicely for sharing/re-using/changing buffer views
 // we basically need an API/struct for making buffer views of existing
 // larger buffers.
-
 pub struct Buffer<'a, T> {
     device: &'a Device,
     pub(crate) handle: RTCBuffer,
@@ -92,6 +91,8 @@ impl<'a, T> Drop for Buffer<'a, T> {
         }
     }
 }
+
+unsafe impl<'a, T> Sync for Buffer<'a, T> {}
 
 pub struct MappedBuffer<'a, T: 'a> {
     buffer: PhantomData<&'a mut Buffer<'a, T>>,

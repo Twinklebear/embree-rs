@@ -6,6 +6,7 @@ use sys::*;
 pub struct Device {
     pub(crate) handle: RTCDevice,
 }
+
 impl Device {
     pub fn new() -> Device {
         Device {
@@ -21,6 +22,7 @@ impl Device {
     // TODO: Setup the flush zero and denormals mode needed by Embree
     // using the Rust SIMD when it's in core
 }
+
 impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
@@ -28,3 +30,6 @@ impl Drop for Device {
         }
     }
 }
+
+unsafe impl Sync for Device {}
+

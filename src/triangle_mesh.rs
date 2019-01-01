@@ -12,6 +12,7 @@ pub struct TriangleMesh<'a> {
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
     pub index_buffer: Buffer<'a, Vector3<u32>>,
 }
+
 impl<'a> TriangleMesh<'a> {
     pub fn unanimated(device: &'a Device, num_tris: usize, num_verts: usize) -> TriangleMesh<'a> {
         let h = unsafe { rtcNewGeometry(device.handle, GeometryType::TRIANGLE) };
@@ -50,4 +51,6 @@ impl<'a> TriangleMesh<'a> {
         }
     }
 }
+
+unsafe impl<'a> Sync for TriangleMesh<'a> {}
 

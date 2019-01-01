@@ -22,12 +22,6 @@ pub struct Scene<'a> {
     geometry: HashMap<u32, Geometry<'a>>,
 }
 
-/// A committed scene with a BVH built over the geometry
-/// which can be used for ray queries.
-pub struct CommittedScene<'a> {
-    pub (crate) scene: &'a Scene<'a>,
-}
-
 impl<'a> Scene<'a> {
     pub fn new(device: &'a Device) -> Scene {
         // Set the flush zero and denormals modes from Embrees's perf. recommendations
@@ -96,6 +90,14 @@ impl<'a> Drop for Scene<'a> {
             rtcReleaseScene(self.handle);
         }
     }
+}
+
+unsafe impl<'a> Sync for Scene<'a> {}
+
+/// A committed scene with a BVH built over the geometry
+/// which can be used for ray queries.
+pub struct CommittedScene<'a> {
+    pub (crate) scene: &'a Scene<'a>,
 }
 
 impl<'a> CommittedScene<'a> {
@@ -186,4 +188,6 @@ impl<'a> CommittedScene<'a> {
         }
     }
 }
+
+unsafe impl<'a> Sync for CommittedScene<'a> {}
 
