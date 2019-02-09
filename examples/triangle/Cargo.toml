@@ -2,7 +2,6 @@
 name = "triangle"
 version = "0.1.0"
 authors = ["Will Usher <willusher.life@gmail.com>"]
-build = "build.rs"
 
 [dependencies]
 sol = { path = "../../" }

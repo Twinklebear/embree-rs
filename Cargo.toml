@@ -1,6 +1,6 @@
 [package]
 name = "sol"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Will Usher <willusher.life@gmail.com>"]
 homepage = "https://github.com/Twinklebear/sol"
 documentation = "http://www.willusher.io/sol/sol/"
@@ -11,6 +11,7 @@ description = """
 A wrapper for the Embree ray tracing kernels.
 """
 keywords = ["embree", "ray", "simd", "bvh"]
+build = "build.rs"
 
 exclude = [
 	".travis.yml",
