@@ -13,11 +13,11 @@ matrix:
   allow_failures:
       - rust: nightly
 before_script:
-    - wget https://github.com/embree/embree/releases/download/v3.2.4/embree-${EMBREE_VERSION}.x86_64.linux.tar.gz
+    - wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x86_64.linux.tar.gz
     - tar -xf embree-${EMBREE_VERSION}.x86_64.linux.tar.gz
     - source embree-${EMBREE_VERSION}.x86_64.linux/embree-vars.sh
+    - export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x86_64.linux/
     - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
-    - export EMBREE_DIR=embree-${EMBREE_VERSION}.x86_64.linux/
 script:
     - travis-cargo build
     - travis-cargo test
