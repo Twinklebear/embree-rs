@@ -1,27 +1,51 @@
-dist: xenial
 sudo: false
 language: rust
-addons:
-  apt:
-    sources:
-    - ubuntu-toolchain-r-test
-rust:
-    - stable
-    - beta
 cache: cargo
 matrix:
-  allow_failures:
-      - rust: nightly
+    allow_failures:
+        - os: windows
+    include:
+        - os: linux
+          dist: xenial
+          env: EMBREE_VERSION=3.5.0
+          rust: stable
+          addons:
+              apt:
+                  sources:
+                      - ubuntu-toolchain-r-test
+        - os: osx
+          osx_image: xcode9.4
+          env: EMBREE_VERSION=3.5.0
+          rust: stable
+        - os: windows
+          env: EMBREE_VERSION=3.5.0
+          rust: stable
 before_script:
-    - wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x86_64.linux.tar.gz
-    - tar -xf embree-${EMBREE_VERSION}.x86_64.linux.tar.gz
-    - source embree-${EMBREE_VERSION}.x86_64.linux/embree-vars.sh
-    - export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x86_64.linux/
-    - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+    - export TARGET_OS=$TRAVIS_OS_NAME
+    - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+          export TARGET_OS="macosx";
+      fi
+    - if [[ "$TARGET_OS" != "windows" ]]; then
+          wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}.tar.gz;
+          tar -xf embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}.tar.gz;
+          source embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/embree-vars.sh;
+          export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/;
+      else
+          wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip;
+          echo "Fetched Embree";
+          7z e embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip;
+          echo "Extracted Embree";
+          ls embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}\\lib;
+          export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS};
+      fi
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+          pip install 'travis-cargo<0.2' --user;
+          export PATH=$HOME/.local/bin:$PATH;
+      fi
 script:
-    - travis-cargo build
-    - travis-cargo test
-    - travis-cargo doc
+    - cargo build
+    - cargo test
+    - cargo doc
     - for d in `ls examples/`; do
           cd examples/${d}/;
           pwd;
@@ -32,7 +56,9 @@ script:
 after_success:
     - git config user.name "Travis-CI Doc Bot"
     - git config user.email "willusher.life@gmail.com"
-    - travis-cargo --only stable doc-upload
+    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+          travis-cargo --only stable doc-upload;
+      fi
 env:
   matrix:
       - EMBREE_VERSION=3.5.0
