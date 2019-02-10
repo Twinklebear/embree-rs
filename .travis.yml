@@ -22,7 +22,13 @@ script:
     - travis-cargo build
     - travis-cargo test
     - travis-cargo doc
-    - for d in `ls examples/`; do cd examples/${d}/; cargo build; cd ../../; done
+    - for d in `ls examples/`; do
+          cd examples/${d}/;
+          pwd;
+          cargo build;
+          if [[ "$?" != "0" ]]; then exit 1; fi;
+          cd ../../;
+      done
 after_success:
     - git config user.name "Travis-CI Doc Bot"
     - git config user.email "willusher.life@gmail.com"

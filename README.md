@@ -6,3 +6,8 @@
 Rust bindings to [Embree 3.0](http://embree.github.io/). These are still in
 development, so a range of features are in progress.
 
+# Documentation
+
+Rust doc can be found [here](http://www.willusher.io/sol/sol),
+Embree documentation can be found [here](https://embree.github.io/api.html).
+
