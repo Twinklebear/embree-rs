@@ -31,9 +31,10 @@ before_script:
           source embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/embree-vars.sh;
           export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/;
       else
+          echo "Grabbing Embree";
           wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip;
           echo "Fetched Embree";
-          7z e embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip;
+          7z e embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip -y;
           echo "Extracted Embree";
           ls embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}\\lib;
           export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS};
