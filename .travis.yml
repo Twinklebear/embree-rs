@@ -7,7 +7,9 @@ matrix:
     include:
         - os: linux
           dist: xenial
-          env: EMBREE_VERSION=3.5.0
+          env:
+              - EMBREE_VERSION=3.5.0
+              - secure: jdyo2YJrD1heiHRebeg5/Cj50DghBTRcFIiRbXPJy+dCIZ226CoYKS5TyrIzq/u2LAjaOrIfMuCOppyoPgGctp6tefZ48860KN/TTDnqn26C2XaFdEtZLd1/1n1J5pZnUvq/xRvuWQmsiMmdtHXgAMFpqF1u7RKy2FDHvYkWmdTSb4Hoj+tSEaykH6Wvs5MbNEXXjp+cj5eXfTkfuSZZn5dhtgDRxEoLXJ4+QoBAGRH0UMXZI8jBe7Ao0CiPUfWVpvMeLudcXchcZmKO1w7zu5hAu2E0v9GL9kfQj9ECs6TVIUOLkb3utHhlZRVvDhYOVjBS8Qyb8ZS8EcnwcZgaRzA06thWk4JNnEh37rKWHpM+sIC1H1rW+sWdpzD2hhGDB4V4YMA1zOeAgj+Gzrj/X4Ka1bWTgEehAI5O14V8QOQbdvH7tpcNJKTDfW132jc2Yad/6hR/ai04vxrX6JLHor64Tf2DfdAm4XB7H4kjWXhmCoDaVQG2vfq3tWYvVgJna8tPHJ9uYoWQyEcptPRoTqaCKLqLWpJ+3BOJ5bkTRZA2VAbuigdJjfBMdhC0cDBhyP8zeMwuVoXYhILHsmWj5DCBaT2ChkYOpkgMlZHWPZz08lVZYIsKzqgp/cCzDmH9U+yb3WQf7WzfaDQ3IQB6LZ7H/HIRohwkLU24f1kbAYQ=
           rust: stable
           addons:
               apt:
@@ -32,10 +34,7 @@ before_script:
           export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/;
       else
           wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip;
-          echo "Fetched Embree";
-          7z e embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip;
-          echo "Extracted Embree";
-          ls embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}\\lib;
+          7z x embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip -y;
           export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS};
       fi
     - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
@@ -46,21 +45,19 @@ script:
     - cargo build
     - cargo test
     - cargo doc
-    - for d in `ls examples/`; do
-          cd examples/${d}/;
+    - cd examples
+    - for d in `ls ./`; do
+          cd $d;
           pwd;
           cargo build;
           if [[ "$?" != "0" ]]; then exit 1; fi;
-          cd ../../;
+          cd ../;
       done
+    - cd ..
 after_success:
-    - git config user.name "Travis-CI Doc Bot"
-    - git config user.email "willusher.life@gmail.com"
     - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+          git config user.name "Travis-CI Doc Bot";
+          git config user.email "willusher.life@gmail.com";
           travis-cargo --only stable doc-upload;
       fi
-env:
-  matrix:
-      - EMBREE_VERSION=3.5.0
-  global:
-    secure: jdyo2YJrD1heiHRebeg5/Cj50DghBTRcFIiRbXPJy+dCIZ226CoYKS5TyrIzq/u2LAjaOrIfMuCOppyoPgGctp6tefZ48860KN/TTDnqn26C2XaFdEtZLd1/1n1J5pZnUvq/xRvuWQmsiMmdtHXgAMFpqF1u7RKy2FDHvYkWmdTSb4Hoj+tSEaykH6Wvs5MbNEXXjp+cj5eXfTkfuSZZn5dhtgDRxEoLXJ4+QoBAGRH0UMXZI8jBe7Ao0CiPUfWVpvMeLudcXchcZmKO1w7zu5hAu2E0v9GL9kfQj9ECs6TVIUOLkb3utHhlZRVvDhYOVjBS8Qyb8ZS8EcnwcZgaRzA06thWk4JNnEh37rKWHpM+sIC1H1rW+sWdpzD2hhGDB4V4YMA1zOeAgj+Gzrj/X4Ka1bWTgEehAI5O14V8QOQbdvH7tpcNJKTDfW132jc2Yad/6hR/ai04vxrX6JLHor64Tf2DfdAm4XB7H4kjWXhmCoDaVQG2vfq3tWYvVgJna8tPHJ9uYoWQyEcptPRoTqaCKLqLWpJ+3BOJ5bkTRZA2VAbuigdJjfBMdhC0cDBhyP8zeMwuVoXYhILHsmWj5DCBaT2ChkYOpkgMlZHWPZz08lVZYIsKzqgp/cCzDmH9U+yb3WQf7WzfaDQ3IQB6LZ7H/HIRohwkLU24f1kbAYQ=
+
