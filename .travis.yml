@@ -36,28 +36,21 @@ before_script:
           echo "Fetched Embree";
           7z e embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip -y;
           echo "Extracted Embree";
-          ls embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}\\lib;
-          export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS};
       fi
     - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
           pip install 'travis-cargo<0.2' --user;
           export PATH=$HOME/.local/bin:$PATH;
       fi
 script:
-    - cargo build
-    - cargo test
-    - cargo doc
-    - for d in `ls examples/`; do
-          cd examples/${d}/;
-          pwd;
-          cargo build;
-          if [[ "$?" != "0" ]]; then exit 1; fi;
-          cd ../../;
-      done
+    - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then
+          ./travis-linux-mac.sh;
+      else
+          powershell ./travis-windows.ps1 $EMBREE_VERSION;
+      fi
 after_success:
-    - git config user.name "Travis-CI Doc Bot"
-    - git config user.email "willusher.life@gmail.com"
     - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+          git config user.name "Travis-CI Doc Bot";
+          git config user.email "willusher.life@gmail.com";
           travis-cargo --only stable doc-upload;
       fi
 env:
