@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
 extern crate cgmath;
-extern crate sol;
+extern crate embree_rs;
 extern crate support;
 
 use cgmath::{Vector3, Vector4};
-use sol::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh};
+use embree_rs::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh};
 use support::Camera;
 
 fn make_cube<'a>(device: &'a Device) -> Geometry<'a> {

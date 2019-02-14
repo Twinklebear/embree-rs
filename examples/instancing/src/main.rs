@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
 extern crate cgmath;
-extern crate sol;
+extern crate embree_rs;
 extern crate support;
 
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Vector3, Vector4};
-use sol::{Device, Geometry, Instance, IntersectContext, QuadMesh, Ray, RayHit, Scene,
+use embree_rs::{Device, Geometry, Instance, IntersectContext, QuadMesh, Ray, RayHit, Scene,
              TriangleMesh};
 use std::{f32, u32};
 use support::Camera;

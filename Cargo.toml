@@ -1,10 +1,10 @@
 [package]
-name = "sol"
-version = "0.1.4"
-authors = ["Will Usher <willusher.life@gmail.com>"]
-homepage = "https://github.com/Twinklebear/sol"
-documentation = "http://www.willusher.io/sol/sol/"
-repository = "https://github.com/Twinklebear/sol"
+name = "embree-rs"
+version = "0.3.2"
+authors = ["Will Usher <will@willusher.io>"]
+homepage = "https://github.com/Twinklebear/embree-rs"
+documentation = "http://www.willusher.io/embree-rs/embree-rs/"
+repository = "https://github.com/Twinklebear/embree-rs"
 readme = "README.md"
 license = "MIT"
 description = """
