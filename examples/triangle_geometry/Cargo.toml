@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Will Usher <willusher.life@gmail.com>"]
 
 [dependencies]
-sol = { path = "../../" }
+embree-rs = { path = "../../" }
 support = { path = "../support" }
 cgmath = "0.16.1"
 
