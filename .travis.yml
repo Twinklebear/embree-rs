@@ -45,7 +45,9 @@ script:
     - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then
           ./travis-linux-mac.sh;
       else
+          echo "Running script!";
           powershell ./travis-windows.ps1 $EMBREE_VERSION;
+          echo "Powershell done";
       fi
 after_success:
     - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
