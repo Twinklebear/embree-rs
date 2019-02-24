@@ -82,6 +82,11 @@ impl<'a> Scene<'a> {
         }
         CommittedScene { scene: &self }
     }
+    /// Get the underlying handle to the scene, e.g. for passing it to
+    /// native code or ISPC kernels.
+    pub unsafe fn handle(&self) -> RTCScene {
+        self.handle
+    }
 }
 
 impl<'a> Drop for Scene<'a> {
@@ -186,6 +191,11 @@ impl<'a> CommittedScene<'a> {
                 n as u32
             );
         }
+    }
+    /// Get the underlying handle to the scene, e.g. for passing it to
+    /// native code or ISPC kernels.
+    pub unsafe fn handle(&self) -> RTCScene {
+        self.scene.handle
     }
 }
 
