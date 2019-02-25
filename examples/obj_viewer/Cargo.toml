@@ -6,6 +6,6 @@ authors = ["Will Usher <willusher.life@gmail.com>"]
 [dependencies]
 embree-rs = { path = "../../" }
 support = { path = "../support" }
-cgmath = "0.16.1"
+cgmath = "0.17.0"
 tobj = "0.1.6"
 
