@@ -50,7 +50,7 @@ impl RayN {
         SoARayIterMut::new(self, n)
     }
     pub fn len(&self) -> usize { self.org_x.len() }
-    pub(crate) unsafe fn as_raynp(&mut self) -> sys::RTCRayNp {
+    pub unsafe fn as_raynp(&mut self) -> sys::RTCRayNp {
         sys::RTCRayNp {
             org_x: self.org_x.as_mut_ptr(),
             org_y: self.org_y.as_mut_ptr(),
@@ -155,7 +155,7 @@ impl HitN {
         SoAHitIter::new(self, self.len()).filter(|h| h.hit())
     }
     pub fn len(&self) -> usize { self.ng_x.len() }
-    pub(crate) unsafe fn as_hitnp(&mut self) -> sys::RTCHitNp {
+    pub unsafe fn as_hitnp(&mut self) -> sys::RTCHitNp {
         sys::RTCHitNp {
             Ng_x: self.ng_x.as_mut_ptr(),
             Ng_y: self.ng_y.as_mut_ptr(),
@@ -220,5 +220,8 @@ impl RayHitN {
         self.ray.iter().zip(self.hit.iter())
     }
     pub fn len(&self) -> usize { self.ray.len() }
+    pub unsafe fn as_rayhitnp(&mut self) -> sys::RTCRayHitNp {
+        sys::RTCRayHitNp { ray: self.ray.as_raynp(), hit: self.hit.as_hitnp() }
+    }
 }
 

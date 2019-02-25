@@ -82,6 +82,11 @@ impl<'a> Scene<'a> {
         }
         CommittedScene { scene: &self }
     }
+    /// Get the underlying handle to the scene, e.g. for passing it to
+    /// native code or ISPC kernels.
+    pub unsafe fn handle(&self) -> RTCScene {
+        self.handle
+    }
 }
 
 impl<'a> Drop for Scene<'a> {
@@ -166,7 +171,7 @@ impl<'a> CommittedScene<'a> {
     pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitN) {
         let n = rays.len();
         unsafe {
-            let mut rayhit = RTCRayHitNp { ray: rays.ray.as_raynp(), hit: rays.hit.as_hitnp() };
+            let mut rayhit = rays.as_rayhitnp();
             rtcIntersectNp(
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
@@ -186,6 +191,11 @@ impl<'a> CommittedScene<'a> {
                 n as u32
             );
         }
+    }
+    /// Get the underlying handle to the scene, e.g. for passing it to
+    /// native code or ISPC kernels.
+    pub unsafe fn handle(&self) -> RTCScene {
+        self.scene.handle
     }
 }
 
