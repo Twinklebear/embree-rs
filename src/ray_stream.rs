@@ -220,5 +220,8 @@ impl RayHitN {
         self.ray.iter().zip(self.hit.iter())
     }
     pub fn len(&self) -> usize { self.ray.len() }
+    pub unsafe fn as_rayhitnp(&mut self) -> sys::RTCRayHitNp {
+        sys::RTCRayHitNp { ray: self.ray.as_raynp(), hit: self.hit.as_hitnp() }
+    }
 }
 
