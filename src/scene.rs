@@ -192,6 +192,28 @@ impl<'a> CommittedScene<'a> {
             );
         }
     }
+    pub fn bounds(&self) -> RTCBounds {
+        #[repr(align(16))]
+        struct Bounds {
+            bounds: RTCBounds,
+        }
+        let mut bounds = Bounds {
+            bounds: RTCBounds {
+                lower_x: 0.0,
+                upper_x: 0.0,
+                lower_y: 0.0,
+                upper_y: 0.0,
+                lower_z: 0.0,
+                upper_z: 0.0,
+                align0: 0.0,
+                align1: 0.0,
+            },
+        };
+        unsafe {
+            rtcGetSceneBounds(self.handle(), &mut bounds.bounds as *mut RTCBounds);
+        }
+        bounds.bounds
+    }
     /// Get the underlying handle to the scene, e.g. for passing it to
     /// native code or ISPC kernels.
     pub unsafe fn handle(&self) -> RTCScene {
