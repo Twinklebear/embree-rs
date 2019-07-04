@@ -8,7 +8,6 @@ bindgen $1 -o $2 \
 	--distrust-clang-mangling \
 	--whitelist-function "rtc.*" \
 	--whitelist-type "RTC.*" \
-	--whitelist-var "rtc.*" \
 	--whitelist-var "RTC.*" \
 	--rustified-enum "RTCDeviceProperty" \
 	--rustified-enum "RTCError" \
