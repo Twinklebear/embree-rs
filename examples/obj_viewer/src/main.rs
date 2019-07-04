@@ -19,9 +19,6 @@ fn main() {
     let (models, _) = tobj::load_obj(&Path::new(&args[1])).unwrap();
     let mesh = &models[0].mesh;
 
-    println!("Mesh has {} triangles and {} verts",
-             mesh.indices.len() / 3, mesh.positions.len() / 3);
-
     let mut tri_geoms = Vec::new();
 
     for m in models.iter() {
