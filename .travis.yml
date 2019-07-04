@@ -42,10 +42,12 @@ before_script:
           pip install 'travis-cargo<0.2' --user;
           export PATH=$HOME/.local/bin:$PATH;
       fi
+    - rustup component add clippy
 script:
     - cargo build
     - cargo test
     - cargo doc
+    - cargo clippy
     - cd examples
     - for d in `ls ./`; do
           cd $d;
