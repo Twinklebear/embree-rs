@@ -8,7 +8,7 @@ matrix:
         - os: linux
           dist: xenial
           env:
-              - EMBREE_VERSION=3.5.0
+              - EMBREE_VERSION=3.5.2
               - secure: jdyo2YJrD1heiHRebeg5/Cj50DghBTRcFIiRbXPJy+dCIZ226CoYKS5TyrIzq/u2LAjaOrIfMuCOppyoPgGctp6tefZ48860KN/TTDnqn26C2XaFdEtZLd1/1n1J5pZnUvq/xRvuWQmsiMmdtHXgAMFpqF1u7RKy2FDHvYkWmdTSb4Hoj+tSEaykH6Wvs5MbNEXXjp+cj5eXfTkfuSZZn5dhtgDRxEoLXJ4+QoBAGRH0UMXZI8jBe7Ao0CiPUfWVpvMeLudcXchcZmKO1w7zu5hAu2E0v9GL9kfQj9ECs6TVIUOLkb3utHhlZRVvDhYOVjBS8Qyb8ZS8EcnwcZgaRzA06thWk4JNnEh37rKWHpM+sIC1H1rW+sWdpzD2hhGDB4V4YMA1zOeAgj+Gzrj/X4Ka1bWTgEehAI5O14V8QOQbdvH7tpcNJKTDfW132jc2Yad/6hR/ai04vxrX6JLHor64Tf2DfdAm4XB7H4kjWXhmCoDaVQG2vfq3tWYvVgJna8tPHJ9uYoWQyEcptPRoTqaCKLqLWpJ+3BOJ5bkTRZA2VAbuigdJjfBMdhC0cDBhyP8zeMwuVoXYhILHsmWj5DCBaT2ChkYOpkgMlZHWPZz08lVZYIsKzqgp/cCzDmH9U+yb3WQf7WzfaDQ3IQB6LZ7H/HIRohwkLU24f1kbAYQ=
           rust: stable
           addons:
@@ -17,10 +17,10 @@ matrix:
                       - ubuntu-toolchain-r-test
         - os: osx
           osx_image: xcode9.4
-          env: EMBREE_VERSION=3.5.0
+          env: EMBREE_VERSION=3.5.2
           rust: stable
         - os: windows
-          env: EMBREE_VERSION=3.5.0
+          env: EMBREE_VERSION=3.5.2
           rust: stable
 before_script:
     - export TARGET_OS=$TRAVIS_OS_NAME
