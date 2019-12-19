@@ -196,7 +196,7 @@ fn main() {
             camera_pose.pos,
             camera_pose.dir,
             camera_pose.up,
-            75.0,
+            55.0,
             img_dims,
         );
         // Render the scene
@@ -227,17 +227,17 @@ fn main() {
                             support::clamp(illum + f32::max(light_dir.dot(normal), 0.0), 0.0, 1.0);
                     }
 
-                    let mut p = image.get_pixel_mut(i, j);
+                    let p = image.get_pixel_mut(i, j);
                     if inst_id == u32::MAX && geom_id == ground_id {
-                        p.data[0] = (255.0 * illum) as u8;
-                        p.data[1] = p.data[0];
-                        p.data[2] = p.data[0];
+                        p[0] = (255.0 * illum) as u8;
+                        p[1] = p[0];
+                        p[2] = p[0];
                     } else {
                         // Shade the instances using their color
                         let color = &instance_colors[inst_id as usize][geom_id as usize];
-                        p.data[0] = (255.0 * illum * color.x) as u8;
-                        p.data[1] = (255.0 * illum * color.y) as u8;
-                        p.data[2] = (255.0 * illum * color.z) as u8;
+                        p[0] = (255.0 * illum * color.x) as u8;
+                        p[1] = (255.0 * illum * color.y) as u8;
+                        p[2] = (255.0 * illum * color.z) as u8;
                     }
                 }
             }

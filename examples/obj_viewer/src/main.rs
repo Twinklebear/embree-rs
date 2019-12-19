@@ -69,7 +69,7 @@ fn main() {
             camera_pose.pos,
             camera_pose.dir,
             camera_pose.up,
-            75.0,
+            55.0,
             img_dims,
         );
         // Render the scene
@@ -104,13 +104,13 @@ fn main() {
                         let mut n = (na * w + nb * ray_hit.hit.u + nc * ray_hit.hit.v).normalize();
                         n = (n + Vector3::new(1.0, 1.0, 1.0)) * 0.5;
 
-                        p.data[0] = (n.x * 255.0) as u8;
-                        p.data[1] = (n.y * 255.0) as u8;
-                        p.data[2] = (n.z * 255.0) as u8;
+                        p[0] = (n.x * 255.0) as u8;
+                        p[1] = (n.y * 255.0) as u8;
+                        p[2] = (n.z * 255.0) as u8;
                     } else {
-                        p.data[0] = (ray_hit.hit.u * 255.0) as u8;
-                        p.data[1] = (ray_hit.hit.v * 255.0) as u8;
-                        p.data[2] = 0;
+                        p[0] = (ray_hit.hit.u * 255.0) as u8;
+                        p[1] = (ray_hit.hit.v * 255.0) as u8;
+                        p[2] = 0;
                     }
                 }
             }

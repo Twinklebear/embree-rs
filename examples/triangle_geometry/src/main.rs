@@ -123,9 +123,9 @@ fn main() {
                     } else {
                         face_colors[ray_hit.hit.primID as usize]
                     };
-                    p.data[0] = (color.x * 255.0) as u8;
-                    p.data[1] = (color.y * 255.0) as u8;
-                    p.data[2] = (color.z * 255.0) as u8;
+                    p[0] = (color.x * 255.0) as u8;
+                    p[1] = (color.y * 255.0) as u8;
+                    p[2] = (color.z * 255.0) as u8;
                 }
             }
         }

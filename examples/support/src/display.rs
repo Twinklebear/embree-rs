@@ -35,7 +35,7 @@ impl Display {
     pub fn new(w: u32, h: u32, title: &str) -> Display {
         let event_loop = glutin::EventsLoop::new();
         let window_builder = glutin::WindowBuilder::new()
-            .with_dimensions(w, h)
+            .with_dimensions(glutin::dpi::LogicalSize::new(w.into(), h.into()))
             .with_title(title);
         let context_builder = glutin::ContextBuilder::new();
         let display = glium::Display::new(window_builder, context_builder, &event_loop).unwrap();
@@ -70,7 +70,7 @@ impl Display {
             let mut should_quit = false;
             self.event_loop.poll_events(|e| match e {
                 Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::Closed => should_quit = true,
+                    WindowEvent::CloseRequested => should_quit = true,
                     WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
                         Some(VirtualKeyCode::Escape) => should_quit = true,
                         _ => {}
@@ -82,13 +82,13 @@ impl Display {
                         let prev = prev_mouse.unwrap();
                         if mouse_pressed[0] {
                             arcball_camera.rotate(
-                                Vector2::new(position.0 as f32, prev.1 as f32),
-                                Vector2::new(prev.0 as f32, position.1 as f32)
+                                Vector2::new(position.x as f32, prev.y as f32),
+                                Vector2::new(prev.x as f32, position.y as f32)
                             );
                         } else if mouse_pressed[1] {
                             let mouse_delta = Vector2::new(
-                                (prev.0 - position.0) as f32,
-                                (position.1 - prev.1) as f32
+                                (prev.x - position.x) as f32,
+                                (position.y - prev.y) as f32
                             );
                             arcball_camera.pan(mouse_delta, 0.16);
                         }
@@ -104,7 +104,7 @@ impl Display {
                     WindowEvent::MouseWheel { delta, .. } => {
                         let y = match delta {
                             MouseScrollDelta::LineDelta(_, y) => y,
-                            MouseScrollDelta::PixelDelta(_, y) => y,
+                            MouseScrollDelta::PixelDelta(lpos) => lpos.y as f32,
                         };
                         arcball_camera.zoom(y, 0.16);
                     }
