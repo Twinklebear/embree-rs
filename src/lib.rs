@@ -1,4 +1,4 @@
-//! [![Crates.io](https://img.shields.io/crates/v/embree-rs.svg)](https://crates.io/crates/embree-rs)
+//! [![Crates.io](https://img.shields.io/crates/v/embree.svg)](https://crates.io/crates/embree)
 //! [![Build Status](https://travis-ci.org/Twinklebear/embree-rs.svg?branch=master)](https://travis-ci.org/Twinklebear/embree-rs)
 //! 
 //! Rust bindings to [Embree](http://embree.github.io/). These are still in

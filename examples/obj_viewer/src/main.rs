@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
 extern crate cgmath;
-extern crate embree_rs;
+extern crate embree;
 extern crate support;
 extern crate tobj;
 
 use std::path::Path;
 
 use cgmath::{Vector3, Vector4, InnerSpace};
-use embree_rs::{Device, Geometry, IntersectContext, Ray, RayHit, Scene, TriangleMesh};
+use embree::{Device, Geometry, IntersectContext, Ray, RayHit, Scene, TriangleMesh};
 use support::Camera;
 
 fn main() {
