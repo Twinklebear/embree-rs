@@ -24,16 +24,18 @@ matrix:
           rust: stable
 before_script:
     - export TARGET_OS=$TRAVIS_OS_NAME
-    - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-          export TARGET_OS="macosx";
-      fi
-    - if [[ "$TARGET_OS" != "windows" ]]; then
+    - if [[ "$TARGET_OS" == "linux" ]]; then
           wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}.tar.gz;
           tar -xf embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}.tar.gz;
           source embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/embree-vars.sh;
           export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/;
+      elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+          export TARGET_OS="macosx";
+          wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}.zip;
+          unzip embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}.zip;
+          source embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/embree-vars.sh;
+          export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x86_64.${TARGET_OS}/;
       else
-          echo "Grabbing Embree";
           wget https://github.com/embree/embree/releases/download/v${EMBREE_VERSION}/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip;
           7z x embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS}.zip -y;
           export EMBREE_DIR=`pwd`/embree-${EMBREE_VERSION}.x64.vc14.${TARGET_OS};
