@@ -4,6 +4,7 @@ use cgmath::InnerSpace;
 
 use Vector3;
 
+#[derive(PartialEq)]
 pub struct Camera {
     pub pos: Vector3,
     dir_top_left: Vector3,
