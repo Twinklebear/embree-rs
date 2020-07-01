@@ -14,6 +14,7 @@ use support::Camera;
 use rayon::prelude::*;
 use rand::prelude::*;
 
+/// Function to sample a point inside a 2D disk
 pub fn concentric_sample_disk(u: Point2<f32>) -> Point2<f32> {
     // map uniform random numbers to $[-1,1]^2$
     let u_offset: Point2<f32> = u * 2.0 as f32 - Vector2 { x: 1.0, y: 1.0 };
@@ -37,6 +38,7 @@ pub fn concentric_sample_disk(u: Point2<f32>) -> Point2<f32> {
         y: theta.sin(),
     } * r
 }
+/// Function to sample cosine-weighted hemisphere
 pub fn cosine_sample_hemisphere(u: Point2<f32>) -> Vector3<f32> {
     let d: Point2<f32> = concentric_sample_disk(u);
     let z: f32 = (0.0 as f32).max(1.0 as f32 - d.x * d.x - d.y * d.y).sqrt();
@@ -69,16 +71,16 @@ impl Frame {
     }
 }
 
-// This is an example of a custom structure 
+// It is an example of a custom structure 
 // that encapsulate the embree commited scene
 pub struct AOIntegrator<'embree> {
-    // Camera (can move)
+    // Camera (can be updated using update_cam method)
     camera: Camera,
-    // The commited scene
+    // A borrowed commited scene
     // Note here the lifetime for borrowing and devide are the same
     // Which is fine in our case
     rtscene: &'embree embree::CommittedScene<'embree>,
-    // The models loaded via tobj
+    // List of models loaded from tobj
     models: Vec<tobj::Model>,
     // Meshs ids (to map embree intersection with the models list)
     mesh_ids: Vec<u32>,
@@ -98,7 +100,7 @@ impl<'embree> AOIntegrator<'embree> {
         }
     }
 
-    // Simple AO
+    // Simple AO computation method
     pub fn render(&self, i: u32, j: u32, u: Point2<f32>) -> f32 {
         let dir = self.camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
         let ray = Ray::new(self.camera.pos, dir);
@@ -178,20 +180,21 @@ impl<'embree> AOIntegrator<'embree> {
 }
 
 fn main() {
-    let mut display = support::Display::new(512, 512, "OBJ Viewer");
+    let mut display = support::Display::new(512, 512, "OBJ AO Viewer");
     let device = Device::new();
 
+    // Expect <obj_path> [max_distance]
     let args: Vec<_> = std::env::args().collect();
     
     // Get the distance. If nothing provided
     // use infinity
     let max_distance = match args.len() {
-        1 => panic!("Need to provide obj path"),
+        1 => panic!("Need to provide obj path argument"),
         2 => None,
         3 => { 
-            let d = args[2].parse::<f32>().expect("Impossible to parse the max distance (need to be float)");
+            let d = args[2].parse::<f32>().expect("Impossible to parse the max distance: need to be float");
             if d <= 0.0 {
-                panic!(format!("Distance need to be more than 0.0 ({})", d));
+                panic!(format!("Max distance need to be more than 0.0 ({})", d));
             }
             Some(d)
         }
@@ -239,7 +242,7 @@ fn main() {
     }
     let rtscene = scene.commit();
     
-    // Create my custom object
+    // Create my custom object that will compute the ambiant occlusion
     let mut scene = AOIntegrator {
         models,
         mesh_ids,
@@ -248,7 +251,7 @@ fn main() {
         max_distance
     };
 
-    // Variables to average over frames
+    // Variables to average AO computation across frames
     let mut spp = 0;
     let mut img = Vec::new();
 
@@ -266,6 +269,7 @@ fn main() {
             55.0,
             img_dims,
         )) {
+            // If the camera have moved, we clear previous accumulated results.
             spp = 0;
             img.resize((img_dims.0 * img_dims.1) as usize, 0.0);
             for i in &mut img {
@@ -273,18 +277,18 @@ fn main() {
             }
         }
         
-        // Render the scene
-        // Note that here we are using rayon to compute AO with multi-threading
+        // Render the scene with Rayon. Here each pixel compute 1 spp AO
         img.par_chunks_mut(image.width() as usize).enumerate().for_each(|(y, row)| {
             let mut rng = rand::thread_rng();
             for (x, p) in row.iter_mut().enumerate() {
                 let u = Point2::new(rng.gen(), rng.gen());
+                // Weighting average
                 (*p) = (*p * spp as f32 + scene.render(x as u32, y as u32, u)) / (spp + 1) as f32;
             }
         });
         spp += 1;
 
-        // Copy the result inside the image buffer       
+        // Copy the accumulated result inside the image buffer       
         let raw_out = image.as_mut();
         raw_out.chunks_mut(3).zip(img.iter()).for_each(|(p, v)| {
                 p[0] = (v * 255.0) as u8;
