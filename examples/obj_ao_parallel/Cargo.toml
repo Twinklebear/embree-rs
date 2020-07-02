@@ -1,0 +1,12 @@
+[package]
+name = "obj_ao_parallel"
+version = "0.1.0"
+authors = ["Will Usher <willusher.life@gmail.com>"]
+
+[dependencies]
+embree = { path = "../../" }
+support = { path = "../support" }
+cgmath = "0.17.0"
+tobj = "0.1.6"
+rayon = "1.3"
+rand = "0.7"
