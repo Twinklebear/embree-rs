@@ -30,6 +30,7 @@ pub mod scene;
 #[allow(non_snake_case)]
 pub mod sys;
 pub mod triangle_mesh;
+pub mod flat_linear_curve;
 
 pub use buffer::{Buffer, MappedBuffer};
 pub use device::Device;
@@ -44,6 +45,7 @@ pub use ray_packet::{Ray4, Hit4, RayHit4};
 pub use ray_stream::{RayN, HitN, RayHitN};
 pub use scene::{Scene, CommittedScene};
 pub use triangle_mesh::TriangleMesh;
+pub use flat_linear_curve::FlatLinearCurve;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases
