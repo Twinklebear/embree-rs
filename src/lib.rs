@@ -6,7 +6,7 @@
 //! 
 //! # Documentation
 //! 
-//! Rust doc can be found [here](http://www.willusher.io/embree-rs/embree-rs),
+//! Rust doc can be found [here](https://docs.rs/embree/).
 //! Embree documentation can be found [here](https://embree.github.io/api.html).
 //! See the [examples/](https://github.com/Twinklebear/embree-rs/tree/master/examples)
 //! for some example applications using the bindings.

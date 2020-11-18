@@ -1,7 +1,4 @@
 #!/bin/bash
-cargo build
-cargo test
-cargo doc
 
 # build the examples
 cd examples
