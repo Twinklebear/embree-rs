@@ -1,11 +1,11 @@
 #![allow(dead_code)]
-
+//source /media/colin/ssd/apps/embree/embree-3.11.0.x86_64.linux/embree-vars.sh
 extern crate cgmath;
 extern crate embree;
 extern crate support;
 
-use cgmath::{Vector2,Vector3, Vector4};
-use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, FlatLinearCurve};
+use cgmath::{Vector2,Vector3, Vector4, InnerSpace};
+use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve};
 use support::Camera;
 
 fn make_cube<'a>(device: &'a Device) -> Geometry<'a> {
@@ -59,7 +59,7 @@ fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
         verts[0] = Vector4::new(-10.0, -2.0, -10.0, 0.0);
         verts[1] = Vector4::new(-10.0, -2.0, 10.0, 0.0);
         verts[2] = Vector4::new(10.0, -2.0, 10.0, 0.0);
-        verts[3] = Vector4::new(10.0, -2.0, -10.0, 0.0);
+        verts[3] = Vector4::new(10.0, -2.0, -10.0, 1.0);
 
         quads[0] = Vector4::new(0, 1, 2, 3);
     }
@@ -69,18 +69,20 @@ fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
 }
 
 fn main() {
-    let mut display = support::Display::new(512, 512, "triangle geometry");
+    let mut display = support::Display::new(512, 512, "curve geometry");
     let device = Device::new();
     let cube = make_cube(&device);
     let ground = make_ground_plane(&device);
 
-    let mut curve = FlatLinearCurve::unanimated(&device, 1, 2);
+    let mut curve = LinearCurve::unanimated(&device, 2, 3, 0);
     let mut verts = curve.vertex_buffer.map();
     let mut ids = curve.index_buffer.map();
     verts[0] = Vector4::new(-0.0, -0.0, -0.0, 1.0);
-    verts[1] = Vector4::new(-0.0, 10.0, 2.0, 1.0);
+    verts[1] = Vector4::new(-0.0, 10.0, 0.0, 0.5);
+    verts[2] = Vector4::new(-0.0, 15.0, 5.0, 0.25);
     ids[0] = 0;
-    let mut curve_geo = Geometry::FlatLinearCurve(curve);
+    ids[1] = 1;
+    let mut curve_geo = Geometry::LinearCurve(curve);
     curve_geo.commit();
 
     let mut scene = Scene::new(&device);
@@ -111,12 +113,23 @@ fn main() {
                 let mut ray_hit = RayHit::new(ray);
                 rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
                 if ray_hit.hit.hit() {
+                    let h = ray_hit.hit;
                     let mut p = image.get_pixel_mut(i, j);
-                    let color = Vector3::new(0.6, 0.6, 0.6);
+                    let color = Vector3::new(0.3, 0.3, 0.3);
+                    let N = Vector3::new(h.Ng_x,h.Ng_y,h.Ng_z).normalize();
+                    let uv = Vector3::new(h.u,h.v,0.0);
 
-                    p[0] = (color.x * 255.0) as u8;
-                    p[1] = (color.y * 255.0) as u8;
-                    p[2] = (color.z * 255.0) as u8;
+                    p[0] = ((uv.x/2.+0.5) * 255.0) as u8;
+                    p[1] = ((uv.y/2.+0.5) * 255.0) as u8;
+                    p[2] = (0.0) as u8;
+
+/*                     p[0] = ((N.x/2. +0.0) * 255.0) as u8;
+                    p[1] = ((N.y/2. +0.0) * 255.0) as u8;
+                    p[2] = ((N.z/2. +0.0) *255.0) as u8; */
+
+                    //p[0] = (color.x * 255.0) as u8;
+                    //p[1] = (color.y * 255.0) as u8;
+                    //p[2] = (color.z * 255.0) as u8;
                 }
             }
         }
