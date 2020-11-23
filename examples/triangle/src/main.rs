@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-//source /media/colin/ssd/apps/embree/embree-3.11.0.x86_64.linux/embree-vars.sh
 extern crate cgmath;
 extern crate embree;
 extern crate support;

@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-//source /media/colin/ssd/apps/embree/embree-3.11.0.x86_64.linux/embree-vars.sh
 extern crate cgmath;
 extern crate embree;
 extern crate support;
@@ -8,49 +7,26 @@ use cgmath::{Vector2,Vector3, Vector4, InnerSpace};
 use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve};
 use support::Camera;
 
-fn make_cube<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut mesh = TriangleMesh::unanimated(device, 12, 8);
+fn make_curve<'a>(device: &'a Device) -> Geometry<'a> {
+    let mut curve = LinearCurve::unanimated(&device, 2, 3, 0);
     {
-        let mut verts = mesh.vertex_buffer.map();
-        let mut tris = mesh.index_buffer.map();
+        let mut verts = curve.vertex_buffer.map();
+        let mut ids = curve.index_buffer.map();
+        let mut flags = curve.index_buffer.map();
+        verts[0] = Vector4::new(-0.0, -0.0, -0.0, 1.0);
+        verts[1] = Vector4::new(-0.0, 10.0, 0.0, 0.5);
+        verts[2] = Vector4::new(-0.0, 15.0, 5.0, 0.25);
+        ids[0] = 0;
+        ids[1] = 1;
+        flags[0] = 0; //not sure how these shoudl be set, https://www.embree.org/api.html#rtccurveflags , https://www.embree.org/api.html#rtc_geometry_type_curve
+        flags[1] = 1; 
 
-        verts[0] = Vector4::new(-1.0, -1.0, -1.0, 0.0);
-        verts[1] = Vector4::new(-1.0, -1.0, 1.0, 0.0);
-        verts[2] = Vector4::new(-1.0, 1.0, -1.0, 0.0);
-        verts[3] = Vector4::new(-1.0, 1.0, 1.0, 0.0);
-        verts[4] = Vector4::new(1.0, -1.0, -1.0, 0.0);
-        verts[5] = Vector4::new(1.0, -1.0, 1.0, 0.0);
-        verts[6] = Vector4::new(1.0, 1.0, -1.0, 0.0);
-        verts[7] = Vector4::new(1.0, 1.0, 1.0, 0.0);
-
-        // left side
-        tris[0] = Vector3::new(0, 2, 1);
-        tris[1] = Vector3::new(1, 2, 3);
-
-        // right side
-        tris[2] = Vector3::new(4, 5, 6);
-        tris[3] = Vector3::new(5, 7, 6);
-
-        // bottom side
-        tris[4] = Vector3::new(0, 1, 4);
-        tris[5] = Vector3::new(1, 5, 4);
-
-        // top side
-        tris[6] = Vector3::new(2, 6, 3);
-        tris[7] = Vector3::new(3, 6, 7);
-
-        // front side
-        tris[8] = Vector3::new(0, 4, 2);
-        tris[9] = Vector3::new(2, 4, 6);
-
-        // back side
-        tris[10] = Vector3::new(1, 3, 5);
-        tris[11] = Vector3::new(3, 7, 5);
     }
-    let mut mesh = Geometry::Triangle(mesh);
-    mesh.commit();
-    mesh
+    let mut curve_geo = Geometry::LinearCurve(curve);
+    curve_geo.commit();
+    curve_geo
 }
+
 fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
     let mut mesh = QuadMesh::unanimated(device, 1, 4);
     {
@@ -71,23 +47,11 @@ fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
 fn main() {
     let mut display = support::Display::new(512, 512, "curve geometry");
     let device = Device::new();
-    let cube = make_cube(&device);
     let ground = make_ground_plane(&device);
-
-    let mut curve = LinearCurve::unanimated(&device, 2, 3, 0);
-    let mut verts = curve.vertex_buffer.map();
-    let mut ids = curve.index_buffer.map();
-    verts[0] = Vector4::new(-0.0, -0.0, -0.0, 1.0);
-    verts[1] = Vector4::new(-0.0, 10.0, 0.0, 0.5);
-    verts[2] = Vector4::new(-0.0, 15.0, 5.0, 0.25);
-    ids[0] = 0;
-    ids[1] = 1;
-    let mut curve_geo = Geometry::LinearCurve(curve);
-    curve_geo.commit();
+    let curve = make_curve(&device);
 
     let mut scene = Scene::new(&device);
-    //scene.attach_geometry(cube);
-    let curve_id = scene.attach_geometry(curve_geo);
+    let curve_id = scene.attach_geometry(curve);
     let ground_id = scene.attach_geometry(ground);
     let rtscene = scene.commit();
 
@@ -115,6 +79,7 @@ fn main() {
                 if ray_hit.hit.hit() {
                     let h = ray_hit.hit;
                     let mut p = image.get_pixel_mut(i, j);
+                    
                     let color = Vector3::new(0.3, 0.3, 0.3);
                     let N = Vector3::new(h.Ng_x,h.Ng_y,h.Ng_z).normalize();
                     let uv = Vector3::new(h.u,h.v,0.0);
