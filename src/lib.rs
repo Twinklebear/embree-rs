@@ -31,6 +31,7 @@ pub mod scene;
 pub mod sys;
 pub mod triangle_mesh;
 pub mod linear_curve;
+pub mod bspline_curve;
 
 pub use buffer::{Buffer, MappedBuffer};
 pub use device::Device;
@@ -46,6 +47,7 @@ pub use ray_stream::{RayN, HitN, RayHitN};
 pub use scene::{Scene, CommittedScene};
 pub use triangle_mesh::TriangleMesh;
 pub use linear_curve::LinearCurve;
+pub use bspline_curve::BsplineCurve;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases
