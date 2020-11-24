@@ -28,7 +28,7 @@ fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
     curve_geo
 }
 fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut curve = BsplineCurve::unanimated(&device, 5, 6, 2);
+    let mut curve = BsplineCurve::unanimated(&device, 5, 6, 1);
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();
@@ -39,7 +39,7 @@ fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
         verts[2] = Vector4::new(-0.0, 8.0, 0.0, 1.0);
         verts[3] = Vector4::new(-0.0, 5.0, 3.0, 1.0);
         verts[4] = Vector4::new(-0.0, 10.0, 5.0, 0.55);
-        verts[5] = Vector4::new(-0.0, 5.0, -5.0, 0.02);
+        verts[5] = Vector4::new(-0.0, 5.0, 12.0, 0.02);
         ids[0] = 0;
         ids[1] = 1;
         ids[2] = 2;
