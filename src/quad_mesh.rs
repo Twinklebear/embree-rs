@@ -1,4 +1,5 @@
 use cgmath::Vector4;
+
 use buffer::Buffer;
 use device::Device;
 use geometry::Geometry;

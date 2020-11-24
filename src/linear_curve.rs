@@ -11,7 +11,7 @@ pub struct LinearCurve<'a> {
     pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
     pub index_buffer: Buffer<'a, u32>,
-    pub neighbour_buffer: Buffer<'a, u32>,
+    pub flag_buffer: Buffer<'a, u32>,
 }
 
 impl<'a> LinearCurve<'a> {
@@ -22,7 +22,7 @@ impl<'a> LinearCurve<'a> {
         };
         let mut vertex_buffer = Buffer::new(device, num_verts);
         let mut index_buffer = Buffer::new(device, num_segments);
-        let mut neighbour_buffer = Buffer::new(device, num_segments);
+        let mut flag_buffer = Buffer::new(device, num_verts);
         unsafe {
             rtcSetGeometryBuffer(
                 h,
@@ -53,19 +53,19 @@ impl<'a> LinearCurve<'a> {
                 BufferType::FLAGS,
                 0,
                 Format::UCHAR,
-                neighbour_buffer.handle,
+                flag_buffer.handle,
                 0,
                 4,
-                num_segments,
+                num_verts,
             );
-            neighbour_buffer.set_attachment(h, BufferType::FLAGS, 0);
+            flag_buffer.set_attachment(h, BufferType::FLAGS, 0);
         }
         LinearCurve {
             device: device,
             handle: h,
             vertex_buffer: vertex_buffer,
             index_buffer: index_buffer,
-            neighbour_buffer: neighbour_buffer,
+            flag_buffer: flag_buffer,
         }
     }
 }

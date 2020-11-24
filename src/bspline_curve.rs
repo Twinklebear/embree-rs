@@ -11,7 +11,7 @@ pub struct BsplineCurve<'a> {
     pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
     pub index_buffer: Buffer<'a, u32>,
-    pub neighbour_buffer: Buffer<'a, u32>,
+    pub flag_buffer: Buffer<'a, u32>,
     pub normal_buffer: Buffer<'a, Vector3<f32>>,
 }
 
@@ -19,13 +19,13 @@ impl<'a> BsplineCurve<'a> {
     pub fn unanimated(device: &'a Device, num_segments: usize, num_verts: usize, curve_type: usize) -> BsplineCurve<'a> {
         let h: RTCGeometry;
         match curve_type {
-        _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_BSPLINE_CURVE) },
         1 => h = unsafe { rtcNewGeometry(device.handle, GeometryType::NORMAL_ORIENTED_BSPLINE_CURVE) },
         2 => h = unsafe { rtcNewGeometry(device.handle, GeometryType::ROUND_BSPLINE_CURVE) },
+        _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_BSPLINE_CURVE) },
         };
         let mut vertex_buffer = Buffer::new(device, num_verts);
         let mut index_buffer = Buffer::new(device, num_segments);
-        let mut neighbour_buffer = Buffer::new(device, num_segments);
+        let mut flag_buffer = Buffer::new(device, num_segments);
         let mut normal_buffer = Buffer::new(device, num_verts);
         unsafe {
             rtcSetGeometryBuffer(
@@ -57,11 +57,12 @@ impl<'a> BsplineCurve<'a> {
                 BufferType::FLAGS,
                 0,
                 Format::UCHAR,
-                neighbour_buffer.handle,
+                flag_buffer.handle,
                 0,
-                4,
+                1,
                 num_segments,
             );
+            flag_buffer.set_attachment(h, BufferType::FLAGS, 0);
 
             rtcSetGeometryBuffer(
                 h,
@@ -73,6 +74,7 @@ impl<'a> BsplineCurve<'a> {
                 12,
                 num_verts,
             );
+            normal_buffer.set_attachment(h, BufferType::NORMAL, 0);
 
         }
         BsplineCurve {
@@ -80,7 +82,7 @@ impl<'a> BsplineCurve<'a> {
             handle: h,
             vertex_buffer: vertex_buffer,
             index_buffer: index_buffer,
-            neighbour_buffer: neighbour_buffer,
+            flag_buffer: flag_buffer,
             normal_buffer: normal_buffer,
         }
     }
