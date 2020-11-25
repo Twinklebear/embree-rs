@@ -51,7 +51,7 @@ impl<'a, T> Buffer<'a, T> {
         };
         Buffer {
             device: device,
-            handle: unsafe { rtcNewBuffer(device.handle, bytes as u64) },
+            handle: unsafe { rtcNewBuffer(device.handle, bytes) },
             bytes: bytes,
             attachment: BufferAttachment::none(),
             marker: PhantomData,
@@ -67,7 +67,7 @@ impl<'a, T> Buffer<'a, T> {
         };
         Buffer {
             device: device,
-            handle: unsafe { rtcNewBuffer(device.handle, bytes as u64) },
+            handle: unsafe { rtcNewBuffer(device.handle, bytes) },
             bytes: bytes,
             attachment: BufferAttachment::none(),
             marker: PhantomData,

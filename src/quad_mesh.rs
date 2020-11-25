@@ -27,7 +27,7 @@ impl<'a> QuadMesh<'a> {
                 vertex_buffer.handle,
                 0,
                 16,
-                num_verts as u64,
+                num_verts,
             );
             vertex_buffer.set_attachment(h, BufferType::VERTEX, 0);
 
@@ -39,7 +39,7 @@ impl<'a> QuadMesh<'a> {
                 index_buffer.handle,
                 0,
                 16,
-                num_quads as u64,
+                num_quads,
             );
             index_buffer.set_attachment(h, BufferType::INDEX, 0);
         }

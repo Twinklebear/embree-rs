@@ -8,8 +8,8 @@ pub const RTC_VERSION_STRING: &'static [u8; 7usize] = b"3.12.1\0";
 pub const RTC_MAX_INSTANCE_LEVEL_COUNT: u32 = 1;
 pub const RTC_MIN_WIDTH: u32 = 0;
 pub const RTC_MAX_TIME_STEP_COUNT: u32 = 129;
-pub type size_t = ::std::os::raw::c_ulong;
-pub type __ssize_t = ::std::os::raw::c_long;
+pub type size_t = usize;
+pub type __ssize_t = isize;
 pub type ssize_t = __ssize_t;
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

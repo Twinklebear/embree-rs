@@ -152,7 +152,7 @@ impl<'a> CommittedScene<'a> {
                 ctx as *mut RTCIntersectContext,
                 rays.as_mut_ptr(),
                 m as u32,
-                mem::size_of::<RayHit>() as u64,
+                mem::size_of::<RayHit>(),
             );
         }
     }
@@ -164,7 +164,7 @@ impl<'a> CommittedScene<'a> {
                 ctx as *mut RTCIntersectContext,
                 rays.as_mut_ptr(),
                 m as u32,
-                mem::size_of::<Ray>() as u64,
+                mem::size_of::<Ray>(),
             );
         }
     }
