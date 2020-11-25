@@ -1,11 +1,12 @@
 use cgmath::Vector3;
-use std::{f32, u32};
 use std::marker::PhantomData;
+use std::{f32, u32};
 
+use soa_ray::{
+    SoAHit, SoAHitIter, SoAHitIterMut, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, SoARayRef,
+    SoARayRefMut,
+};
 use sys;
-use soa_ray::{SoARay, SoAHit, SoARayRef, SoARayRefMut,
-                SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter,
-                SoAHitIterMut};
 
 pub type Ray4 = sys::RTCRay4;
 pub type Hit4 = sys::RTCHit4;
@@ -13,15 +14,22 @@ pub type RayHit4 = sys::RTCRayHit4;
 
 impl Ray4 {
     pub fn empty() -> Ray4 {
-        Ray4::segment([Vector3::new(0.0, 0.0, 0.0); 4],
-                      [Vector3::new(0.0, 0.0, 0.0); 4],
-                      [0.0; 4], [f32::INFINITY; 4])
+        Ray4::segment(
+            [Vector3::new(0.0, 0.0, 0.0); 4],
+            [Vector3::new(0.0, 0.0, 0.0); 4],
+            [0.0; 4],
+            [f32::INFINITY; 4],
+        )
     }
     pub fn new(origin: [Vector3<f32>; 4], dir: [Vector3<f32>; 4]) -> Ray4 {
         Ray4::segment(origin, dir, [0.0; 4], [f32::INFINITY; 4])
     }
-    pub fn segment(origin: [Vector3<f32>; 4], dir: [Vector3<f32>; 4],
-                   tnear: [f32; 4], tfar: [f32; 4]) -> Ray4 {
+    pub fn segment(
+        origin: [Vector3<f32>; 4],
+        dir: [Vector3<f32>; 4],
+        tnear: [f32; 4],
+        tfar: [f32; 4],
+    ) -> Ray4 {
         sys::RTCRay4 {
             org_x: [origin[0].x, origin[1].x, origin[2].x, origin[3].x],
             org_y: [origin[0].y, origin[1].y, origin[2].y, origin[3].y],
@@ -64,32 +72,44 @@ impl SoARay for Ray4 {
         self.dir_z[i] = d.z;
     }
 
-    fn tnear(&self, i: usize) -> f32 { self.tnear[i] }
+    fn tnear(&self, i: usize) -> f32 {
+        self.tnear[i]
+    }
     fn set_tnear(&mut self, i: usize, near: f32) {
         self.tnear[i] = near;
     }
 
-    fn tfar(&self, i: usize) -> f32 { self.tfar[i] }
+    fn tfar(&self, i: usize) -> f32 {
+        self.tfar[i]
+    }
     fn set_tfar(&mut self, i: usize, far: f32) {
         self.tfar[i] = far;
     }
 
-    fn time(&self, i: usize) -> f32 { self.time[i] }
+    fn time(&self, i: usize) -> f32 {
+        self.time[i]
+    }
     fn set_time(&mut self, i: usize, time: f32) {
         self.time[i] = time;
     }
 
-    fn mask(&self, i: usize) -> u32 { self.mask[i] }
+    fn mask(&self, i: usize) -> u32 {
+        self.mask[i]
+    }
     fn set_mask(&mut self, i: usize, mask: u32) {
         self.mask[i] = mask;
     }
 
-    fn id(&self, i: usize) -> u32 { self.id[i] }
+    fn id(&self, i: usize) -> u32 {
+        self.id[i]
+    }
     fn set_id(&mut self, i: usize, id: u32) {
         self.id[i] = id;
     }
 
-    fn flags(&self, i: usize) -> u32 { self.flags[i] }
+    fn flags(&self, i: usize) -> u32 {
+        self.flags[i]
+    }
     fn set_flags(&mut self, i: usize, flags: u32) {
         self.flags[i] = flags;
     }
@@ -111,13 +131,13 @@ impl Hit4 {
     pub fn any_hit(&self) -> bool {
         self.hits().fold(false, |acc, g| acc || g)
     }
-    pub fn hits<'a>(&'a self) -> impl Iterator<Item=bool> + 'a {
+    pub fn hits<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
         self.geomID.iter().map(|g| *g != u32::MAX)
     }
     pub fn iter(&self) -> SoAHitIter<Hit4> {
         SoAHitIter::new(self, 4)
     }
-    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item=SoAHitRef<Hit4>> + 'a {
+    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item = SoAHitRef<Hit4>> + 'a {
         SoAHitIter::new(self, 4).filter(|h| h.hit())
     }
 }
@@ -132,7 +152,9 @@ impl SoAHit for Hit4 {
         self.Ng_z[i] = n.z;
     }
 
-    fn uv(&self, i: usize) -> (f32, f32) { (self.u[i], self.v[i]) }
+    fn uv(&self, i: usize) -> (f32, f32) {
+        (self.u[i], self.v[i])
+    }
     fn set_u(&mut self, i: usize, u: f32) {
         self.u[i] = u;
     }
@@ -140,17 +162,23 @@ impl SoAHit for Hit4 {
         self.v[i] = v;
     }
 
-    fn prim_id(&self, i: usize) -> u32 { self.primID[i] }
+    fn prim_id(&self, i: usize) -> u32 {
+        self.primID[i]
+    }
     fn set_prim_id(&mut self, i: usize, id: u32) {
         self.primID[i] = id;
     }
 
-    fn geom_id(&self, i: usize) -> u32 { self.geomID[i] }
+    fn geom_id(&self, i: usize) -> u32 {
+        self.geomID[i]
+    }
     fn set_geom_id(&mut self, i: usize, id: u32) {
         self.geomID[i] = id;
     }
 
-    fn inst_id(&self, i: usize) -> u32 { self.instID[0][i] }
+    fn inst_id(&self, i: usize) -> u32 {
+        self.instID[0][i]
+    }
     fn set_inst_id(&mut self, i: usize, id: u32) {
         self.instID[0][i] = id;
     }
@@ -167,4 +195,3 @@ impl RayHit4 {
         self.ray.iter().zip(self.hit.iter())
     }
 }
-

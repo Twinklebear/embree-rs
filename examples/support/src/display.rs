@@ -1,8 +1,9 @@
 use arcball::ArcballCamera;
-use cgmath::{SquareMatrix, Matrix4, Vector2, Vector3, Vector4};
+use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
 use clock_ticks;
-use glium::glutin::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode,
-                    WindowEvent};
+use glium::glutin::{
+    ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
+};
 use glium::texture::RawImage2d;
 use glium::Texture2d;
 use glium::{self, glutin, Surface};
@@ -23,11 +24,7 @@ pub struct CameraPose {
 }
 impl CameraPose {
     fn new(pos: Vector3<f32>, dir: Vector3<f32>, up: Vector3<f32>) -> CameraPose {
-        CameraPose {
-            pos,
-            dir,
-            up,
-        }
+        CameraPose { pos, dir, up }
     }
 }
 
@@ -53,15 +50,22 @@ impl Display {
     {
         let mut embree_target = RgbImage::new(self.window_dims.0, self.window_dims.1);
 
-        let mut arcball_camera = ArcballCamera::new(Vector3::new(0.0, 0.0, 0.0),
+        let mut arcball_camera = ArcballCamera::new(
+            Vector3::new(0.0, 0.0, 0.0),
             1.0,
             [self.window_dims.0 as f32, self.window_dims.1 as f32],
         );
         arcball_camera.zoom(-50.0, 0.16);
-        arcball_camera.rotate(Vector2::new(self.window_dims.0 as f32 / 2.0,
-                                           self.window_dims.1 as f32 / 4.0),
-                                Vector2::new(self.window_dims.0 as f32 / 2.0,
-                                             self.window_dims.1 as f32 / 3.0));
+        arcball_camera.rotate(
+            Vector2::new(
+                self.window_dims.0 as f32 / 2.0,
+                self.window_dims.1 as f32 / 4.0,
+            ),
+            Vector2::new(
+                self.window_dims.0 as f32 / 2.0,
+                self.window_dims.1 as f32 / 3.0,
+            ),
+        );
 
         let mut mouse_pressed = [false, false];
         let mut prev_mouse = None;
@@ -83,12 +87,12 @@ impl Display {
                         if mouse_pressed[0] {
                             arcball_camera.rotate(
                                 Vector2::new(position.x as f32, prev.y as f32),
-                                Vector2::new(prev.x as f32, position.y as f32)
+                                Vector2::new(prev.x as f32, position.y as f32),
                             );
                         } else if mouse_pressed[1] {
                             let mouse_delta = Vector2::new(
                                 (prev.x - position.x) as f32,
-                                (position.y - prev.y) as f32
+                                (position.y - prev.y) as f32,
                             );
                             arcball_camera.pan(mouse_delta, 0.16);
                         }
@@ -116,8 +120,11 @@ impl Display {
                 return;
             }
 
-            let cam_pose = CameraPose::new(arcball_camera.eye_pos(), arcball_camera.eye_dir(),
-                                           arcball_camera.up_dir());
+            let cam_pose = CameraPose::new(
+                arcball_camera.eye_pos(),
+                arcball_camera.eye_dir(),
+                arcball_camera.up_dir(),
+            );
             render(
                 &mut embree_target,
                 cam_pose,

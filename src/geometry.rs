@@ -1,13 +1,13 @@
 use sys::*;
 
-use triangle_mesh;
-use quad_mesh;
 use instance;
+use quad_mesh;
+use triangle_mesh;
 
 pub enum Geometry<'a> {
     Triangle(triangle_mesh::TriangleMesh<'a>),
     Quad(quad_mesh::QuadMesh<'a>),
-    Instance(instance::Instance<'a>)
+    Instance(instance::Instance<'a>),
 }
 
 /// Geometry trait implemented by all Embree Geometry types
@@ -16,7 +16,7 @@ impl<'a> Geometry<'a> {
         match self {
             &Geometry::Triangle(ref m) => m.handle,
             &Geometry::Quad(ref q) => q.handle,
-            &Geometry::Instance(ref i) => i.handle
+            &Geometry::Instance(ref i) => i.handle,
         }
     }
     pub fn commit(&mut self) {
@@ -41,4 +41,3 @@ impl<'a> PartialEq<Geometry<'a>> for Geometry<'a> {
 }
 
 impl<'a> Eq for Geometry<'a> {}
-

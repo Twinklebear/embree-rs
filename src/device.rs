@@ -32,4 +32,3 @@ impl Drop for Device {
 }
 
 unsafe impl Sync for Device {}
-

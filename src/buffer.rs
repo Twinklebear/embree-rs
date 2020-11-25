@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
-use std::{mem, ptr};
 use std::ops::{Index, IndexMut};
+use std::{mem, ptr};
 
 use device::Device;
 use sys::*;
@@ -44,10 +44,14 @@ impl<'a, T> Buffer<'a, T> {
     /// Allocate a buffer with some raw capacity in bytes
     pub fn raw(device: &'a Device, bytes: usize) -> Buffer<'a, T> {
         // Pad to a multiple of 16 bytes
-        let bytes = if bytes % 16 == 0 { bytes } else { bytes + bytes / 16};
+        let bytes = if bytes % 16 == 0 {
+            bytes
+        } else {
+            bytes + bytes / 16
+        };
         Buffer {
             device: device,
-            handle: unsafe { rtcNewBuffer(device.handle, bytes) },
+            handle: unsafe { rtcNewBuffer(device.handle, bytes as u64) },
             bytes: bytes,
             attachment: BufferAttachment::none(),
             marker: PhantomData,
@@ -56,10 +60,14 @@ impl<'a, T> Buffer<'a, T> {
     pub fn new(device: &'a Device, len: usize) -> Buffer<'a, T> {
         let mut bytes = len * mem::size_of::<T>();
         // Pad to a multiple of 16 bytes
-        bytes = if bytes % 16 == 0 { bytes } else { bytes + bytes / 16};
+        bytes = if bytes % 16 == 0 {
+            bytes
+        } else {
+            bytes + bytes / 16
+        };
         Buffer {
             device: device,
-            handle: unsafe { rtcNewBuffer(device.handle, bytes) },
+            handle: unsafe { rtcNewBuffer(device.handle, bytes as u64) },
             bytes: bytes,
             attachment: BufferAttachment::none(),
             marker: PhantomData,
@@ -75,9 +83,7 @@ impl<'a, T> Buffer<'a, T> {
             len: len,
         }
     }
-    pub(crate) fn set_attachment(&mut self, geom: RTCGeometry,
-                          buf_type: BufferType, slot: u32)
-    {
+    pub(crate) fn set_attachment(&mut self, geom: RTCGeometry, buf_type: BufferType, slot: u32) {
         self.attachment.geom = geom;
         self.attachment.buf_type = buf_type;
         self.attachment.slot = slot;
@@ -115,7 +121,7 @@ impl<'a, T: 'a> Drop for MappedBuffer<'a, T> {
                 rtcUpdateGeometryBuffer(
                     self.attachment.geom,
                     self.attachment.buf_type,
-                    self.attachment.slot
+                    self.attachment.slot,
                 );
             }
         }

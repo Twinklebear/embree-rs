@@ -38,7 +38,8 @@ impl Camera {
     }
     /// Compute the ray direction going through the pixel passed
     pub fn ray_dir(&self, px: (f32, f32)) -> Vector3 {
-        (self.dir_top_left + px.0 / (self.img.0 as f32) * self.screen_du
+        (self.dir_top_left
+            + px.0 / (self.img.0 as f32) * self.screen_du
             + px.1 / (self.img.1 as f32) * self.screen_dv)
             .normalize()
     }

@@ -27,7 +27,7 @@ impl<'a> TriangleMesh<'a> {
                 vertex_buffer.handle,
                 0,
                 16,
-                num_verts,
+                num_verts as u64,
             );
             vertex_buffer.set_attachment(h, BufferType::VERTEX, 0);
 
@@ -39,7 +39,7 @@ impl<'a> TriangleMesh<'a> {
                 index_buffer.handle,
                 0,
                 12,
-                num_tris,
+                num_tris as u64,
             );
             index_buffer.set_attachment(h, BufferType::INDEX, 0);
         }
@@ -53,4 +53,3 @@ impl<'a> TriangleMesh<'a> {
 }
 
 unsafe impl<'a> Sync for TriangleMesh<'a> {}
-
