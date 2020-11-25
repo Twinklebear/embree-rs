@@ -55,7 +55,7 @@ impl<'a> LinearCurve<'a> {
                 Format::UCHAR,
                 flag_buffer.handle,
                 0,
-                4,
+                1,
                 num_verts,
             );
             flag_buffer.set_attachment(h, BufferType::FLAGS, 0);

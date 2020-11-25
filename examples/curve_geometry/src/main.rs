@@ -32,7 +32,6 @@ fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();
-        let mut flags = curve.flag_buffer.map();
         let mut normals = curve.normal_buffer.map();
         verts[0] = Vector4::new(-0.0, -0.0, -5.0, 0.3);
         verts[1] = Vector4::new(-0.0, -0.0, -0.0, 0.5);
@@ -45,11 +44,6 @@ fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
         ids[2] = 2;
         ids[3] = 3;
         ids[4] = 4;
-        flags[0] = 0x3;
-        flags[1] = 0x3;
-        flags[2] = 0x3;
-        flags[3] = 0x3;
-        flags[4] = 0x3;
         normals[0] = Vector3::new(0.1,0.8,0.1);
         normals[1] = Vector3::new(0.1,0.8,0.1);
         normals[2] = Vector3::new(0.1,0.8,0.1);

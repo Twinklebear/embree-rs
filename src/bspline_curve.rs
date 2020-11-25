@@ -11,7 +11,6 @@ pub struct BsplineCurve<'a> {
     pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
     pub index_buffer: Buffer<'a, u32>,
-    pub flag_buffer: Buffer<'a, u32>,
     pub normal_buffer: Buffer<'a, Vector3<f32>>,
 }
 
@@ -25,7 +24,6 @@ impl<'a> BsplineCurve<'a> {
         };
         let mut vertex_buffer = Buffer::new(device, num_verts);
         let mut index_buffer = Buffer::new(device, num_segments);
-        let mut flag_buffer = Buffer::new(device, num_segments);
         let mut normal_buffer = Buffer::new(device, num_verts);
         unsafe {
             rtcSetGeometryBuffer(
@@ -54,18 +52,6 @@ impl<'a> BsplineCurve<'a> {
 
             rtcSetGeometryBuffer(
                 h,
-                BufferType::FLAGS,
-                0,
-                Format::UCHAR,
-                flag_buffer.handle,
-                0,
-                1,
-                num_segments,
-            );
-            flag_buffer.set_attachment(h, BufferType::FLAGS, 0);
-
-            rtcSetGeometryBuffer(
-                h,
                 BufferType::NORMAL,
                 0,
                 Format::FLOAT3,
@@ -82,7 +68,6 @@ impl<'a> BsplineCurve<'a> {
             handle: h,
             vertex_buffer: vertex_buffer,
             index_buffer: index_buffer,
-            flag_buffer: flag_buffer,
             normal_buffer: normal_buffer,
         }
     }
