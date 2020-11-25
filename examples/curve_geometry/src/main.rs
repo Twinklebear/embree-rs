@@ -4,11 +4,11 @@ extern crate embree;
 extern crate support;
 
 use cgmath::{Vector2,Vector3, Vector4, InnerSpace};
-use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve, BsplineCurve};
+use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve, BsplineCurve, CurveType};
 use support::Camera;
 
 fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut curve = LinearCurve::unanimated(&device, 2, 3, 2);
+    let mut curve = LinearCurve::unanimated(&device, 2, 3, CurveType::Flat);
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();
@@ -28,7 +28,7 @@ fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
     curve_geo
 }
 fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut curve = BsplineCurve::unanimated(&device, 5, 6, 1);
+    let mut curve = BsplineCurve::unanimated(&device, 5, 6,  CurveType::NormalOriented);
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();

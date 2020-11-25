@@ -4,7 +4,7 @@ use buffer::Buffer;
 use device::Device;
 use geometry::Geometry;
 use sys::*;
-use {BufferType, Format, GeometryType};
+use {BufferType, Format, GeometryType, CurveType};
 
 pub struct BsplineCurve<'a> {
     device: &'a Device,
@@ -15,11 +15,11 @@ pub struct BsplineCurve<'a> {
 }
 
 impl<'a> BsplineCurve<'a> {
-    pub fn unanimated(device: &'a Device, num_segments: usize, num_verts: usize, curve_type: usize) -> BsplineCurve<'a> {
+    pub fn unanimated(device: &'a Device, num_segments: usize, num_verts: usize, curve_type: CurveType) -> BsplineCurve<'a> {
         let h: RTCGeometry;
         match curve_type {
-        1 => h = unsafe { rtcNewGeometry(device.handle, GeometryType::NORMAL_ORIENTED_BSPLINE_CURVE) },
-        2 => h = unsafe { rtcNewGeometry(device.handle, GeometryType::ROUND_BSPLINE_CURVE) },
+        CurveType::NormalOriented => h = unsafe { rtcNewGeometry(device.handle, GeometryType::NORMAL_ORIENTED_BSPLINE_CURVE) },
+        CurveType::Round => h = unsafe { rtcNewGeometry(device.handle, GeometryType::ROUND_BSPLINE_CURVE) },
         _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_BSPLINE_CURVE) },
         };
         let mut vertex_buffer = Buffer::new(device, num_verts);

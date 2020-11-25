@@ -30,6 +30,7 @@ pub mod scene;
 #[allow(non_snake_case)]
 pub mod sys;
 pub mod triangle_mesh;
+pub mod curve;
 pub mod linear_curve;
 pub mod bspline_curve;
 
@@ -46,6 +47,7 @@ pub use ray_packet::{Ray4, Hit4, RayHit4};
 pub use ray_stream::{RayN, HitN, RayHitN};
 pub use scene::{Scene, CommittedScene};
 pub use triangle_mesh::TriangleMesh;
+pub use curve::CurveType;
 pub use linear_curve::LinearCurve;
 pub use bspline_curve::BsplineCurve;
 

@@ -4,7 +4,7 @@ use buffer::Buffer;
 use device::Device;
 use geometry::Geometry;
 use sys::*;
-use {BufferType, Format, GeometryType};
+use {BufferType, Format, GeometryType, CurveType};
 
 pub struct LinearCurve<'a> {
     device: &'a Device,
@@ -15,7 +15,7 @@ pub struct LinearCurve<'a> {
 }
 
 impl<'a> LinearCurve<'a> {
-    pub fn unanimated(device: &'a Device, num_segments: usize, num_verts: usize, curve_type: usize) -> LinearCurve<'a> {
+    pub fn unanimated(device: &'a Device, num_segments: usize, num_verts: usize, curve_type: CurveType) -> LinearCurve<'a> {
         let h: RTCGeometry;
         match curve_type {
         _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_LINEAR_CURVE) },
