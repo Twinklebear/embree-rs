@@ -8,7 +8,7 @@ use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, T
 use support::Camera;
 
 fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut curve = LinearCurve::unanimated(&device, 2, 3, CurveType::Flat);
+    let mut curve = LinearCurve::unanimated(&device, 2, 3, CurveType::Flat, true);
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();
@@ -28,11 +28,11 @@ fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
     curve_geo
 }
 fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut curve = BsplineCurve::unanimated(&device, 5, 6,  CurveType::NormalOriented);
+    let mut curve = BsplineCurve::unanimated(&device, 5, 6, CurveType::NormalOriented, false);
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();
-        let mut normals = curve.normal_buffer.map();
+        //let mut normals = curve.normal_buffer.as_mut().unwrap().map();
         verts[0] = Vector4::new(-0.0, -0.0, -5.0, 0.3);
         verts[1] = Vector4::new(-0.0, -0.0, -0.0, 0.5);
         verts[2] = Vector4::new(-0.0, 8.0, 0.0, 1.0);
@@ -44,12 +44,12 @@ fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
         ids[2] = 2;
         ids[3] = 3;
         ids[4] = 4;
-        normals[0] = Vector3::new(0.1,0.8,0.1);
+/*         normals[0] = Vector3::new(0.1,0.8,0.1);
         normals[1] = Vector3::new(0.1,0.8,0.1);
         normals[2] = Vector3::new(0.1,0.8,0.1);
         normals[3] = Vector3::new(0.1,0.8,0.1);
         normals[4] = Vector3::new(0.1,0.8,0.1);
-        normals[5] = Vector3::new(0.1,0.8,0.1);
+        normals[5] = Vector3::new(0.1,0.8,0.1); */
 
     }
     let mut curve_geo = Geometry::BsplineCurve(curve);

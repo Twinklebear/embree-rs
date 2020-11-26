@@ -15,7 +15,7 @@ pub struct BsplineCurve<'a> {
 }
 
 impl<'a> BsplineCurve<'a> {
-    pub fn unanimated(device: &'a Device, num_segments: usize, num_verts: usize, curve_type: CurveType) -> BsplineCurve<'a> {
+    pub fn unanimated(device: &'a Device, num_segments: usize, num_verts: usize, curve_type: CurveType, use_normals: bool) -> BsplineCurve<'a> {
         let h: RTCGeometry;
         match curve_type {
         CurveType::NormalOriented => h = unsafe { rtcNewGeometry(device.handle, GeometryType::NORMAL_ORIENTED_BSPLINE_CURVE) },
@@ -25,6 +25,7 @@ impl<'a> BsplineCurve<'a> {
         let mut vertex_buffer = Buffer::new(device, num_verts);
         let mut index_buffer = Buffer::new(device, num_segments);
         let mut normal_buffer = Buffer::new(device, num_verts);
+        
         unsafe {
             rtcSetGeometryBuffer(
                 h,
@@ -50,17 +51,19 @@ impl<'a> BsplineCurve<'a> {
             );
             index_buffer.set_attachment(h, BufferType::INDEX, 0);
 
-            rtcSetGeometryBuffer(
-                h,
-                BufferType::NORMAL,
-                0,
-                Format::FLOAT3,
-                normal_buffer.handle,
-                0,
-                12,
-                num_verts,
-            );
-            normal_buffer.set_attachment(h, BufferType::NORMAL, 0);
+            if use_normals {
+                rtcSetGeometryBuffer(
+                    h,
+                    BufferType::NORMAL,
+                    0,
+                    Format::FLOAT3,
+                    normal_buffer.handle,
+                    0,
+                    12,
+                    num_verts,
+                );
+                normal_buffer.set_attachment(h, BufferType::NORMAL, 0);
+            }
 
         }
         BsplineCurve {
