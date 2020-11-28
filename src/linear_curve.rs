@@ -15,7 +15,10 @@ pub struct LinearCurve<'a> {
 }
 
 impl<'a> LinearCurve<'a> {
-    pub fn unanimated(device: &'a Device, num_segments: usize, num_verts: usize, curve_type: CurveType, use_flags: bool) -> LinearCurve<'a> {
+    pub fn flat( device: &'a Device, num_segments: usize, num_verts: usize, ) -> LinearCurve<'a> {
+        LinearCurve::unanimated(device, num_segments, num_verts, CurveType::Flat)
+    }
+    fn unanimated( device: &'a Device, num_segments: usize, num_verts: usize, curve_type: CurveType) -> LinearCurve<'a> {
         let h: RTCGeometry;
         match curve_type {
         _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_LINEAR_CURVE) },
