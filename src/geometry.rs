@@ -4,14 +4,16 @@ use triangle_mesh;
 use quad_mesh;
 use instance;
 use linear_curve;
-use bspline_curve; 
+use bspline_curve;
+use bezier_curve;
 
 pub enum Geometry<'a> {
     Triangle(triangle_mesh::TriangleMesh<'a>),
     Quad(quad_mesh::QuadMesh<'a>),
     Instance(instance::Instance<'a>),
     LinearCurve(linear_curve::LinearCurve<'a>),
-    BsplineCurve(bspline_curve::BsplineCurve<'a>)
+    BsplineCurve(bspline_curve::BsplineCurve<'a>),
+    BezierCurve(bezier_curve::BezierCurve<'a>)
 }
 
 /// Geometry trait implemented by all Embree Geometry types
@@ -22,7 +24,8 @@ impl<'a> Geometry<'a> {
             &Geometry::Quad(ref q) => q.handle,
             &Geometry::Instance(ref i) => i.handle,
             &Geometry::LinearCurve(ref lc) => lc.handle,
-            &Geometry::BsplineCurve(ref bsc) => bsc.handle
+            &Geometry::BsplineCurve(ref bsc) => bsc.handle,
+            &Geometry::BezierCurve(ref bzc) => bzc.handle
         }
     }
     pub fn commit(&mut self) {

@@ -4,7 +4,7 @@ extern crate embree;
 extern crate support;
 
 use cgmath::{Vector2,Vector3, Vector4, InnerSpace};
-use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve, BsplineCurve, CurveType};
+use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve, BsplineCurve, BezierCurve, CurveType};
 use support::Camera;
 
 fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
@@ -28,7 +28,7 @@ fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
     curve_geo
 }
 fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut curve = BsplineCurve::normal_oriented(&device, 5, 6);
+    let mut curve = BsplineCurve::normal_oriented(&device, 4, 6);
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();
@@ -43,7 +43,6 @@ fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
         ids[1] = 1;
         ids[2] = 2;
         ids[3] = 3;
-        ids[4] = 4;
         normals[0] = Vector3::new(0.1,0.8,0.1);
         normals[1] = Vector3::new(0.1,0.8,0.1);
         normals[2] = Vector3::new(0.1,0.8,0.1);
@@ -53,6 +52,29 @@ fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
 
     }
     let mut curve_geo = Geometry::BsplineCurve(curve);
+    curve_geo.commit();
+    curve_geo
+}
+
+fn make_bezier_curve<'a>(device: &'a Device) -> Geometry<'a> {
+    let mut curve = BezierCurve::round(&device, 2, 8, false);
+    {
+        let mut verts = curve.vertex_buffer.map();
+        let mut ids = curve.index_buffer.map();
+        verts[0] = Vector4::new(5.0, -0.0, -5.0, 0.3);
+        verts[1] = Vector4::new(5.0, -0.0, -0.0, 0.5);
+        verts[2] = Vector4::new(5.0, 5.0, 0.0, 1.0);
+        verts[3] = Vector4::new(5.0, 5.0, 5.0, 1.0);
+        verts[4] = Vector4::new(5.0, 5.0, 10.0, 1.0);
+        verts[5] = Vector4::new(5.0, 5.0, 12.0, 0.035);
+        verts[6] = Vector4::new(5.0, 7.0, 11.0, 0.02);
+        verts[7] = Vector4::new(5.0, 10.0, 9.0, 0.01);
+
+        ids[0] = 0;
+        ids[1] = 3;
+
+    }
+    let mut curve_geo = Geometry::BezierCurve(curve);
     curve_geo.commit();
     curve_geo
 }
@@ -78,12 +100,14 @@ fn main() {
     let mut display = support::Display::new(512, 512, "curve geometry");
     let device = Device::new();
     let ground = make_ground_plane(&device);
-    let bs_curve = make_bspline_curve(&device);
     let l_curve = make_linear_curve(&device);
+    let bs_curve = make_bspline_curve(&device);
+    let bz_curve = make_bezier_curve(&device);
 
     let mut scene = Scene::new(&device);
-    let bs_curve_id = scene.attach_geometry(bs_curve);
     let l_curve_id = scene.attach_geometry(l_curve);
+    let bs_curve_id = scene.attach_geometry(bs_curve);
+    let bz_curve_id = scene.attach_geometry(bz_curve);
     let ground_id = scene.attach_geometry(ground);
     let rtscene = scene.commit();
 

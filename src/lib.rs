@@ -33,6 +33,7 @@ pub mod triangle_mesh;
 pub mod curve;
 pub mod linear_curve;
 pub mod bspline_curve;
+pub mod bezier_curve;
 
 pub use buffer::{Buffer, MappedBuffer};
 pub use device::Device;
@@ -50,6 +51,7 @@ pub use triangle_mesh::TriangleMesh;
 pub use curve::CurveType;
 pub use linear_curve::LinearCurve;
 pub use bspline_curve::BsplineCurve;
+pub use bezier_curve::BezierCurve;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases
