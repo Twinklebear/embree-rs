@@ -30,6 +30,11 @@ pub mod soa_ray;
 #[allow(non_snake_case)]
 pub mod sys;
 pub mod triangle_mesh;
+pub mod curve;
+pub mod linear_curve;
+pub mod bspline_curve;
+pub mod bezier_curve;
+pub mod hermite_curve;
 
 pub use buffer::{Buffer, MappedBuffer};
 pub use device::Device;
@@ -45,6 +50,11 @@ pub use soa_ray::{
     SoARayRefMut,
 };
 pub use triangle_mesh::TriangleMesh;
+pub use curve::CurveType;
+pub use linear_curve::LinearCurve;
+pub use bspline_curve::BsplineCurve;
+pub use bezier_curve::BezierCurve;
+pub use hermite_curve::HermiteCurve;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases
