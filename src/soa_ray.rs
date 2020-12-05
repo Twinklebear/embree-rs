@@ -1,5 +1,5 @@
+use std::iter::{ExactSizeIterator, Iterator};
 use std::marker::PhantomData;
-use std::iter::{Iterator, ExactSizeIterator};
 use std::u32;
 
 use cgmath::Vector3;
@@ -47,7 +47,9 @@ pub trait SoAHit {
     fn inst_id(&self, i: usize) -> u32;
     fn set_inst_id(&mut self, i: usize, id: u32);
 
-    fn hit(&self, i: usize) -> bool { self.geom_id(i) != u32::MAX }
+    fn hit(&self, i: usize) -> bool {
+        self.geom_id(i) != u32::MAX
+    }
 }
 
 pub struct SoARayRef<'a, T> {
@@ -56,13 +58,27 @@ pub struct SoARayRef<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> SoARayRef<'a, T> {
-    pub fn origin(&self) -> Vector3<f32> { self.ray.org(self.idx) }
-    pub fn dir(&self) -> Vector3<f32> { self.ray.dir(self.idx) }
-    pub fn tnear(&self) -> f32 { self.ray.tnear(self.idx) }
-    pub fn tfar(&self) -> f32 { self.ray.tfar(self.idx) }
-    pub fn mask(&self) -> u32 { self.ray.mask(self.idx) }
-    pub fn id(&self) -> u32 { self.ray.id(self.idx) }
-    pub fn flags(&self) -> u32 { self.ray.flags(self.idx) }
+    pub fn origin(&self) -> Vector3<f32> {
+        self.ray.org(self.idx)
+    }
+    pub fn dir(&self) -> Vector3<f32> {
+        self.ray.dir(self.idx)
+    }
+    pub fn tnear(&self) -> f32 {
+        self.ray.tnear(self.idx)
+    }
+    pub fn tfar(&self) -> f32 {
+        self.ray.tfar(self.idx)
+    }
+    pub fn mask(&self) -> u32 {
+        self.ray.mask(self.idx)
+    }
+    pub fn id(&self) -> u32 {
+        self.ray.id(self.idx)
+    }
+    pub fn flags(&self) -> u32 {
+        self.ray.flags(self.idx)
+    }
 }
 
 // TODO: Is this going to work well?
@@ -139,7 +155,11 @@ pub struct SoARayIter<'a, T> {
 
 impl<'a, T: SoARay + 'a> SoARayIter<'a, T> {
     pub fn new(ray: &'a T, len: usize) -> SoARayIter<'a, T> {
-        SoARayIter { ray: ray, cur: 0, len: len }
+        SoARayIter {
+            ray: ray,
+            cur: 0,
+            len: len,
+        }
     }
 }
 
@@ -152,7 +172,10 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIter<'a, T> {
         } else {
             let i = self.cur;
             self.cur = self.cur + 1;
-            Some(SoARayRef { ray: self.ray, idx: i })
+            Some(SoARayRef {
+                ray: self.ray,
+                idx: i,
+            })
         }
     }
 }
@@ -171,7 +194,11 @@ pub struct SoARayIterMut<'a, T> {
 
 impl<'a, T: SoARay + 'a> SoARayIterMut<'a, T> {
     pub fn new(ray: &'a mut T, len: usize) -> SoARayIterMut<'a, T> {
-        SoARayIterMut { ray: ray, cur: 0, len: len }
+        SoARayIterMut {
+            ray: ray,
+            cur: 0,
+            len: len,
+        }
     }
 }
 
@@ -187,7 +214,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIterMut<'a, T> {
             Some(SoARayRefMut {
                 ray: self.ray as *mut T,
                 idx: i,
-                marker: PhantomData
+                marker: PhantomData,
             })
         }
     }
@@ -205,12 +232,24 @@ pub struct SoAHitRef<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> SoAHitRef<'a, T> {
-    pub fn normal(&self) -> Vector3<f32> { self.hit.normal(self.idx) }
-    pub fn uv(&self) -> (f32, f32) { self.hit.uv(self.idx) }
-    pub fn prim_id(&self) -> u32 { self.hit.prim_id(self.idx) }
-    pub fn geom_id(&self) -> u32 { self.hit.geom_id(self.idx) }
-    pub fn inst_id(&self) -> u32 { self.hit.inst_id(self.idx) }
-    pub fn hit(&self) -> bool { self.hit.hit(self.idx) }
+    pub fn normal(&self) -> Vector3<f32> {
+        self.hit.normal(self.idx)
+    }
+    pub fn uv(&self) -> (f32, f32) {
+        self.hit.uv(self.idx)
+    }
+    pub fn prim_id(&self) -> u32 {
+        self.hit.prim_id(self.idx)
+    }
+    pub fn geom_id(&self) -> u32 {
+        self.hit.geom_id(self.idx)
+    }
+    pub fn inst_id(&self) -> u32 {
+        self.hit.inst_id(self.idx)
+    }
+    pub fn hit(&self) -> bool {
+        self.hit.hit(self.idx)
+    }
 }
 
 pub struct SoAHitIter<'a, T> {
@@ -221,7 +260,11 @@ pub struct SoAHitIter<'a, T> {
 
 impl<'a, T: SoAHit + 'a> SoAHitIter<'a, T> {
     pub fn new(hit: &'a T, len: usize) -> SoAHitIter<'a, T> {
-        SoAHitIter { hit: hit, cur: 0, len: len }
+        SoAHitIter {
+            hit: hit,
+            cur: 0,
+            len: len,
+        }
     }
 }
 
@@ -234,7 +277,10 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIter<'a, T> {
         } else {
             let i = self.cur;
             self.cur = self.cur + 1;
-            Some(SoAHitRef { hit: self.hit, idx: i })
+            Some(SoAHitRef {
+                hit: self.hit,
+                idx: i,
+            })
         }
     }
 }
@@ -310,7 +356,11 @@ pub struct SoAHitIterMut<'a, T> {
 
 impl<'a, T: SoAHit + 'a> SoAHitIterMut<'a, T> {
     pub fn new(hit: &'a mut T, len: usize) -> SoAHitIterMut<'a, T> {
-        SoAHitIterMut { hit: hit, cur: 0, len: len }
+        SoAHitIterMut {
+            hit: hit,
+            cur: 0,
+            len: len,
+        }
     }
 }
 
@@ -326,7 +376,7 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIterMut<'a, T> {
             Some(SoAHitRefMut {
                 hit: self.hit as *mut T,
                 idx: i,
-                marker: PhantomData
+                marker: PhantomData,
             })
         }
     }

@@ -1,13 +1,13 @@
+use std::arch::x86_64;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::arch::x86_64;
 use std::mem;
 
 use device::Device;
 use geometry::Geometry;
 use ray::{IntersectContext, Ray, RayHit};
 use ray_packet::{Ray4, RayHit4};
-use ray_stream::{RayN, RayHitN};
+use ray_stream::{RayHitN, RayN};
 use sys::*;
 
 /// A scene containing various geometry for rendering. Geometry
@@ -102,7 +102,7 @@ unsafe impl<'a> Sync for Scene<'a> {}
 /// A committed scene with a BVH built over the geometry
 /// which can be used for ray queries.
 pub struct CommittedScene<'a> {
-    pub (crate) scene: &'a Scene<'a>,
+    pub(crate) scene: &'a Scene<'a>,
 }
 
 impl<'a> CommittedScene<'a> {
@@ -111,7 +111,7 @@ impl<'a> CommittedScene<'a> {
             rtcIntersect1(
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRayHit
+                ray as *mut RTCRayHit,
             );
         }
     }
@@ -120,7 +120,7 @@ impl<'a> CommittedScene<'a> {
             rtcOccluded1(
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRay
+                ray as *mut RTCRay,
             );
         }
     }
@@ -130,7 +130,7 @@ impl<'a> CommittedScene<'a> {
                 valid.as_ptr(),
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRayHit4
+                ray as *mut RTCRayHit4,
             );
         }
     }
@@ -140,7 +140,7 @@ impl<'a> CommittedScene<'a> {
                 valid.as_ptr(),
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRay4
+                ray as *mut RTCRay4,
             );
         }
     }
@@ -152,7 +152,7 @@ impl<'a> CommittedScene<'a> {
                 ctx as *mut RTCIntersectContext,
                 rays.as_mut_ptr(),
                 m as u32,
-                mem::size_of::<RayHit>()
+                mem::size_of::<RayHit>(),
             );
         }
     }
@@ -164,7 +164,7 @@ impl<'a> CommittedScene<'a> {
                 ctx as *mut RTCIntersectContext,
                 rays.as_mut_ptr(),
                 m as u32,
-                mem::size_of::<Ray>()
+                mem::size_of::<Ray>(),
             );
         }
     }
@@ -176,7 +176,7 @@ impl<'a> CommittedScene<'a> {
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
                 &mut rayhit as *mut RTCRayHitNp,
-                n as u32
+                n as u32,
             );
         }
     }
@@ -188,7 +188,7 @@ impl<'a> CommittedScene<'a> {
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
                 &mut r as *mut RTCRayNp,
-                n as u32
+                n as u32,
             );
         }
     }
@@ -216,4 +216,3 @@ impl<'a> CommittedScene<'a> {
 }
 
 unsafe impl<'a> Sync for CommittedScene<'a> {}
-

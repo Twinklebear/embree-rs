@@ -4,7 +4,7 @@ use cgmath::Matrix4;
 
 use device::Device;
 use geometry::Geometry;
-use scene::{Scene, CommittedScene};
+use scene::{CommittedScene, Scene};
 use sys::*;
 use {BufferType, Format, GeometryType};
 
@@ -42,4 +42,3 @@ impl<'a> Instance<'a> {
 }
 
 unsafe impl<'a> Sync for Instance<'a> {}
-

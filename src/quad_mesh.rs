@@ -53,4 +53,3 @@ impl<'a> QuadMesh<'a> {
 }
 
 unsafe impl<'a> Sync for QuadMesh<'a> {}
-

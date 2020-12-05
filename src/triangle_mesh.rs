@@ -53,4 +53,3 @@ impl<'a> TriangleMesh<'a> {
 }
 
 unsafe impl<'a> Sync for TriangleMesh<'a> {}
-

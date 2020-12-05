@@ -1,12 +1,14 @@
 use cgmath::Vector3;
-use std::{f32, u32};
 use std::iter::Iterator;
 use std::marker::PhantomData;
+use std::{f32, u32};
 
-use ::{aligned_vector, aligned_vector_init};
+use soa_ray::{
+    SoAHit, SoAHitIter, SoAHitIterMut, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, SoARayRef,
+    SoARayRefMut,
+};
 use sys;
-use soa_ray::{SoARay, SoAHit, SoARayRef, SoARayRefMut,
-                SoARayIter, SoARayIterMut, SoAHitRef, SoAHitIter, SoAHitIterMut};
+use {aligned_vector, aligned_vector_init};
 
 /// A ray stream stored in SoA format
 pub struct RayN {
@@ -39,7 +41,7 @@ impl RayN {
             tfar: aligned_vector_init::<f32>(n, 16, f32::INFINITY),
             mask: aligned_vector_init::<u32>(n, 16, u32::MAX),
             id: aligned_vector_init::<u32>(n, 16, 0),
-            flags: aligned_vector_init::<u32>(n, 16, 0)
+            flags: aligned_vector_init::<u32>(n, 16, 0),
         }
     }
     pub fn iter(&self) -> SoARayIter<RayN> {
@@ -49,7 +51,9 @@ impl RayN {
         let n = self.len();
         SoARayIterMut::new(self, n)
     }
-    pub fn len(&self) -> usize { self.org_x.len() }
+    pub fn len(&self) -> usize {
+        self.org_x.len()
+    }
     pub unsafe fn as_raynp(&mut self) -> sys::RTCRayNp {
         sys::RTCRayNp {
             org_x: self.org_x.as_mut_ptr(),
@@ -87,32 +91,44 @@ impl SoARay for RayN {
         self.dir_z[i] = d.z;
     }
 
-    fn tnear(&self, i: usize) -> f32 { self.tnear[i] }
+    fn tnear(&self, i: usize) -> f32 {
+        self.tnear[i]
+    }
     fn set_tnear(&mut self, i: usize, near: f32) {
         self.tnear[i] = near;
     }
 
-    fn tfar(&self, i: usize) -> f32 { self.tfar[i] }
+    fn tfar(&self, i: usize) -> f32 {
+        self.tfar[i]
+    }
     fn set_tfar(&mut self, i: usize, far: f32) {
         self.tfar[i] = far;
     }
 
-    fn time(&self, i: usize) -> f32 { self.time[i] }
+    fn time(&self, i: usize) -> f32 {
+        self.time[i]
+    }
     fn set_time(&mut self, i: usize, time: f32) {
         self.time[i] = time;
     }
 
-    fn mask(&self, i: usize) -> u32 { self.mask[i] }
+    fn mask(&self, i: usize) -> u32 {
+        self.mask[i]
+    }
     fn set_mask(&mut self, i: usize, mask: u32) {
         self.mask[i] = mask;
     }
 
-    fn id(&self, i: usize) -> u32 { self.id[i] }
+    fn id(&self, i: usize) -> u32 {
+        self.id[i]
+    }
     fn set_id(&mut self, i: usize, id: u32) {
         self.id[i] = id;
     }
 
-    fn flags(&self, i: usize) -> u32 { self.flags[i] }
+    fn flags(&self, i: usize) -> u32 {
+        self.flags[i]
+    }
     fn set_flags(&mut self, i: usize, flags: u32) {
         self.flags[i] = flags;
     }
@@ -145,16 +161,18 @@ impl HitN {
     pub fn any_hit(&self) -> bool {
         self.hits().fold(false, |acc, g| acc || g)
     }
-    pub fn hits<'a>(&'a self) -> impl Iterator<Item=bool> + 'a {
+    pub fn hits<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
         self.geom_id.iter().map(|g| *g != u32::MAX)
     }
     pub fn iter(&self) -> SoAHitIter<HitN> {
         SoAHitIter::new(self, self.len())
     }
-    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item=SoAHitRef<HitN>> + 'a {
+    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item = SoAHitRef<HitN>> + 'a {
         SoAHitIter::new(self, self.len()).filter(|h| h.hit())
     }
-    pub fn len(&self) -> usize { self.ng_x.len() }
+    pub fn len(&self) -> usize {
+        self.ng_x.len()
+    }
     pub unsafe fn as_hitnp(&mut self) -> sys::RTCHitNp {
         sys::RTCHitNp {
             Ng_x: self.ng_x.as_mut_ptr(),
@@ -179,7 +197,9 @@ impl SoAHit for HitN {
         self.ng_z[i] = n.z;
     }
 
-    fn uv(&self, i: usize) -> (f32, f32) { (self.u[i], self.v[i]) }
+    fn uv(&self, i: usize) -> (f32, f32) {
+        (self.u[i], self.v[i])
+    }
     fn set_u(&mut self, i: usize, u: f32) {
         self.u[i] = u;
     }
@@ -187,17 +207,23 @@ impl SoAHit for HitN {
         self.v[i] = v;
     }
 
-    fn prim_id(&self, i: usize) -> u32 { self.prim_id[i] }
+    fn prim_id(&self, i: usize) -> u32 {
+        self.prim_id[i]
+    }
     fn set_prim_id(&mut self, i: usize, id: u32) {
         self.prim_id[i] = id;
     }
 
-    fn geom_id(&self, i: usize) -> u32 { self.geom_id[i] }
+    fn geom_id(&self, i: usize) -> u32 {
+        self.geom_id[i]
+    }
     fn set_geom_id(&mut self, i: usize, id: u32) {
         self.geom_id[i] = id;
     }
 
-    fn inst_id(&self, i: usize) -> u32 { self.inst_id[i] }
+    fn inst_id(&self, i: usize) -> u32 {
+        self.inst_id[i]
+    }
     fn set_inst_id(&mut self, i: usize, id: u32) {
         self.inst_id[i] = id;
     }
@@ -219,9 +245,13 @@ impl RayHitN {
     pub fn iter(&self) -> std::iter::Zip<SoARayIter<RayN>, SoAHitIter<HitN>> {
         self.ray.iter().zip(self.hit.iter())
     }
-    pub fn len(&self) -> usize { self.ray.len() }
+    pub fn len(&self) -> usize {
+        self.ray.len()
+    }
     pub unsafe fn as_rayhitnp(&mut self) -> sys::RTCRayHitNp {
-        sys::RTCRayHitNp { ray: self.ray.as_raynp(), hit: self.hit.as_hitnp() }
+        sys::RTCRayHitNp {
+            ray: self.ray.as_raynp(),
+            hit: self.hit.as_hitnp(),
+        }
     }
 }
-
