@@ -6,6 +6,7 @@ use instance;
 use linear_curve;
 use bspline_curve;
 use bezier_curve;
+use hermite_curve;
 
 pub enum Geometry<'a> {
     Triangle(triangle_mesh::TriangleMesh<'a>),
@@ -13,7 +14,8 @@ pub enum Geometry<'a> {
     Instance(instance::Instance<'a>),
     LinearCurve(linear_curve::LinearCurve<'a>),
     BsplineCurve(bspline_curve::BsplineCurve<'a>),
-    BezierCurve(bezier_curve::BezierCurve<'a>)
+    BezierCurve(bezier_curve::BezierCurve<'a>),
+    HermiteCurve(hermite_curve::HermiteCurve<'a>)
 }
 
 /// Geometry trait implemented by all Embree Geometry types
@@ -25,7 +27,8 @@ impl<'a> Geometry<'a> {
             &Geometry::Instance(ref i) => i.handle,
             &Geometry::LinearCurve(ref lc) => lc.handle,
             &Geometry::BsplineCurve(ref bsc) => bsc.handle,
-            &Geometry::BezierCurve(ref bzc) => bzc.handle
+            &Geometry::BezierCurve(ref bzc) => bzc.handle,
+            &Geometry::HermiteCurve(ref hc) => hc.handle
         }
     }
     pub fn commit(&mut self) {

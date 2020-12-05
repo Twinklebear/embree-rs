@@ -4,7 +4,7 @@ extern crate embree;
 extern crate support;
 
 use cgmath::{Vector2,Vector3, Vector4, InnerSpace};
-use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve, BsplineCurve, BezierCurve, CurveType};
+use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve, BsplineCurve, BezierCurve, HermiteCurve, CurveType};
 use support::Camera;
 
 fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
@@ -27,6 +27,7 @@ fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
     curve_geo.commit();
     curve_geo
 }
+
 fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
     let mut curve = BsplineCurve::normal_oriented(&device, 4, 6);
     {
@@ -79,6 +80,35 @@ fn make_bezier_curve<'a>(device: &'a Device) -> Geometry<'a> {
     curve_geo
 }
 
+fn make_hermite_curve<'a>(device: &'a Device) -> Geometry<'a> {
+    let mut curve = HermiteCurve::normal_oriented(&device, 2, 3);
+    {
+        let mut verts = curve.vertex_buffer.map();
+        let mut ids = curve.index_buffer.map();
+        let mut normals = curve.normal_buffer.as_mut().unwrap().map();
+        let mut tangents = curve.tangent_buffer.map();
+        let mut normal_derivatives = curve.normal_derivative_buffer.as_mut().unwrap().map();
+        verts[0] = Vector4::new(10.0, -0.0, -0.0, 0.3);
+        verts[1] = Vector4::new(10.0, 2.0, 4.0, 0.5);
+        verts[2] = Vector4::new(10.0, 8.0, 8.0, 0.2);
+        ids[0] = 0;
+        ids[1] = 1;
+        normals[0] = Vector3::new(0.5,0.4,0.1);
+        normals[1] = Vector3::new(0.5,0.4,0.1);
+        normals[2] = Vector3::new(0.5,0.4,0.1);
+        tangents[0] = Vector4::new(0.0,10.0,0.0,0.1);
+        tangents[1] = Vector4::new(0.0,10.0,0.0,0.1);
+        tangents[2] = Vector4::new(0.0,10.0,0.0,0.1);
+        normal_derivatives[0] = Vector3::new(0.4,0.5,1.0);
+        normal_derivatives[1] = Vector3::new(0.4,0.5,1.0);
+        normal_derivatives[2] = Vector3::new(0.4,0.5,1.0);
+
+    }
+    let mut curve_geo = Geometry::HermiteCurve(curve);
+    curve_geo.commit();
+    curve_geo
+}
+
 fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
     let mut mesh = QuadMesh::unanimated(device, 1, 4);
     {
@@ -103,11 +133,13 @@ fn main() {
     let l_curve = make_linear_curve(&device);
     let bs_curve = make_bspline_curve(&device);
     let bz_curve = make_bezier_curve(&device);
+    let h_curve = make_hermite_curve(&device);
 
     let mut scene = Scene::new(&device);
     let l_curve_id = scene.attach_geometry(l_curve);
     let bs_curve_id = scene.attach_geometry(bs_curve);
     let bz_curve_id = scene.attach_geometry(bz_curve);
+    let h_curve_id = scene.attach_geometry(h_curve);
     let ground_id = scene.attach_geometry(ground);
     let rtscene = scene.commit();
 
