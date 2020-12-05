@@ -35,6 +35,7 @@ pub mod linear_curve;
 pub mod bspline_curve;
 pub mod bezier_curve;
 pub mod hermite_curve;
+pub mod catmull_rom_curve;
 
 pub use buffer::{Buffer, MappedBuffer};
 pub use device::Device;
@@ -55,6 +56,7 @@ pub use linear_curve::LinearCurve;
 pub use bspline_curve::BsplineCurve;
 pub use bezier_curve::BezierCurve;
 pub use hermite_curve::HermiteCurve;
+pub use catmull_rom_curve::CatmullRomCurve;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases

@@ -1,5 +1,6 @@
 pub enum CurveType {
     Flat,
     NormalOriented,
-    Round
+    Round,
+    Cone
 }
