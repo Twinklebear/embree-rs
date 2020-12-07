@@ -8,7 +8,7 @@ use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, T
 use support::Camera;
 
 fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut curve = LinearCurve::flat(&device, 2, 3);
+    let mut curve = LinearCurve::cone(&device, 2, 3, true);
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();
@@ -20,7 +20,6 @@ fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
         ids[1] = 1;
         flags[0] = 0x3;
         flags[1] = 0x3;
-        flags[2] = 0x3;
 
     }
     let mut curve_geo = Geometry::LinearCurve(curve);
