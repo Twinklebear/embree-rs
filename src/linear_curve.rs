@@ -28,8 +28,8 @@ impl<'a> LinearCurve<'a> {
     fn unanimated( device: &'a Device, num_segments: usize, num_verts: usize, curve_type: CurveType, use_normals: bool) -> LinearCurve<'a> {
         let h: RTCGeometry;
         match curve_type {
-        CurveType::Round => h = unsafe { rtcNewGeometry(device.handle, GeometryType::CONE_LINEAR_CURVE) },
-        CurveType::Cone => h = unsafe { rtcNewGeometry(device.handle, GeometryType::ROUND_LINEAR_CURVE) },
+        CurveType::Cone => h = unsafe { rtcNewGeometry(device.handle, GeometryType::CONE_LINEAR_CURVE) },
+        CurveType::Round => h = unsafe { rtcNewGeometry(device.handle, GeometryType::ROUND_LINEAR_CURVE) },
         _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_LINEAR_CURVE) },
         };
         let mut vertex_buffer = Buffer::new(device, num_verts);

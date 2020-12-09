@@ -8,18 +8,18 @@ use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, T
 use support::Camera;
 
 fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut curve = LinearCurve::cone(&device, 2, 3, true);
+    let mut curve = LinearCurve::cone(&device, 2, 3, false);
     {
         let mut verts = curve.vertex_buffer.map();
         let mut ids = curve.index_buffer.map();
         let mut flags = curve.flag_buffer.map();
-        verts[0] = Vector4::new(-5.0, -0.0, -0.0, 0.35);
-        verts[1] = Vector4::new(-5.0, 4.0, 0.0, 0.25);
+        verts[0] = Vector4::new(-5.0, 0.0, 0.0, 0.35);
+        verts[1] = Vector4::new(-5.0, 4.0, -1.0, 0.25);
         verts[2] = Vector4::new(-5.0, 8.0, 2.0, 0.05);
         ids[0] = 0;
         ids[1] = 1;
-        flags[0] = 0x3;
-        flags[1] = 0x3;
+        flags[0] = 10;
+        flags[1] = 1;
 
     }
     let mut curve_geo = Geometry::LinearCurve(curve);
@@ -138,10 +138,10 @@ fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut quads = mesh.index_buffer.map();
-        verts[0] = Vector4::new(-10.0, -2.0, -10.0, 0.0);
-        verts[1] = Vector4::new(-10.0, -2.0, 10.0, 0.0);
-        verts[2] = Vector4::new(10.0, -2.0, 10.0, 0.0);
-        verts[3] = Vector4::new(10.0, -2.0, -10.0, 1.0);
+        verts[0] = Vector4::new(-25.0, -2.0, -25.0, 0.0);
+        verts[1] = Vector4::new(-25.0, -2.0, 25.0, 0.0);
+        verts[2] = Vector4::new(25.0, -2.0, 25.0, 0.0);
+        verts[3] = Vector4::new(25.0, -2.0, -25.0, 1.0);
 
         quads[0] = Vector4::new(0, 1, 2, 3);
     }
@@ -152,7 +152,7 @@ fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
 
 fn main() {
     let mut display = support::Display::new(512, 512, "curve geometry");
-    let device = Device::new();
+    let device = Device::debug();
     let ground = make_ground_plane(&device);
     let l_curve = make_linear_curve(&device);
     let bs_curve = make_bspline_curve(&device);
