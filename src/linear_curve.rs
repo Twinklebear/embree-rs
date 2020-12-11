@@ -4,7 +4,7 @@ use buffer::Buffer;
 use device::Device;
 use geometry::Geometry;
 use sys::*;
-use {BufferType, Format, GeometryType, CurveType};
+use {BufferType, CurveType, Format, GeometryType};
 
 pub struct LinearCurve<'a> {
     device: &'a Device,
@@ -12,25 +12,68 @@ pub struct LinearCurve<'a> {
     pub vertex_buffer: Buffer<'a, Vector4<f32>>,
     pub index_buffer: Buffer<'a, u32>,
     pub flag_buffer: Buffer<'a, u32>,
-    pub normal_buffer: Option< Buffer<'a, Vector3<f32>> >
+    pub normal_buffer: Option<Buffer<'a, Vector3<f32>>>,
 }
 
 impl<'a> LinearCurve<'a> {
-    pub fn flat( device: &'a Device, num_segments: usize, num_verts: usize, use_normals: bool) -> LinearCurve<'a> {
-        LinearCurve::unanimated(device, num_segments, num_verts, CurveType::Flat, use_normals)
+    pub fn flat(
+        device: &'a Device,
+        num_segments: usize,
+        num_verts: usize,
+        use_normals: bool,
+    ) -> LinearCurve<'a> {
+        LinearCurve::unanimated(
+            device,
+            num_segments,
+            num_verts,
+            CurveType::Flat,
+            use_normals,
+        )
     }
-    pub fn round( device: &'a Device, num_segments: usize, num_verts: usize, use_normals: bool) -> LinearCurve<'a> {
-        LinearCurve::unanimated(device, num_segments, num_verts, CurveType::Round, use_normals)
+    pub fn round(
+        device: &'a Device,
+        num_segments: usize,
+        num_verts: usize,
+        use_normals: bool,
+    ) -> LinearCurve<'a> {
+        LinearCurve::unanimated(
+            device,
+            num_segments,
+            num_verts,
+            CurveType::Round,
+            use_normals,
+        )
     }
-    pub fn cone( device: &'a Device, num_segments: usize, num_verts: usize, use_normals: bool) -> LinearCurve<'a> {
-        LinearCurve::unanimated(device, num_segments, num_verts, CurveType::Cone, use_normals)
+    pub fn cone(
+        device: &'a Device,
+        num_segments: usize,
+        num_verts: usize,
+        use_normals: bool,
+    ) -> LinearCurve<'a> {
+        LinearCurve::unanimated(
+            device,
+            num_segments,
+            num_verts,
+            CurveType::Cone,
+            use_normals,
+        )
     }
-    fn unanimated( device: &'a Device, num_segments: usize, num_verts: usize, curve_type: CurveType, use_normals: bool) -> LinearCurve<'a> {
+    fn unanimated(
+        device: &'a Device,
+        num_segments: usize,
+        num_verts: usize,
+        curve_type: CurveType,
+        use_normals: bool,
+    ) -> LinearCurve<'a> {
         let h: RTCGeometry;
         match curve_type {
-        CurveType::Cone => h = unsafe { rtcNewGeometry(device.handle, GeometryType::CONE_LINEAR_CURVE) },
-        CurveType::Round => h = unsafe { rtcNewGeometry(device.handle, GeometryType::ROUND_LINEAR_CURVE) },
-        _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_LINEAR_CURVE) },
+            CurveType::Cone => {
+                h = unsafe { rtcNewGeometry(device.handle, GeometryType::CONE_LINEAR_CURVE) }
+            }
+            CurveType::Round => {
+                h = unsafe { rtcNewGeometry(device.handle, GeometryType::ROUND_LINEAR_CURVE) }
+            }
+            _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_LINEAR_CURVE) },
         };
         let mut vertex_buffer = Buffer::new(device, num_verts);
         let mut index_buffer = Buffer::new(device, num_segments);
@@ -103,4 +146,3 @@ impl<'a> LinearCurve<'a> {
 }
 
 unsafe impl<'a> Sync for LinearCurve<'a> {}
-

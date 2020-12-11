@@ -15,10 +15,16 @@ use std::{alloc, mem};
 
 extern crate cgmath;
 
+pub mod bezier_curve;
+pub mod bspline_curve;
 pub mod buffer;
+pub mod catmull_rom_curve;
+pub mod curve;
 pub mod device;
 pub mod geometry;
+pub mod hermite_curve;
 pub mod instance;
+pub mod linear_curve;
 pub mod quad_mesh;
 pub mod ray;
 pub mod ray_packet;
@@ -30,17 +36,17 @@ pub mod soa_ray;
 #[allow(non_snake_case)]
 pub mod sys;
 pub mod triangle_mesh;
-pub mod curve;
-pub mod linear_curve;
-pub mod bspline_curve;
-pub mod bezier_curve;
-pub mod hermite_curve;
-pub mod catmull_rom_curve;
 
+pub use bezier_curve::BezierCurve;
+pub use bspline_curve::BsplineCurve;
 pub use buffer::{Buffer, MappedBuffer};
+pub use catmull_rom_curve::CatmullRomCurve;
+pub use curve::CurveType;
 pub use device::Device;
 pub use geometry::Geometry;
+pub use hermite_curve::HermiteCurve;
 pub use instance::Instance;
+pub use linear_curve::LinearCurve;
 pub use quad_mesh::QuadMesh;
 pub use ray::{Hit, IntersectContext, Ray, RayHit};
 pub use ray_packet::{Hit4, Ray4, RayHit4};
@@ -51,12 +57,6 @@ pub use soa_ray::{
     SoARayRefMut,
 };
 pub use triangle_mesh::TriangleMesh;
-pub use curve::CurveType;
-pub use linear_curve::LinearCurve;
-pub use bspline_curve::BsplineCurve;
-pub use bezier_curve::BezierCurve;
-pub use hermite_curve::HermiteCurve;
-pub use catmull_rom_curve::CatmullRomCurve;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases
