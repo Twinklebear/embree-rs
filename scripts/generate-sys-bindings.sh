@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# This should be run on nightly rust, as it requires
-# rustfmt-nightly to do the formatting
-
 bindgen $1 -o $2 \
 	--no-doc-comments \
 	--distrust-clang-mangling \
@@ -34,4 +31,7 @@ sed -i "s/RTC_CURVE_FLAG_//g" $2
 sed -i "s/RTC_SCENE_FLAG_//g" $2
 sed -i "s/RTC_BUILD_FLAG_//g" $2
 
+# Fix up the size_t and ssize_t typedefs
+sed -i "s/pub type size_t = ::std::os::raw::c_ulong/pub type size_t = usize/" $2
+sed -i "s/pub type __ssize_t = ::std::os::raw::c_long/pub type __ssize_t = isize/" $2
 

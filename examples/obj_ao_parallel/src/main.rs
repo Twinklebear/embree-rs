@@ -2,17 +2,17 @@
 
 extern crate cgmath;
 extern crate embree;
+extern crate rand;
+extern crate rayon;
 extern crate support;
 extern crate tobj;
-extern crate rayon;
-extern crate rand;
 use std::path::Path;
 
-use cgmath::{Vector3, Vector4, InnerSpace, Point2, Vector2, Matrix3};
+use cgmath::{InnerSpace, Matrix3, Point2, Vector2, Vector3, Vector4};
 use embree::{Device, Geometry, IntersectContext, Ray, RayHit, Scene, TriangleMesh};
-use support::Camera;
-use rayon::prelude::*;
 use rand::prelude::*;
+use rayon::prelude::*;
+use support::Camera;
 
 /// Function to sample a point inside a 2D disk
 pub fn concentric_sample_disk(u: Point2<f32>) -> Point2<f32> {
@@ -71,7 +71,7 @@ impl Frame {
     }
 }
 
-// It is an example of a custom structure 
+// It is an example of a custom structure
 // that encapsulate the embree commited scene
 pub struct AOIntegrator<'embree> {
     // Camera (can be updated using update_cam method)
@@ -85,7 +85,7 @@ pub struct AOIntegrator<'embree> {
     // Meshs ids (to map embree intersection with the models list)
     mesh_ids: Vec<u32>,
     // Max distance (to compute the AO)
-    max_distance: Option<f32>
+    max_distance: Option<f32>,
 }
 
 impl<'embree> AOIntegrator<'embree> {
@@ -108,31 +108,39 @@ impl<'embree> AOIntegrator<'embree> {
 
         let mut intersection_ctx = IntersectContext::coherent();
         self.rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
-        
+
         if ray_hit.hit.hit() {
             let mesh = &self.models[self.mesh_ids[ray_hit.hit.geomID as usize] as usize].mesh;
             // Compute the normal at the intersection point
             let mut n = {
-                    if !mesh.normals.is_empty() {
+                if !mesh.normals.is_empty() {
                     // In this case, we will interpolate the normals
                     // Note that this operation is supported by embree (internal)
                     let prim = ray_hit.hit.primID as usize;
-                    let tri = [mesh.indices[prim * 3] as usize,
-                                mesh.indices[prim * 3 + 1] as usize,
-                                mesh.indices[prim * 3 + 2] as usize];
+                    let tri = [
+                        mesh.indices[prim * 3] as usize,
+                        mesh.indices[prim * 3 + 1] as usize,
+                        mesh.indices[prim * 3 + 2] as usize,
+                    ];
 
                     // Retrive the different normal vectors
-                    let na = Vector3::new(mesh.normals[tri[0] * 3],
-                                            mesh.normals[tri[0] * 3 + 1],
-                                            mesh.normals[tri[0] * 3 + 2]);
+                    let na = Vector3::new(
+                        mesh.normals[tri[0] * 3],
+                        mesh.normals[tri[0] * 3 + 1],
+                        mesh.normals[tri[0] * 3 + 2],
+                    );
 
-                    let nb = Vector3::new(mesh.normals[tri[1] * 3],
-                                            mesh.normals[tri[1] * 3 + 1],
-                                            mesh.normals[tri[1] * 3 + 2]);
+                    let nb = Vector3::new(
+                        mesh.normals[tri[1] * 3],
+                        mesh.normals[tri[1] * 3 + 1],
+                        mesh.normals[tri[1] * 3 + 2],
+                    );
 
-                    let nc = Vector3::new(mesh.normals[tri[2] * 3],
-                                            mesh.normals[tri[2] * 3 + 1],
-                                            mesh.normals[tri[2] * 3 + 2]);
+                    let nc = Vector3::new(
+                        mesh.normals[tri[2] * 3],
+                        mesh.normals[tri[2] * 3 + 1],
+                        mesh.normals[tri[2] * 3 + 2],
+                    );
 
                     // Interpolate
                     let w = 1.0 - ray_hit.hit.u - ray_hit.hit.v;
@@ -149,7 +157,7 @@ impl<'embree> AOIntegrator<'embree> {
             if n.dot(dir) > 0.0 {
                 n *= -1.0;
             }
-           
+
             // Create local frame
             let frame = Frame::new(n);
             let p = self.camera.pos + dir * ray_hit.ray.tfar;
@@ -158,7 +166,7 @@ impl<'embree> AOIntegrator<'embree> {
             // note that we will not evaluate the cosine term from this point
             // as it get canceled by the PDF
             let dir = frame.to_world(cosine_sample_hemisphere(u));
-            
+
             // Launch a second ray from the intersection point
             let ray = Ray::new(p, dir);
             let mut ray_hit = RayHit::new(ray);
@@ -168,8 +176,14 @@ impl<'embree> AOIntegrator<'embree> {
             if ray_hit.hit.hit() {
                 match self.max_distance {
                     None => 0.0,
-                    Some(t) => if ray_hit.ray.tfar > t { 1.0 } else { 0.0 }
-                } 
+                    Some(t) => {
+                        if ray_hit.ray.tfar > t {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                }
             } else {
                 1.0
             }
@@ -185,21 +199,25 @@ fn main() {
 
     // Expect <obj_path> [max_distance]
     let args: Vec<_> = std::env::args().collect();
-    
+
     // Get the distance. If nothing provided
     // use infinity
     let max_distance = match args.len() {
         1 => panic!("Need to provide obj path argument"),
         2 => None,
-        3 => { 
-            let d = args[2].parse::<f32>().expect("Impossible to parse the max distance: need to be float");
+        3 => {
+            let d = args[2]
+                .parse::<f32>()
+                .expect("Impossible to parse the max distance: need to be float");
             if d <= 0.0 {
                 panic!(format!("Max distance need to be more than 0.0 ({})", d));
             }
             Some(d)
         }
-        _ => panic!("Too much arguments provided. Only supporting obj path and max distance arguments"),
-    } ;
+        _ => panic!(
+            "Too much arguments provided. Only supporting obj path and max distance arguments"
+        ),
+    };
 
     // Load the obj
     let (models, _) = tobj::load_obj(&Path::new(&args[1])).unwrap();
@@ -207,26 +225,32 @@ fn main() {
 
     for m in models.iter() {
         let mesh = &m.mesh;
-        println!("Mesh has {} triangles and {} verts",
-                 mesh.indices.len() / 3, mesh.positions.len() / 3);
+        println!(
+            "Mesh has {} triangles and {} verts",
+            mesh.indices.len() / 3,
+            mesh.positions.len() / 3
+        );
 
-        let mut tris = TriangleMesh::unanimated(&device,
-                                                mesh.indices.len() / 3,
-                                                mesh.positions.len() / 3);
+        let mut tris =
+            TriangleMesh::unanimated(&device, mesh.indices.len() / 3, mesh.positions.len() / 3);
         {
             let mut verts = tris.vertex_buffer.map();
             let mut tris = tris.index_buffer.map();
-            for i in 0..mesh.positions.len() / 3 { 
-                verts[i] = Vector4::new(mesh.positions[i * 3],
-                                        mesh.positions[i * 3 + 1],
-                                        mesh.positions[i * 3 + 2],
-                                        0.0);
+            for i in 0..mesh.positions.len() / 3 {
+                verts[i] = Vector4::new(
+                    mesh.positions[i * 3],
+                    mesh.positions[i * 3 + 1],
+                    mesh.positions[i * 3 + 2],
+                    0.0,
+                );
             }
 
-            for i in 0..mesh.indices.len() / 3 { 
-                tris[i] = Vector3::new(mesh.indices[i * 3],
-                                       mesh.indices[i * 3 + 1],
-                                       mesh.indices[i * 3 + 2]);
+            for i in 0..mesh.indices.len() / 3 {
+                tris[i] = Vector3::new(
+                    mesh.indices[i * 3],
+                    mesh.indices[i * 3 + 1],
+                    mesh.indices[i * 3 + 2],
+                );
             }
         }
         let mut tri_geom = Geometry::Triangle(tris);
@@ -241,14 +265,20 @@ fn main() {
         mesh_ids.push(id);
     }
     let rtscene = scene.commit();
-    
+
     // Create my custom object that will compute the ambiant occlusion
     let mut scene = AOIntegrator {
         models,
         mesh_ids,
-        camera: Camera::look_at(Vector3::new(-1.0,0.0,0.0), Vector3::new(0.0,0.0,0.0), Vector3::new(0.0,1.0,0.0), 55.0, (512, 512)),
+        camera: Camera::look_at(
+            Vector3::new(-1.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            55.0,
+            (512, 512),
+        ),
         rtscene: &rtscene,
-        max_distance
+        max_distance,
     };
 
     // Variables to average AO computation across frames
@@ -260,7 +290,7 @@ fn main() {
             *p = 0;
         }
         let img_dims = image.dimensions();
-        
+
         // Update the camera
         if scene.update_cam(Camera::look_dir(
             camera_pose.pos,
@@ -276,25 +306,27 @@ fn main() {
                 (*i) = 0.0;
             }
         }
-        
+
         // Render the scene with Rayon. Here each pixel compute 1 spp AO
-        img.par_chunks_mut(image.width() as usize).enumerate().for_each(|(y, row)| {
-            let mut rng = rand::thread_rng();
-            for (x, p) in row.iter_mut().enumerate() {
-                let u = Point2::new(rng.gen(), rng.gen());
-                // Weighting average
-                (*p) = (*p * spp as f32 + scene.render(x as u32, y as u32, u)) / (spp + 1) as f32;
-            }
-        });
+        img.par_chunks_mut(image.width() as usize)
+            .enumerate()
+            .for_each(|(y, row)| {
+                let mut rng = rand::thread_rng();
+                for (x, p) in row.iter_mut().enumerate() {
+                    let u = Point2::new(rng.gen(), rng.gen());
+                    // Weighting average
+                    (*p) =
+                        (*p * spp as f32 + scene.render(x as u32, y as u32, u)) / (spp + 1) as f32;
+                }
+            });
         spp += 1;
 
-        // Copy the accumulated result inside the image buffer       
+        // Copy the accumulated result inside the image buffer
         let raw_out = image.as_mut();
         raw_out.chunks_mut(3).zip(img.iter()).for_each(|(p, v)| {
-                p[0] = (v * 255.0) as u8;
-                p[1] = (v * 255.0) as u8;
-                p[2] = (v * 255.0) as u8;
+            p[0] = (v * 255.0) as u8;
+            p[1] = (v * 255.0) as u8;
+            p[2] = (v * 255.0) as u8;
         });
     });
 }
-

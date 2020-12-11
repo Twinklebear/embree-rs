@@ -1,13 +1,13 @@
 use sys::*;
 
-use triangle_mesh;
-use quad_mesh;
 use instance;
 use linear_curve;
 use bspline_curve;
 use bezier_curve;
 use hermite_curve;
 use catmull_rom_curve;
+use quad_mesh;
+use triangle_mesh;
 
 pub enum Geometry<'a> {
     Triangle(triangle_mesh::TriangleMesh<'a>),
@@ -56,4 +56,3 @@ impl<'a> PartialEq<Geometry<'a>> for Geometry<'a> {
 }
 
 impl<'a> Eq for Geometry<'a> {}
-

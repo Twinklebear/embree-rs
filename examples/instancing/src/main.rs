@@ -5,22 +5,26 @@ extern crate embree;
 extern crate support;
 
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Vector3, Vector4};
-use embree::{Device, Geometry, Instance, IntersectContext, QuadMesh, Ray, RayHit, Scene,
-             TriangleMesh};
+use embree::{
+    Device, Geometry, Instance, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh,
+};
 use std::{f32, u32};
 use support::Camera;
 
 /// Make a triangulated sphere, from the Embree tutorial:
 /// https://github.com/embree/embree/blob/master/tutorials/instanced_geometry/instanced_geometry_device.cpp
-fn make_triangulated_sphere<'a>(device: &'a Device,
-                                pos: Vector3<f32>,
-                                radius: f32) -> Geometry<'a>
-{
+fn make_triangulated_sphere<'a>(
+    device: &'a Device,
+    pos: Vector3<f32>,
+    radius: f32,
+) -> Geometry<'a> {
     let num_phi = 5;
     let num_theta = 2 * num_phi;
-    let mut mesh = TriangleMesh::unanimated(device,
-                                            2 * num_theta * (num_phi - 1),
-                                            num_theta * (num_phi + 1));
+    let mut mesh = TriangleMesh::unanimated(
+        device,
+        2 * num_theta * (num_phi - 1),
+        num_theta * (num_phi + 1),
+    );
     {
         let mut verts = mesh.vertex_buffer.map();
         let mut tris = mesh.index_buffer.map();
@@ -116,7 +120,7 @@ fn main() {
         make_triangulated_sphere(&device, Vector3::new(0.0, 0.0, 1.0), 0.5),
         make_triangulated_sphere(&device, Vector3::new(1.0, 0.0, 0.0), 0.5),
         make_triangulated_sphere(&device, Vector3::new(0.0, 0.0, -1.0), 0.5),
-        make_triangulated_sphere(&device, Vector3::new(-1.0, 0.0, 0.0), 0.5)
+        make_triangulated_sphere(&device, Vector3::new(-1.0, 0.0, 0.0), 0.5),
     ];
     let mut instanced_scene = Scene::new(&device);
     for s in spheres.into_iter() {
@@ -130,7 +134,7 @@ fn main() {
         Instance::unanimated(&device, &committed_instance),
         Instance::unanimated(&device, &committed_instance),
         Instance::unanimated(&device, &committed_instance),
-        Instance::unanimated(&device, &committed_instance)
+        Instance::unanimated(&device, &committed_instance),
     ];
     let num_instances = instances.len();
 
