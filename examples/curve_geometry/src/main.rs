@@ -3,8 +3,11 @@ extern crate cgmath;
 extern crate embree;
 extern crate support;
 
-use cgmath::{Vector2,Vector3, Vector4, InnerSpace};
-use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh, LinearCurve, BsplineCurve, BezierCurve, HermiteCurve, CatmullRomCurve, CurveType};
+use cgmath::{Vector3, Vector4};
+use embree::{
+    BezierCurve, BsplineCurve, CatmullRomCurve, Device, Geometry, HermiteCurve, IntersectContext,
+    LinearCurve, QuadMesh, Ray, RayHit, Scene,
+};
 use support::Camera;
 
 fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
@@ -20,7 +23,6 @@ fn make_linear_curve<'a>(device: &'a Device) -> Geometry<'a> {
         ids[1] = 1;
         flags[0] = 10;
         flags[1] = 1;
-
     }
     let mut curve_geo = Geometry::LinearCurve(curve);
     curve_geo.commit();
@@ -43,13 +45,12 @@ fn make_bspline_curve<'a>(device: &'a Device) -> Geometry<'a> {
         ids[1] = 1;
         ids[2] = 2;
         ids[3] = 3;
-        normals[0] = Vector3::new(0.1,0.8,0.1);
-        normals[1] = Vector3::new(0.1,0.8,0.1);
-        normals[2] = Vector3::new(0.1,0.8,0.1);
-        normals[3] = Vector3::new(0.1,0.8,0.1);
-        normals[4] = Vector3::new(0.1,0.8,0.1);
-        normals[5] = Vector3::new(0.1,0.8,0.1);
-
+        normals[0] = Vector3::new(0.1, 0.8, 0.1);
+        normals[1] = Vector3::new(0.1, 0.8, 0.1);
+        normals[2] = Vector3::new(0.1, 0.8, 0.1);
+        normals[3] = Vector3::new(0.1, 0.8, 0.1);
+        normals[4] = Vector3::new(0.1, 0.8, 0.1);
+        normals[5] = Vector3::new(0.1, 0.8, 0.1);
     }
     let mut curve_geo = Geometry::BsplineCurve(curve);
     curve_geo.commit();
@@ -72,7 +73,6 @@ fn make_bezier_curve<'a>(device: &'a Device) -> Geometry<'a> {
 
         ids[0] = 0;
         ids[1] = 3;
-
     }
     let mut curve_geo = Geometry::BezierCurve(curve);
     curve_geo.commit();
@@ -92,16 +92,15 @@ fn make_hermite_curve<'a>(device: &'a Device) -> Geometry<'a> {
         verts[2] = Vector4::new(10.0, 8.0, 8.0, 0.2);
         ids[0] = 0;
         ids[1] = 1;
-        normals[0] = Vector3::new(0.5,0.4,0.1);
-        normals[1] = Vector3::new(0.5,0.4,0.1);
-        normals[2] = Vector3::new(0.5,0.4,0.1);
-        tangents[0] = Vector4::new(0.0,10.0,0.0,0.1);
-        tangents[1] = Vector4::new(0.0,10.0,0.0,0.1);
-        tangents[2] = Vector4::new(0.0,10.0,0.0,0.1);
-        normal_derivatives[0] = Vector3::new(0.4,0.5,1.0);
-        normal_derivatives[1] = Vector3::new(0.4,0.5,1.0);
-        normal_derivatives[2] = Vector3::new(0.4,0.5,1.0);
-
+        normals[0] = Vector3::new(0.5, 0.4, 0.1);
+        normals[1] = Vector3::new(0.5, 0.4, 0.1);
+        normals[2] = Vector3::new(0.5, 0.4, 0.1);
+        tangents[0] = Vector4::new(0.0, 10.0, 0.0, 0.1);
+        tangents[1] = Vector4::new(0.0, 10.0, 0.0, 0.1);
+        tangents[2] = Vector4::new(0.0, 10.0, 0.0, 0.1);
+        normal_derivatives[0] = Vector3::new(0.4, 0.5, 1.0);
+        normal_derivatives[1] = Vector3::new(0.4, 0.5, 1.0);
+        normal_derivatives[2] = Vector3::new(0.4, 0.5, 1.0);
     }
     let mut curve_geo = Geometry::HermiteCurve(curve);
     curve_geo.commit();
@@ -126,7 +125,6 @@ fn make_catmull_curve<'a>(device: &'a Device) -> Geometry<'a> {
         ids[1] = 1;
         ids[2] = 2;
         ids[3] = 3;
-
     }
     let mut curve_geo = Geometry::CatmullRomCurve(curve);
     curve_geo.commit();
@@ -152,7 +150,7 @@ fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
 
 fn main() {
     let mut display = support::Display::new(512, 512, "curve geometry");
-    let device = Device::debug();
+    let device = Device::new();
     let ground = make_ground_plane(&device);
     let l_curve = make_linear_curve(&device);
     let bs_curve = make_bspline_curve(&device);
@@ -161,12 +159,12 @@ fn main() {
     let cr_curve = make_catmull_curve(&device);
 
     let mut scene = Scene::new(&device);
-    let l_curve_id = scene.attach_geometry(l_curve);
-    let bs_curve_id = scene.attach_geometry(bs_curve);
-    let bz_curve_id = scene.attach_geometry(bz_curve);
-    let h_curve_id = scene.attach_geometry(h_curve);
-    let cr_curve_id = scene.attach_geometry(cr_curve);
-    let ground_id = scene.attach_geometry(ground);
+    scene.attach_geometry(l_curve);
+    scene.attach_geometry(bs_curve);
+    scene.attach_geometry(bz_curve);
+    scene.attach_geometry(h_curve);
+    scene.attach_geometry(cr_curve);
+    scene.attach_geometry(ground);
     let rtscene = scene.commit();
 
     let mut intersection_ctx = IntersectContext::coherent();
@@ -192,23 +190,13 @@ fn main() {
                 rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
                 if ray_hit.hit.hit() {
                     let h = ray_hit.hit;
-                    let mut p = image.get_pixel_mut(i, j);
-                    
-                    let color = Vector3::new(0.3, 0.3, 0.3);
-                    let N = Vector3::new(h.Ng_x,h.Ng_y,h.Ng_z).normalize();
-                    let uv = Vector3::new(h.u,h.v,0.0);
+                    let p = image.get_pixel_mut(i, j);
 
-                    p[0] = ((uv.x/2.+0.5) * 255.0) as u8;
-                    p[1] = ((uv.y/2.+0.5) * 255.0) as u8;
+                    let uv = Vector3::new(h.u, h.v, 0.0);
+
+                    p[0] = ((uv.x / 2. + 0.5) * 255.0) as u8;
+                    p[1] = ((uv.y / 2. + 0.5) * 255.0) as u8;
                     p[2] = (0.0) as u8;
-
-/*                     p[0] = ((N.x/2. +0.0) * 255.0) as u8;
-                    p[1] = ((N.y/2. +0.0) * 255.0) as u8;
-                    p[2] = ((N.z/2. +0.0) *255.0) as u8; */
-
-                    //p[0] = (color.x * 255.0) as u8;
-                    //p[1] = (color.y * 255.0) as u8;
-                    //p[2] = (color.z * 255.0) as u8;
                 }
             }
         }
