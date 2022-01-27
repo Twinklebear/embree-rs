@@ -12,6 +12,7 @@ A wrapper for the Embree ray tracing kernels.
 """
 keywords = ["embree", "ray", "simd", "bvh"]
 build = "build.rs"
+edition = "2021"
 
 exclude = [
 	".travis.yml",
@@ -21,5 +22,5 @@ exclude = [
 ]
 
 [dependencies]
-cgmath = "0.17.0"
+cgmath = "0.18"
 

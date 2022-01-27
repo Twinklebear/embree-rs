@@ -2,9 +2,10 @@
 name = "triangle"
 version = "0.1.0"
 authors = ["Will Usher <willusher.life@gmail.com>"]
+edition = "2021"
 
 [dependencies]
 embree = { path = "../../" }
 support = { path = "../support" }
-cgmath = "0.17.0"
+cgmath = "0.18"
 

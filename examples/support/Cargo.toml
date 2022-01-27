@@ -1,15 +1,15 @@
 [package]
 name = "support"
 version = "0.1.0"
-authors = ["Will Usher <willusher.life@gmail.com>"]
+authors = ["Will Usher <will@willusher.io>"]
+edition = "2021"
 
 [dependencies]
 image = "0.22.0"
 arcball = "1.0.0"
-cgmath = "0.17.0"
+cgmath = "0.18"
 clock_ticks = "0.1.1"
-
-[dependencies.glium]
-version = "0.25.0"
-default = ["glutin"]
+wgpu = "0.12"
+winit = "0.26"
+futures = {version = "0.3", features = ["executor"]}
 

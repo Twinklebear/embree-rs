@@ -8,7 +8,7 @@ use cgmath::{Vector3, Vector4};
 use embree::{Device, Geometry, IntersectContext, RayHitN, RayN, Scene, TriangleMesh};
 
 fn main() {
-    let mut display = support::Display::new(512, 512, "triangle");
+    let display = support::Display::new(512, 512, "triangle");
     let device = Device::new();
 
     // Make a triangle
@@ -31,7 +31,7 @@ fn main() {
 
     let mut intersection_ctx = IntersectContext::coherent();
 
-    display.run(|image, _, _| {
+    display::run(display, |image, _, _| {
         let img_dims = image.dimensions();
         // Render the scene
         for j in 0..img_dims.1 {
