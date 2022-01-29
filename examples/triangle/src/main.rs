@@ -9,29 +9,31 @@ use embree::{Device, Geometry, IntersectContext, RayHitN, RayN, Scene, TriangleM
 
 fn main() {
     let display = support::Display::new(512, 512, "triangle");
-    let device = Device::new();
 
-    // Make a triangle
-    let mut triangle = TriangleMesh::unanimated(&device, 1, 3);
-    {
-        let mut verts = triangle.vertex_buffer.map();
-        let mut tris = triangle.index_buffer.map();
-        verts[0] = Vector4::new(-1.0, 0.0, 0.0, 0.0);
-        verts[1] = Vector4::new(0.0, 1.0, 0.0, 0.0);
-        verts[2] = Vector4::new(1.0, 0.0, 0.0, 0.0);
+    support::display::run(display, move |image, _, _| {
+        // TODO: this BS needs the ARc device so borrow checker doesn't complain about lifetime
+        let device = Device::new();
 
-        tris[0] = Vector3::new(0, 1, 2);
-    }
-    let mut tri_geom = Geometry::Triangle(triangle);
-    tri_geom.commit();
+        // Make a triangle
+        let mut triangle = TriangleMesh::unanimated(&device, 1, 3);
+        {
+            let mut verts = triangle.vertex_buffer.map();
+            let mut tris = triangle.index_buffer.map();
+            verts[0] = Vector4::new(-1.0, 0.0, 0.0, 0.0);
+            verts[1] = Vector4::new(0.0, 1.0, 0.0, 0.0);
+            verts[2] = Vector4::new(1.0, 0.0, 0.0, 0.0);
 
-    let mut scene = Scene::new(&device);
-    scene.attach_geometry(tri_geom);
-    let rtscene = scene.commit();
+            tris[0] = Vector3::new(0, 1, 2);
+        }
+        let mut tri_geom = Geometry::Triangle(triangle);
+        tri_geom.commit();
 
-    let mut intersection_ctx = IntersectContext::coherent();
+        let mut scene = Scene::new(&device);
+        scene.attach_geometry(tri_geom);
+        let rtscene = scene.commit();
 
-    support::display::run(display, |image, _, _| {
+        let mut intersection_ctx = IntersectContext::coherent();
+
         let img_dims = image.dimensions();
         // Render the scene
         for j in 0..img_dims.1 {

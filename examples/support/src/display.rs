@@ -1,10 +1,11 @@
+use core::num::NonZeroU32;
 use std::borrow::Cow;
 
 use arcball::ArcballCamera;
 use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
 use clock_ticks;
 use futures;
-use image::RgbImage;
+use image::RgbaImage;
 use wgpu;
 use winit::{
     dpi::{LogicalSize, Size},
@@ -13,28 +14,39 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-// TODO: render a UV quad here
 const WGSL_SHADERS: &str = "
+type float2 = vec2<f32>;
+type float4 = vec4<f32>;
+type int2 = vec2<i32>;
+
 struct VertexInput {
-    [[location(0)]] position: vec4<f32>;
-    [[location(1)]] color: vec4<f32>;
+    [[builtin(vertex_index)]] index: u32;
 };
+
 struct VertexOutput {
-    [[builtin(position)]] position: vec4<f32>;
-    [[location(0)]] color: vec4<f32>;
+    [[builtin(position)]] position: float4;
 };
+
+var<private> coords: array<float2, 4> = array<float2, 4>(
+    float2(-1.0, -1.0),
+    float2(1.0, -1.0),
+    float2(-1.0, 1.0),
+    float2(1.0, 1.0)
+);
 
 [[stage(vertex)]]
 fn vertex_main(vert: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.color = vert.color;
-    out.position = vert.position;
+    out.position = float4(coords[vert.index], 0.0, 1.0);
     return out;
 };
 
+[[group(0), binding(0)]]
+var image: texture_2d<f32>;
+
 [[stage(fragment)]]
-fn fragment_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    return vec4<f32>(in.color);
+fn fragment_main(in: VertexOutput) -> [[location(0)]] float4 {
+    return textureLoad(image, int2(in.position.xy), 0);
 }
 ";
 
@@ -106,10 +118,10 @@ impl Display {
 /// optionally using the camera pose information passed.
 pub fn run<F>(display: Display, mut render: F)
 where
-    F: FnMut(&mut RgbImage, CameraPose, f32),
+    F: 'static + FnMut(&mut RgbaImage, CameraPose, f32),
 {
     let window_size = display.window.inner_size();
-    let mut embree_target = RgbImage::new(window_size.width, window_size.height);
+    let mut embree_target = RgbaImage::new(window_size.width, window_size.height);
 
     let mut arcball_camera = ArcballCamera::new(
         Vector3::new(0.0, 0.0, 0.0),
@@ -128,10 +140,6 @@ where
         ),
     );
 
-    let mut mouse_pressed = [false, false];
-    //let mut prev_mouse = None;
-    let t_start = clock_ticks::precise_time_s();
-
     // Porting in my wgpu-rs example just to test set up
     let vertex_module = display
         .device
@@ -146,26 +154,7 @@ where
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(WGSL_SHADERS)),
         });
 
-    let vertex_data: [f32; 24] = [
-        1.0, -1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, -1.0, -1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0,
-        1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-    ];
-    let data_buffer = display.device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: (vertex_data.len() * 4) as u64,
-        usage: wgpu::BufferUsages::VERTEX,
-        mapped_at_creation: true,
-    });
-    {
-        let mut view = data_buffer.slice(..).get_mapped_range_mut();
-        let float_view = unsafe {
-            std::slice::from_raw_parts_mut(view.as_mut_ptr() as *mut f32, vertex_data.len())
-        };
-        float_view.copy_from_slice(&vertex_data)
-    }
-    data_buffer.unmap();
-
-    let index_data: [u16; 3] = [0, 1, 2];
+    let index_data: [u16; 4] = [0, 1, 2, 3];
     let index_buffer = display.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: (index_data.len() * 4) as u64,
@@ -181,30 +170,65 @@ where
     }
     index_buffer.unmap();
 
-    let vertex_attrib_descs = [
-        wgpu::VertexAttribute {
-            offset: 0,
-            format: wgpu::VertexFormat::Float32x4,
-            shader_location: 0,
-        },
-        wgpu::VertexAttribute {
-            offset: 4 * 4,
-            format: wgpu::VertexFormat::Float32x4,
-            shader_location: 1,
-        },
-    ];
+    let window_extent = wgpu::Extent3d {
+        width: window_size.width,
+        height: window_size.height,
+        depth_or_array_layers: 1,
+    };
+    let embree_texture = display.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: window_extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+    });
 
-    let vertex_buffer_layouts = [wgpu::VertexBufferLayout {
-        array_stride: 2 * 4 * 4,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &vertex_attrib_descs,
-    }];
+    let bindgroup_layout =
+        display
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                }],
+            });
+
+    let bindgroup = display
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bindgroup_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&embree_texture.create_view(
+                    &wgpu::TextureViewDescriptor {
+                        label: None,
+                        format: Some(wgpu::TextureFormat::Rgba8Unorm),
+                        dimension: Some(wgpu::TextureViewDimension::D2),
+                        aspect: wgpu::TextureAspect::All,
+                        base_mip_level: 0,
+                        mip_level_count: None,
+                        base_array_layer: 0,
+                        array_layer_count: None,
+                    },
+                )),
+            }],
+        });
 
     let pipeline_layout = display
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&bindgroup_layout],
             push_constant_ranges: &[],
         });
 
@@ -229,7 +253,7 @@ where
             vertex: wgpu::VertexState {
                 module: &vertex_module,
                 entry_point: "vertex_main",
-                buffers: &vertex_buffer_layouts,
+                buffers: &[],
             },
             primitive: wgpu::PrimitiveState {
                 // Note: it's not possible to set a "none" strip index format,
@@ -269,6 +293,9 @@ where
         a: 1.0,
     };
 
+    let mut mouse_pressed = [false, false];
+    //let mut prev_mouse = None;
+    let t_start = clock_ticks::precise_time_s();
     display.event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -283,6 +310,17 @@ where
                 _ => (),
             },
             Event::MainEventsCleared => {
+                let cam_pose = CameraPose::new(
+                    arcball_camera.eye_pos(),
+                    arcball_camera.eye_dir(),
+                    arcball_camera.up_dir(),
+                );
+                render(
+                    &mut embree_target,
+                    cam_pose,
+                    (clock_ticks::precise_time_s() - t_start) as f32,
+                );
+
                 let frame = display
                     .surface
                     .get_current_texture()
@@ -290,6 +328,19 @@ where
                 let render_target_view = frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
+
+                // Just use queue write_texture even though it likely makes a temporary upload
+                // buffer, because making the async map API work in here will be a mess.
+                display.queue.write_texture(
+                    embree_texture.as_image_copy(),
+                    &embree_target.as_raw()[..],
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(NonZeroU32::new(window_size.width * 4).unwrap()),
+                        rows_per_image: Some(NonZeroU32::new(window_size.height).unwrap()),
+                    },
+                    window_extent,
+                );
 
                 let mut encoder = display
                     .device
@@ -309,11 +360,11 @@ where
                     });
 
                     render_pass.set_pipeline(&render_pipeline);
-                    render_pass.set_vertex_buffer(0, data_buffer.slice(..));
+                    render_pass.set_bind_group(0, &bindgroup, &[]);
                     // Note: also bug in wgpu-rs set_index_buffer or web sys not passing
                     // the right index type
                     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                    render_pass.draw_indexed(0..3, 0, 0..1);
+                    render_pass.draw_indexed(0..4, 0, 0..1);
                 }
                 display.queue.submit(Some(encoder.finish()));
                 frame.present();
