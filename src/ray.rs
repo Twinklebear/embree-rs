@@ -1,7 +1,7 @@
 use cgmath::Vector3;
 use std::{f32, u32};
 
-use sys;
+use crate::sys;
 
 pub type Ray = sys::RTCRay;
 pub type Hit = sys::RTCHit;

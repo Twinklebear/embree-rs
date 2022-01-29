@@ -3,7 +3,7 @@ use std::arch::x86_64;
 use std::ffi::CString;
 use std::ptr;
 
-use sys::*;
+use crate::sys::*;
 
 pub struct Device {
     pub(crate) handle: RTCDevice,

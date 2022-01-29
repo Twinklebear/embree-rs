@@ -1,13 +1,13 @@
-use sys::*;
+use crate::sys::*;
 
-use bezier_curve;
-use bspline_curve;
-use catmull_rom_curve;
-use hermite_curve;
-use instance;
-use linear_curve;
-use quad_mesh;
-use triangle_mesh;
+use crate::bezier_curve;
+use crate::bspline_curve;
+use crate::catmull_rom_curve;
+use crate::hermite_curve;
+use crate::instance;
+use crate::linear_curve;
+use crate::quad_mesh;
+use crate::triangle_mesh;
 
 pub enum Geometry<'a> {
     Triangle(triangle_mesh::TriangleMesh<'a>),

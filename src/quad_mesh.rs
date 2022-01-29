@@ -1,10 +1,9 @@
 use cgmath::Vector4;
 
-use buffer::Buffer;
-use device::Device;
-use geometry::Geometry;
-use sys::*;
-use {BufferType, Format, GeometryType};
+use crate::buffer::Buffer;
+use crate::device::Device;
+use crate::sys::*;
+use crate::{BufferType, Format, GeometryType};
 
 pub struct QuadMesh<'a> {
     device: &'a Device,

@@ -2,11 +2,10 @@ use std::os::raw;
 
 use cgmath::Matrix4;
 
-use device::Device;
-use geometry::Geometry;
-use scene::{CommittedScene, Scene};
-use sys::*;
-use {BufferType, Format, GeometryType};
+use crate::device::Device;
+use crate::scene::CommittedScene;
+use crate::sys::*;
+use crate::{Format, GeometryType};
 
 pub struct Instance<'a> {
     device: &'a Device,

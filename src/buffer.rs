@@ -2,9 +2,9 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::{mem, ptr};
 
-use device::Device;
-use sys::*;
-use BufferType;
+use crate::device::Device;
+use crate::sys::*;
+use crate::BufferType;
 
 #[derive(Copy, Clone)]
 struct BufferAttachment {

@@ -1,14 +1,10 @@
 use cgmath::Vector3;
 use std::iter::Iterator;
-use std::marker::PhantomData;
 use std::{f32, u32};
 
-use soa_ray::{
-    SoAHit, SoAHitIter, SoAHitIterMut, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, SoARayRef,
-    SoARayRefMut,
-};
-use sys;
-use {aligned_vector, aligned_vector_init};
+use crate::soa_ray::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut};
+use crate::sys;
+use crate::{aligned_vector, aligned_vector_init};
 
 /// A ray stream stored in SoA format
 pub struct RayN {

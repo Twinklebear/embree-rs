@@ -1,12 +1,8 @@
 use cgmath::Vector3;
-use std::marker::PhantomData;
 use std::{f32, u32};
 
-use soa_ray::{
-    SoAHit, SoAHitIter, SoAHitIterMut, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, SoARayRef,
-    SoARayRefMut,
-};
-use sys;
+use crate::soa_ray::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut};
+use crate::sys;
 
 pub type Ray4 = sys::RTCRay4;
 pub type Hit4 = sys::RTCHit4;

@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
 
-use device::Device;
-use geometry::Geometry;
-use ray::{IntersectContext, Ray, RayHit};
-use ray_packet::{Ray4, RayHit4};
-use ray_stream::{RayHitN, RayN};
-use sys::*;
+use crate::device::Device;
+use crate::geometry::Geometry;
+use crate::ray::{IntersectContext, Ray, RayHit};
+use crate::ray_packet::{Ray4, RayHit4};
+use crate::ray_stream::{RayHitN, RayN};
+use crate::sys::*;
 
 /// A scene containing various geometry for rendering. Geometry
 /// can be added and removed by attaching and detaching it, after

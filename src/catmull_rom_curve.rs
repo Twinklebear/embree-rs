@@ -1,10 +1,9 @@
-use cgmath::{Vector2, Vector3, Vector4};
+use cgmath::{Vector3, Vector4};
 
-use buffer::Buffer;
-use device::Device;
-use geometry::Geometry;
-use sys::*;
-use {BufferType, CurveType, Format, GeometryType};
+use crate::buffer::Buffer;
+use crate::device::Device;
+use crate::sys::*;
+use crate::{BufferType, CurveType, Format, GeometryType};
 
 pub struct CatmullRomCurve<'a> {
     device: &'a Device,
