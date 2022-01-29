@@ -10,6 +10,8 @@ use embree::{Device, Geometry, IntersectContext, RayHitN, RayN, Scene, TriangleM
 fn main() {
     let display = support::Display::new(512, 512, "triangle");
 
+    // TODO: It's a real PITA that we have to move and get the main loop hijacked here.
+    // need to change stuff in embree-rs to make this work but should fix lifetime issues anyway?
     support::display::run(display, move |image, _, _| {
         // TODO: this BS needs the ARc device so borrow checker doesn't complain about lifetime
         let device = Device::new();
