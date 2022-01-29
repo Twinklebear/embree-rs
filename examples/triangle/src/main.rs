@@ -31,7 +31,7 @@ fn main() {
 
     let mut intersection_ctx = IntersectContext::coherent();
 
-    display::run(display, |image, _, _| {
+    support::display::run(display, |image, _, _| {
         let img_dims = image.dimensions();
         // Render the scene
         for j in 0..img_dims.1 {
