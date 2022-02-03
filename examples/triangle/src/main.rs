@@ -6,34 +6,39 @@ extern crate support;
 
 use cgmath::{Vector3, Vector4};
 use embree::{Device, Geometry, IntersectContext, RayHitN, RayN, Scene, TriangleMesh};
+use std::sync::Arc;
 
 fn main() {
     let display = support::Display::new(512, 512, "triangle");
 
-    // TODO: It's a real PITA that we have to move and get the main loop hijacked here.
-    // need to change stuff in embree-rs to make this work but should fix lifetime issues anyway?
-    support::display::run(display, move |image, _, _| {
-        // TODO: this BS needs the ARc device so borrow checker doesn't complain about lifetime
-        let device = Device::new();
+    let device = Device::new();
 
-        // Make a triangle
-        let mut triangle = TriangleMesh::unanimated(&device, 1, 3);
+    // Make a triangle
+    let mut triangle = TriangleMesh::unanimated(device.clone(), 1, 3);
+    {
+        // TODO: API ergonomics are also pretty rough here w/ all the Arc::get_mut etc
+        let tri_mut = Arc::get_mut(&mut triangle).unwrap();
         {
-            let mut verts = triangle.vertex_buffer.map();
-            let mut tris = triangle.index_buffer.map();
+            let mut verts = tri_mut.vertex_buffer.map();
+            let mut tris = tri_mut.index_buffer.map();
             verts[0] = Vector4::new(-1.0, 0.0, 0.0, 0.0);
             verts[1] = Vector4::new(0.0, 1.0, 0.0, 0.0);
             verts[2] = Vector4::new(1.0, 0.0, 0.0, 0.0);
 
             tris[0] = Vector3::new(0, 1, 2);
         }
-        let mut tri_geom = Geometry::Triangle(triangle);
-        tri_geom.commit();
 
-        let mut scene = Scene::new(&device);
-        scene.attach_geometry(tri_geom);
-        let rtscene = scene.commit();
+        tri_mut.commit();
+    }
 
+    let mut scene = Scene::new(device.clone());
+    {
+        let scene_mut = Arc::get_mut(&mut scene).unwrap();
+        scene_mut.attach_geometry(triangle);
+        scene_mut.commit();
+    }
+
+    support::display::run(display, move |image, _, _| {
         let mut intersection_ctx = IntersectContext::coherent();
 
         let img_dims = image.dimensions();
@@ -51,7 +56,7 @@ fn main() {
             }
 
             let mut ray_hit = RayHitN::new(rays);
-            rtscene.intersect_stream_soa(&mut intersection_ctx, &mut ray_hit);
+            scene.intersect_stream_soa(&mut intersection_ctx, &mut ray_hit);
             for (i, hit) in ray_hit.hit.iter().enumerate().filter(|(_i, h)| h.hit()) {
                 let p = image.get_pixel_mut(i as u32, j);
                 let uv = hit.uv();
