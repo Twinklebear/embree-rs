@@ -1,25 +1,27 @@
 use cgmath::{Vector3, Vector4};
+use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::device::Device;
+use crate::geometry::Geometry;
 use crate::sys::*;
 use crate::{BufferType, CurveType, Format, GeometryType};
 
-pub struct BezierCurve<'a> {
-    device: &'a Device,
+pub struct BezierCurve {
+    device: Arc<Device>,
     pub(crate) handle: RTCGeometry,
-    pub vertex_buffer: Buffer<'a, Vector4<f32>>,
-    pub index_buffer: Buffer<'a, u32>,
-    pub normal_buffer: Option<Buffer<'a, Vector3<f32>>>,
+    pub vertex_buffer: Buffer<Vector4<f32>>,
+    pub index_buffer: Buffer<u32>,
+    pub normal_buffer: Option<Buffer<Vector3<f32>>>,
 }
 
-impl<'a> BezierCurve<'a> {
+impl BezierCurve {
     pub fn flat(
-        device: &'a Device,
+        device: Arc<Device>,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
-    ) -> BezierCurve<'a> {
+    ) -> Arc<BezierCurve> {
         BezierCurve::unanimated(
             device,
             num_segments,
@@ -29,11 +31,11 @@ impl<'a> BezierCurve<'a> {
         )
     }
     pub fn round(
-        device: &'a Device,
+        device: Arc<Device>,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
-    ) -> BezierCurve<'a> {
+    ) -> Arc<BezierCurve> {
         BezierCurve::unanimated(
             device,
             num_segments,
@@ -43,10 +45,10 @@ impl<'a> BezierCurve<'a> {
         )
     }
     pub fn normal_oriented(
-        device: &'a Device,
+        device: Arc<Device>,
         num_segments: usize,
         num_verts: usize,
-    ) -> BezierCurve<'a> {
+    ) -> Arc<BezierCurve> {
         BezierCurve::unanimated(
             device,
             num_segments,
@@ -57,12 +59,12 @@ impl<'a> BezierCurve<'a> {
     }
 
     fn unanimated(
-        device: &'a Device,
+        device: Arc<Device>,
         num_segments: usize,
         num_verts: usize,
         curve_type: CurveType,
         use_normals: bool,
-    ) -> BezierCurve<'a> {
+    ) -> Arc<BezierCurve> {
         let h: RTCGeometry;
         match curve_type {
             CurveType::NormalOriented => {
@@ -75,8 +77,8 @@ impl<'a> BezierCurve<'a> {
             }
             _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_BEZIER_CURVE) },
         };
-        let mut vertex_buffer = Buffer::new(device, num_verts);
-        let mut index_buffer = Buffer::new(device, num_segments);
+        let mut vertex_buffer = Buffer::new(device.clone(), num_verts);
+        let mut index_buffer = Buffer::new(device.clone(), num_segments);
         let mut normal_buffer = None;
 
         unsafe {
@@ -105,7 +107,7 @@ impl<'a> BezierCurve<'a> {
             index_buffer.set_attachment(h, BufferType::INDEX, 0);
 
             if use_normals {
-                let mut temp_normal_buffer = Buffer::new(device, num_verts);
+                let mut temp_normal_buffer = Buffer::new(device.clone(), num_verts);
                 rtcSetGeometryBuffer(
                     h,
                     BufferType::NORMAL,
@@ -120,14 +122,26 @@ impl<'a> BezierCurve<'a> {
                 normal_buffer = Some(temp_normal_buffer);
             }
         }
-        BezierCurve {
+        Arc::new(BezierCurve {
             device: device,
             handle: h,
             vertex_buffer: vertex_buffer,
             index_buffer: index_buffer,
             normal_buffer: normal_buffer,
-        }
+        })
     }
 }
 
-unsafe impl<'a> Sync for BezierCurve<'a> {}
+impl Geometry for BezierCurve {
+    fn handle(&self) -> RTCGeometry {
+        self.handle
+    }
+}
+
+impl Drop for BezierCurve {
+    fn drop(&mut self) {
+        unsafe {
+            rtcReleaseGeometry(self.handle);
+        }
+    }
+}

@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+use std::sync::Arc;
 use std::{mem, ptr};
 
 use crate::device::Device;
@@ -29,8 +30,8 @@ impl BufferAttachment {
 // TODO: To handle this nicely for sharing/re-using/changing buffer views
 // we basically need an API/struct for making buffer views of existing
 // larger buffers.
-pub struct Buffer<'a, T> {
-    device: &'a Device,
+pub struct Buffer<T> {
+    device: Arc<Device>,
     pub(crate) handle: RTCBuffer,
     // TODO: We need a list of RTCGeometry handles
     // that we're attached to to mark buffers as updated on
@@ -40,24 +41,25 @@ pub struct Buffer<'a, T> {
     marker: PhantomData<T>,
 }
 
-impl<'a, T> Buffer<'a, T> {
+impl<T> Buffer<T> {
     /// Allocate a buffer with some raw capacity in bytes
-    pub fn raw(device: &'a Device, bytes: usize) -> Buffer<'a, T> {
+    pub fn raw(device: Arc<Device>, bytes: usize) -> Buffer<T> {
         // Pad to a multiple of 16 bytes
         let bytes = if bytes % 16 == 0 {
             bytes
         } else {
             bytes + bytes / 16
         };
+        let h = unsafe { rtcNewBuffer(device.handle, bytes) };
         Buffer {
             device: device,
-            handle: unsafe { rtcNewBuffer(device.handle, bytes) },
+            handle: h,
             bytes: bytes,
             attachment: BufferAttachment::none(),
             marker: PhantomData,
         }
     }
-    pub fn new(device: &'a Device, len: usize) -> Buffer<'a, T> {
+    pub fn new(device: Arc<Device>, len: usize) -> Buffer<T> {
         let mut bytes = len * mem::size_of::<T>();
         // Pad to a multiple of 16 bytes
         bytes = if bytes % 16 == 0 {
@@ -65,15 +67,16 @@ impl<'a, T> Buffer<'a, T> {
         } else {
             bytes + bytes / 16
         };
+        let h = unsafe { rtcNewBuffer(device.handle, bytes) };
         Buffer {
             device: device,
-            handle: unsafe { rtcNewBuffer(device.handle, bytes) },
+            handle: h,
             bytes: bytes,
             attachment: BufferAttachment::none(),
             marker: PhantomData,
         }
     }
-    pub fn map(&mut self) -> MappedBuffer<'a, T> {
+    pub fn map<'a>(&'a mut self) -> MappedBuffer<'a, T> {
         let len = self.bytes / mem::size_of::<T>();
         let slice = unsafe { rtcGetBufferData(self.handle) as *mut T };
         MappedBuffer {
@@ -90,7 +93,7 @@ impl<'a, T> Buffer<'a, T> {
     }
 }
 
-impl<'a, T> Drop for Buffer<'a, T> {
+impl<T> Drop for Buffer<T> {
     fn drop(&mut self) {
         unsafe {
             rtcReleaseBuffer(self.handle);
@@ -98,10 +101,8 @@ impl<'a, T> Drop for Buffer<'a, T> {
     }
 }
 
-unsafe impl<'a, T> Sync for Buffer<'a, T> {}
-
 pub struct MappedBuffer<'a, T: 'a> {
-    buffer: PhantomData<&'a mut Buffer<'a, T>>,
+    buffer: PhantomData<&'a mut Buffer<T>>,
     attachment: BufferAttachment,
     slice: *mut T,
     len: usize,

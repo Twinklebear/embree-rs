@@ -1,27 +1,29 @@
 use cgmath::{Vector3, Vector4};
+use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::device::Device;
+use crate::geometry::Geometry;
 use crate::sys::*;
 use crate::{BufferType, CurveType, Format, GeometryType};
 
-pub struct HermiteCurve<'a> {
-    device: &'a Device,
+pub struct HermiteCurve {
+    device: Arc<Device>,
     pub(crate) handle: RTCGeometry,
-    pub vertex_buffer: Buffer<'a, Vector4<f32>>,
-    pub index_buffer: Buffer<'a, u32>,
-    pub tangent_buffer: Buffer<'a, Vector4<f32>>,
-    pub normal_derivative_buffer: Option<Buffer<'a, Vector3<f32>>>,
-    pub normal_buffer: Option<Buffer<'a, Vector3<f32>>>,
+    pub vertex_buffer: Buffer<Vector4<f32>>,
+    pub index_buffer: Buffer<u32>,
+    pub tangent_buffer: Buffer<Vector4<f32>>,
+    pub normal_derivative_buffer: Option<Buffer<Vector3<f32>>>,
+    pub normal_buffer: Option<Buffer<Vector3<f32>>>,
 }
 
-impl<'a> HermiteCurve<'a> {
+impl HermiteCurve {
     pub fn flat(
-        device: &'a Device,
+        device: Arc<Device>,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
-    ) -> HermiteCurve<'a> {
+    ) -> Arc<HermiteCurve> {
         HermiteCurve::unanimated(
             device,
             num_segments,
@@ -31,11 +33,11 @@ impl<'a> HermiteCurve<'a> {
         )
     }
     pub fn round(
-        device: &'a Device,
+        device: Arc<Device>,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
-    ) -> HermiteCurve<'a> {
+    ) -> Arc<HermiteCurve> {
         HermiteCurve::unanimated(
             device,
             num_segments,
@@ -45,10 +47,10 @@ impl<'a> HermiteCurve<'a> {
         )
     }
     pub fn normal_oriented(
-        device: &'a Device,
+        device: Arc<Device>,
         num_segments: usize,
         num_verts: usize,
-    ) -> HermiteCurve<'a> {
+    ) -> Arc<HermiteCurve> {
         HermiteCurve::unanimated(
             device,
             num_segments,
@@ -59,12 +61,12 @@ impl<'a> HermiteCurve<'a> {
     }
 
     fn unanimated(
-        device: &'a Device,
+        device: Arc<Device>,
         num_segments: usize,
         num_verts: usize,
         curve_type: CurveType,
         use_normals: bool,
-    ) -> HermiteCurve<'a> {
+    ) -> Arc<HermiteCurve> {
         let h: RTCGeometry;
         match curve_type {
             CurveType::NormalOriented => {
@@ -77,9 +79,9 @@ impl<'a> HermiteCurve<'a> {
             }
             _ => h = unsafe { rtcNewGeometry(device.handle, GeometryType::FLAT_HERMITE_CURVE) },
         };
-        let mut vertex_buffer = Buffer::new(device, num_verts);
-        let mut index_buffer = Buffer::new(device, num_segments);
-        let mut tangent_buffer = Buffer::new(device, num_verts);
+        let mut vertex_buffer = Buffer::new(device.clone(), num_verts);
+        let mut index_buffer = Buffer::new(device.clone(), num_segments);
+        let mut tangent_buffer = Buffer::new(device.clone(), num_verts);
         let mut normal_derivative_buffer = None;
         let mut normal_buffer = None;
 
@@ -121,7 +123,7 @@ impl<'a> HermiteCurve<'a> {
             tangent_buffer.set_attachment(h, BufferType::TANGENT, 0);
 
             if use_normals {
-                let mut temp_normal_buffer = Buffer::new(device, num_verts);
+                let mut temp_normal_buffer = Buffer::new(device.clone(), num_verts);
                 rtcSetGeometryBuffer(
                     h,
                     BufferType::NORMAL,
@@ -135,7 +137,7 @@ impl<'a> HermiteCurve<'a> {
                 temp_normal_buffer.set_attachment(h, BufferType::NORMAL, 0);
                 normal_buffer = Some(temp_normal_buffer);
 
-                let mut temp_normal_derivative_buffer = Buffer::new(device, num_verts);
+                let mut temp_normal_derivative_buffer = Buffer::new(device.clone(), num_verts);
                 rtcSetGeometryBuffer(
                     h,
                     BufferType::NORMAL_DERIVATIVE,
@@ -150,7 +152,7 @@ impl<'a> HermiteCurve<'a> {
                 normal_derivative_buffer = Some(temp_normal_derivative_buffer);
             }
         }
-        HermiteCurve {
+        Arc::new(HermiteCurve {
             device: device,
             handle: h,
             vertex_buffer: vertex_buffer,
@@ -158,8 +160,20 @@ impl<'a> HermiteCurve<'a> {
             tangent_buffer: tangent_buffer,
             normal_derivative_buffer: normal_derivative_buffer,
             normal_buffer: normal_buffer,
-        }
+        })
     }
 }
 
-unsafe impl<'a> Sync for HermiteCurve<'a> {}
+impl Geometry for HermiteCurve {
+    fn handle(&self) -> RTCGeometry {
+        self.handle
+    }
+}
+
+impl Drop for HermiteCurve {
+    fn drop(&mut self) {
+        unsafe {
+            rtcReleaseGeometry(self.handle);
+        }
+    }
+}

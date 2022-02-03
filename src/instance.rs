@@ -1,30 +1,29 @@
 use std::os::raw;
+use std::sync::Arc;
 
 use cgmath::Matrix4;
 
-use crate::device::Device;
-use crate::scene::CommittedScene;
+use crate::geometry::Geometry;
+use crate::scene::Scene;
 use crate::sys::*;
 use crate::{Format, GeometryType};
 
-pub struct Instance<'a> {
-    device: &'a Device,
-    pub(crate) handle: RTCGeometry,
+pub struct Instance {
     /// The scene being instanced
-    scene: &'a CommittedScene<'a>,
+    scene: Arc<Scene>,
+    pub(crate) handle: RTCGeometry,
 }
 
-impl<'a> Instance<'a> {
-    pub fn unanimated(device: &'a Device, scene: &'a CommittedScene) -> Instance<'a> {
-        let h = unsafe { rtcNewGeometry(device.handle, GeometryType::INSTANCE) };
+impl Instance {
+    pub fn unanimated(scene: Arc<Scene>) -> Arc<Instance> {
+        let h = unsafe { rtcNewGeometry(scene.device.handle, GeometryType::INSTANCE) };
         unsafe {
-            rtcSetGeometryInstancedScene(h, scene.scene.handle);
+            rtcSetGeometryInstancedScene(h, scene.handle);
         }
-        Instance {
-            device: device,
+        Arc::new(Instance {
             handle: h,
             scene: scene,
-        }
+        })
     }
     pub fn set_transform(&mut self, transform: &Matrix4<f32>) {
         let mat: &[f32; 16] = transform.as_ref();
@@ -40,4 +39,16 @@ impl<'a> Instance<'a> {
     }
 }
 
-unsafe impl<'a> Sync for Instance<'a> {}
+impl Geometry for Instance {
+    fn handle(&self) -> RTCGeometry {
+        self.handle
+    }
+}
+
+impl Drop for Instance {
+    fn drop(&mut self) {
+        unsafe {
+            rtcReleaseGeometry(self.handle);
+        }
+    }
+}

@@ -1,22 +1,24 @@
 use cgmath::{Vector3, Vector4};
+use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::device::Device;
+use crate::geometry::Geometry;
 use crate::sys::*;
 use crate::{BufferType, Format, GeometryType};
 
-pub struct TriangleMesh<'a> {
-    device: &'a Device,
+pub struct TriangleMesh {
+    device: Arc<Device>,
     pub(crate) handle: RTCGeometry,
-    pub vertex_buffer: Buffer<'a, Vector4<f32>>,
-    pub index_buffer: Buffer<'a, Vector3<u32>>,
+    pub vertex_buffer: Buffer<Vector4<f32>>,
+    pub index_buffer: Buffer<Vector3<u32>>,
 }
 
-impl<'a> TriangleMesh<'a> {
-    pub fn unanimated(device: &'a Device, num_tris: usize, num_verts: usize) -> TriangleMesh<'a> {
+impl TriangleMesh {
+    pub fn unanimated(device: Arc<Device>, num_tris: usize, num_verts: usize) -> Arc<TriangleMesh> {
         let h = unsafe { rtcNewGeometry(device.handle, GeometryType::TRIANGLE) };
-        let mut vertex_buffer = Buffer::new(device, num_verts);
-        let mut index_buffer = Buffer::new(device, num_tris);
+        let mut vertex_buffer = Buffer::new(device.clone(), num_verts);
+        let mut index_buffer = Buffer::new(device.clone(), num_tris);
         unsafe {
             rtcSetGeometryBuffer(
                 h,
@@ -42,13 +44,25 @@ impl<'a> TriangleMesh<'a> {
             );
             index_buffer.set_attachment(h, BufferType::INDEX, 0);
         }
-        TriangleMesh {
+        Arc::new(TriangleMesh {
             device: device,
             handle: h,
             vertex_buffer: vertex_buffer,
             index_buffer: index_buffer,
-        }
+        })
     }
 }
 
-unsafe impl<'a> Sync for TriangleMesh<'a> {}
+impl Geometry for TriangleMesh {
+    fn handle(&self) -> RTCGeometry {
+        self.handle
+    }
+}
+
+impl Drop for TriangleMesh {
+    fn drop(&mut self) {
+        unsafe {
+            rtcReleaseGeometry(self.handle);
+        }
+    }
+}

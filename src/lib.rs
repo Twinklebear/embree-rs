@@ -51,7 +51,7 @@ pub use quad_mesh::QuadMesh;
 pub use ray::{Hit, IntersectContext, Ray, RayHit};
 pub use ray_packet::{Hit4, Ray4, RayHit4};
 pub use ray_stream::{HitN, RayHitN, RayN};
-pub use scene::{CommittedScene, Scene};
+pub use scene::Scene;
 pub use soa_ray::{
     SoAHit, SoAHitIter, SoAHitIterMut, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, SoARayRef,
     SoARayRefMut,
