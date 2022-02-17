@@ -15,7 +15,7 @@ impl Device {
         // Set the flush zero and denormals modes from Embrees's perf. recommendations
         // https://embree.github.io/api.html#performance-recommendations
         // Though, in Rust I think we just call the below function to do both
-        #[cfg(x86_64)]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             x86_64::_MM_SET_FLUSH_ZERO_MODE(x86_64::_MM_FLUSH_ZERO_ON);
         }
