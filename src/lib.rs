@@ -42,6 +42,7 @@ pub use bspline_curve::BsplineCurve;
 pub use buffer::{Buffer, MappedBuffer};
 pub use catmull_rom_curve::CatmullRomCurve;
 pub use curve::CurveType;
+pub use device::Config;
 pub use device::Device;
 pub use geometry::Geometry;
 pub use hermite_curve::HermiteCurve;
