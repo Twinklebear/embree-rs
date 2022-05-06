@@ -1,5 +1,3 @@
-#[cfg(x86_64)]
-use std::arch::x86_64;
 use std::ffi::CString;
 use std::ptr;
 use std::sync::Arc;
@@ -17,6 +15,7 @@ impl Device {
         // Though, in Rust I think we just call the below function to do both
         #[cfg(target_arch = "x86_64")]
         unsafe {
+            use std::arch::x86_64;
             x86_64::_MM_SET_FLUSH_ZERO_MODE(x86_64::_MM_FLUSH_ZERO_ON);
         }
 
