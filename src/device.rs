@@ -1,5 +1,5 @@
 use std::ffi::CString;
-use std::fmt::{Display, Formatter, Error, format};
+use std::fmt::{Display, Error, Formatter};
 use std::ptr;
 use std::sync::Arc;
 
@@ -114,7 +114,7 @@ pub struct Config {
     pub start_threads: bool,
 
     /// ISA selection. By default the ISA is chosen automatically.
-    pub isa: Isa,
+    pub isa: Option<Isa>,
 
     /// Configures the automated ISA selection to use maximally the specified ISA.
     pub max_isa: Isa,
@@ -135,21 +135,35 @@ pub struct Config {
     /// Frequency level the application want to run on. See [`FrequencyLevel`].
     /// When some frequency level is specified, Embree will avoid doing optimizations
     /// that may reduce the frequency level below the level specified.
-    pub frequency_level: FrequencyLevel,
+    pub frequency_level: Option<FrequencyLevel>,
 }
 
 impl Config {
     /// Converts the configuration to a C string.
     pub fn to_c_string(&self) -> CString {
-        let formated = format!("threads={},verbose={},set_affinity={},start_threads={},\
-        isa={},max_isa={},hugepages={},enable_selockmemoryprivilege={},frequency_level={}",
-                               self.threads, self.verbose, self.set_affinity as u32,
-                               self.start_threads as u32, self.isa, self.max_isa,
-                               self.hugepages as u32, self.enable_selockmemoryprivilege as u32,
-                               self.frequency_level).into_bytes();
-        unsafe {
-            CString::from_vec_unchecked(formated)
-        }
+        let isa = self
+            .isa
+            .map(|isa| format!("isa={},", isa))
+            .unwrap_or_default();
+        let frequency_level = self
+            .frequency_level
+            .map(|frequency_level| format!("frequency_level={}", frequency_level))
+            .unwrap_or_default();
+        let formated = format!(
+            "threads={},verbose={},set_affinity={},start_threads={},\
+        max_isa={},hugepages={},enable_selockmemoryprivilege={},{}{}",
+            self.threads,
+            self.verbose,
+            self.set_affinity as u32,
+            self.start_threads as u32,
+            self.max_isa,
+            self.hugepages as u32,
+            self.enable_selockmemoryprivilege as u32,
+            isa,
+            frequency_level
+        )
+        .into_bytes();
+        unsafe { CString::from_vec_unchecked(formated) }
     }
 }
 
@@ -160,16 +174,12 @@ impl Default for Config {
             user_threads: 0,
             set_affinity: false,
             start_threads: false,
-            isa: Isa::Sse2,
+            isa: None,
             max_isa: Isa::Avx512,
-            hugepages: if cfg!(target_os = "linux") {
-                true
-            } else {
-                false
-            },
+            hugepages: cfg!(target_os = "linux"),
             enable_selockmemoryprivilege: false,
             verbose: 0,
-            frequency_level: FrequencyLevel::Simd256,
+            frequency_level: None,
         }
     }
 }
