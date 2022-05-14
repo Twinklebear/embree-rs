@@ -11,15 +11,7 @@ pub struct Device {
 
 impl Device {
     pub fn new() -> Arc<Device> {
-        // Set the flush zero and denormals modes from Embrees's perf. recommendations
-        // https://embree.github.io/api.html#performance-recommendations
-        // Though, in Rust I think we just call the below function to do both
-        #[cfg(target_arch = "x86_64")]
-        unsafe {
-            use std::arch::x86_64;
-            x86_64::_MM_SET_FLUSH_ZERO_MODE(x86_64::_MM_FLUSH_ZERO_ON);
-        }
-
+        enable_ftz_and_daz();
         Arc::new(Device {
             handle: unsafe { rtcNewDevice(ptr::null()) },
         })
@@ -27,12 +19,14 @@ impl Device {
 
     pub fn debug() -> Arc<Device> {
         let cfg = CString::new("verbose=4").unwrap();
+        enable_ftz_and_daz();
         Arc::new(Device {
             handle: unsafe { rtcNewDevice(cfg.as_ptr()) },
         })
     }
 
     pub fn with_config(config: Config) -> Arc<Device> {
+        enable_ftz_and_daz();
         let cfg = config.to_c_string();
         Arc::new(Device {
             handle: unsafe { rtcNewDevice(cfg.as_ptr()) },
@@ -180,6 +174,24 @@ impl Default for Config {
             enable_selockmemoryprivilege: false,
             verbose: 0,
             frequency_level: None,
+        }
+    }
+}
+
+/// Set the flush zero and denormals modes from Embrees's perf. recommendations
+/// https://embree.github.io/api.html#performance-recommendations
+pub fn enable_ftz_and_daz() {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        #[cfg(target_arch = "x86")]
+        use std::arch::x86::{_mm_getcsr, _mm_setcsr, _MM_FLUSH_ZERO_MASK};
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::{_mm_getcsr, _mm_setcsr, _MM_FLUSH_ZERO_MASK};
+
+        let flag = _MM_FLUSH_ZERO_MASK | 0x0040;
+        unsafe {
+            let csr = (_mm_getcsr() & !flag) | flag;
+            _mm_setcsr(csr);
         }
     }
 }
