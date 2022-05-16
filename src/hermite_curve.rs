@@ -12,8 +12,8 @@ pub struct HermiteCurve {
     pub vertex_buffer: Buffer<[f32; 4]>,
     pub index_buffer: Buffer<u32>,
     pub tangent_buffer: Buffer<[f32; 4]>,
-    pub normal_derivative_buffer: Option<Buffer<[u32; 3]>>,
-    pub normal_buffer: Option<Buffer<[u32; 3]>>,
+    pub normal_derivative_buffer: Option<Buffer<[f32; 3]>>,
+    pub normal_buffer: Option<Buffer<[f32; 3]>>,
 }
 
 impl HermiteCurve {

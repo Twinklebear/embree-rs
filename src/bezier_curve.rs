@@ -11,7 +11,7 @@ pub struct BezierCurve {
     pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<[f32; 4]>,
     pub index_buffer: Buffer<u32>,
-    pub normal_buffer: Option<Buffer<[u32; 3]>>,
+    pub normal_buffer: Option<Buffer<[f32; 3]>>,
 }
 
 impl BezierCurve {
