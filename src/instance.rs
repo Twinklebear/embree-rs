@@ -1,8 +1,6 @@
 use std::os::raw;
 use std::sync::Arc;
 
-use cgmath::Matrix4;
-
 use crate::geometry::Geometry;
 use crate::scene::Scene;
 use crate::sys::*;
@@ -25,7 +23,7 @@ impl Instance {
             scene: scene,
         })
     }
-    pub fn set_transform(&mut self, transform: &Matrix4<f32>) {
+    pub fn set_transform<Transform: AsRef<[f32; 16]>>(&mut self, transform: Transform) {
         let mat: &[f32; 16] = transform.as_ref();
         // Will this be fine if we don't set the number of timesteps? Default should be 1?
         unsafe {

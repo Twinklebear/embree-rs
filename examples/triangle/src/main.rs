@@ -21,11 +21,11 @@ fn main() {
         {
             let mut verts = tri_mut.vertex_buffer.map();
             let mut tris = tri_mut.index_buffer.map();
-            verts[0] = Vector4::new(-1.0, 0.0, 0.0, 0.0);
-            verts[1] = Vector4::new(0.0, 1.0, 0.0, 0.0);
-            verts[2] = Vector4::new(1.0, 0.0, 0.0, 0.0);
+            verts[0] = [-1.0, 0.0, 0.0, 0.0];
+            verts[1] = [0.0, 1.0, 0.0, 0.0];
+            verts[2] = [1.0, 0.0, 0.0, 0.0];
 
-            tris[0] = Vector3::new(0, 1, 2);
+            tris[0] = [0, 1, 2];
         }
 
         tri_mut.commit();
@@ -51,8 +51,8 @@ fn main() {
             for (i, mut ray) in rays.iter_mut().enumerate() {
                 let x = (i as f32 + 0.5) / img_dims.0 as f32 - 0.5;
                 let dir_len = f32::sqrt(x * x + y * y + 1.0);
-                ray.set_origin(Vector3::new(0.0, 0.5, 2.0));
-                ray.set_dir(Vector3::new(x / dir_len, y / dir_len, -1.0 / dir_len));
+                ray.set_origin([0.0, 0.5, 2.0]);
+                ray.set_dir([x / dir_len, y / dir_len, -1.0 / dir_len]);
             }
 
             let mut ray_hit = RayHitN::new(rays);

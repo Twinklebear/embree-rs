@@ -1,4 +1,3 @@
-use cgmath::Vector3;
 use std::{f32, u32};
 
 use crate::sys;
@@ -10,17 +9,17 @@ pub type IntersectContext = sys::RTCIntersectContext;
 
 impl Ray {
     /// Create a new ray starting at `origin` and heading in direction `dir`
-    pub fn new(origin: Vector3<f32>, dir: Vector3<f32>) -> Ray {
+    pub fn new(origin: [f32; 3], dir: [f32; 3]) -> Ray {
         Ray::segment(origin, dir, 0.0, f32::INFINITY)
     }
-    pub fn segment(origin: Vector3<f32>, dir: Vector3<f32>, tnear: f32, tfar: f32) -> Ray {
+    pub fn segment(origin: [f32; 3], dir: [f32; 3], tnear: f32, tfar: f32) -> Ray {
         sys::RTCRay {
-            org_x: origin.x,
-            org_y: origin.y,
-            org_z: origin.z,
-            dir_x: dir.x,
-            dir_y: dir.y,
-            dir_z: dir.z,
+            org_x: origin[0],
+            org_y: origin[1],
+            org_z: origin[2],
+            dir_x: dir[0],
+            dir_y: dir[1],
+            dir_z: dir[2],
             tnear: tnear,
             tfar: tfar,
             time: 0.0,

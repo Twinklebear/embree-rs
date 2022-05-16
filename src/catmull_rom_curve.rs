@@ -1,4 +1,3 @@
-use cgmath::{Vector3, Vector4};
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
@@ -10,9 +9,9 @@ use crate::{BufferType, CurveType, Format, GeometryType};
 pub struct CatmullRomCurve {
     device: Arc<Device>,
     pub(crate) handle: RTCGeometry,
-    pub vertex_buffer: Buffer<Vector4<f32>>,
+    pub vertex_buffer: Buffer<[f32; 4]>,
     pub index_buffer: Buffer<u32>,
-    pub normal_buffer: Option<Buffer<Vector3<f32>>>,
+    pub normal_buffer: Option<Buffer<[u32; 3]>>,
 }
 
 impl CatmullRomCurve {

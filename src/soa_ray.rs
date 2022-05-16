@@ -2,14 +2,12 @@ use std::iter::{ExactSizeIterator, Iterator};
 use std::marker::PhantomData;
 use std::u32;
 
-use cgmath::Vector3;
-
 pub trait SoARay {
-    fn org(&self, i: usize) -> Vector3<f32>;
-    fn set_org(&mut self, i: usize, o: Vector3<f32>);
+    fn org(&self, i: usize) -> [f32; 3];
+    fn set_org(&mut self, i: usize, o: [f32; 3]);
 
-    fn dir(&self, i: usize) -> Vector3<f32>;
-    fn set_dir(&mut self, i: usize, d: Vector3<f32>);
+    fn dir(&self, i: usize) -> [f32; 3];
+    fn set_dir(&mut self, i: usize, d: [f32; 3]);
 
     fn tnear(&self, i: usize) -> f32;
     fn set_tnear(&mut self, i: usize, near: f32);
@@ -31,8 +29,8 @@ pub trait SoARay {
 }
 
 pub trait SoAHit {
-    fn normal(&self, i: usize) -> Vector3<f32>;
-    fn set_normal(&mut self, i: usize, n: Vector3<f32>);
+    fn normal(&self, i: usize) -> [f32; 3];
+    fn set_normal(&mut self, i: usize, n: [f32; 3]);
 
     fn uv(&self, i: usize) -> (f32, f32);
     fn set_u(&mut self, i: usize, u: f32);
@@ -58,10 +56,10 @@ pub struct SoARayRef<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> SoARayRef<'a, T> {
-    pub fn origin(&self) -> Vector3<f32> {
+    pub fn origin(&self) -> [f32; 3] {
         self.ray.org(self.idx)
     }
-    pub fn dir(&self) -> Vector3<f32> {
+    pub fn dir(&self) -> [f32; 3] {
         self.ray.dir(self.idx)
     }
     pub fn tnear(&self) -> f32 {
@@ -89,19 +87,19 @@ pub struct SoARayRefMut<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> SoARayRefMut<'a, T> {
-    pub fn origin(&self) -> Vector3<f32> {
+    pub fn origin(&self) -> [f32; 3] {
         let ray = unsafe { self.ray.as_ref().expect("should never be null!") };
         ray.org(self.idx)
     }
-    pub fn set_origin(&mut self, o: Vector3<f32>) {
+    pub fn set_origin(&mut self, o: [f32; 3]) {
         let ray = unsafe { self.ray.as_mut().expect("should never be null!") };
         ray.set_org(self.idx, o);
     }
-    pub fn dir(&self) -> Vector3<f32> {
+    pub fn dir(&self) -> [f32; 3] {
         let ray = unsafe { self.ray.as_ref().expect("should never be null!") };
         ray.dir(self.idx)
     }
-    pub fn set_dir(&mut self, d: Vector3<f32>) {
+    pub fn set_dir(&mut self, d: [f32; 3]) {
         let ray = unsafe { self.ray.as_mut().expect("should never be null!") };
         ray.set_dir(self.idx, d);
     }
@@ -232,7 +230,7 @@ pub struct SoAHitRef<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> SoAHitRef<'a, T> {
-    pub fn normal(&self) -> Vector3<f32> {
+    pub fn normal(&self) -> [f32; 3] {
         self.hit.normal(self.idx)
     }
     pub fn uv(&self) -> (f32, f32) {
@@ -298,11 +296,11 @@ pub struct SoAHitRefMut<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> SoAHitRefMut<'a, T> {
-    pub fn normal(&self) -> Vector3<f32> {
+    pub fn normal(&self) -> [f32; 3] {
         let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
         hit.normal(self.idx)
     }
-    pub fn set_normal(&mut self, n: Vector3<f32>) {
+    pub fn set_normal(&mut self, n: [f32; 3]) {
         let hit = unsafe { self.hit.as_mut().expect("should never be null!") };
         hit.set_normal(self.idx, n)
     }

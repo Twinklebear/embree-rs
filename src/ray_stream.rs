@@ -1,4 +1,3 @@
-use cgmath::Vector3;
 use std::iter::Iterator;
 use std::{f32, u32};
 
@@ -69,22 +68,22 @@ impl RayN {
 }
 
 impl SoARay for RayN {
-    fn org(&self, i: usize) -> Vector3<f32> {
-        Vector3::new(self.org_x[i], self.org_y[i], self.org_z[i])
+    fn org(&self, i: usize) -> [f32; 3] {
+        [self.org_x[i], self.org_y[i], self.org_z[i]]
     }
-    fn set_org(&mut self, i: usize, o: Vector3<f32>) {
-        self.org_x[i] = o.x;
-        self.org_y[i] = o.y;
-        self.org_z[i] = o.z;
+    fn set_org(&mut self, i: usize, o: [f32; 3]) {
+        self.org_x[i] = o[0];
+        self.org_y[i] = o[1];
+        self.org_z[i] = o[2];
     }
 
-    fn dir(&self, i: usize) -> Vector3<f32> {
-        Vector3::new(self.dir_x[i], self.dir_y[i], self.dir_z[i])
+    fn dir(&self, i: usize) -> [f32; 3] {
+        [self.dir_x[i], self.dir_y[i], self.dir_z[i]]
     }
-    fn set_dir(&mut self, i: usize, d: Vector3<f32>) {
-        self.dir_x[i] = d.x;
-        self.dir_y[i] = d.y;
-        self.dir_z[i] = d.z;
+    fn set_dir(&mut self, i: usize, d: [f32; 3]) {
+        self.dir_x[i] = d[0];
+        self.dir_y[i] = d[1];
+        self.dir_z[i] = d[2];
     }
 
     fn tnear(&self, i: usize) -> f32 {
@@ -184,13 +183,13 @@ impl HitN {
 }
 
 impl SoAHit for HitN {
-    fn normal(&self, i: usize) -> Vector3<f32> {
-        Vector3::new(self.ng_x[i], self.ng_y[i], self.ng_z[i])
+    fn normal(&self, i: usize) -> [f32; 3] {
+        [self.ng_x[i], self.ng_y[i], self.ng_z[i]]
     }
-    fn set_normal(&mut self, i: usize, n: Vector3<f32>) {
-        self.ng_x[i] = n.x;
-        self.ng_y[i] = n.y;
-        self.ng_z[i] = n.z;
+    fn set_normal(&mut self, i: usize, n: [f32; 3]) {
+        self.ng_x[i] = n[0];
+        self.ng_y[i] = n[1];
+        self.ng_z[i] = n[2];
     }
 
     fn uv(&self, i: usize) -> (f32, f32) {

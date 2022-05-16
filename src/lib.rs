@@ -13,8 +13,6 @@
 
 use std::{alloc, mem};
 
-extern crate cgmath;
-
 pub mod bezier_curve;
 pub mod bspline_curve;
 pub mod buffer;

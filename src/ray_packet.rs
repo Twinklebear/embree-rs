@@ -1,4 +1,3 @@
-use cgmath::Vector3;
 use std::{f32, u32};
 
 use crate::soa_ray::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut};
@@ -11,28 +10,28 @@ pub type RayHit4 = sys::RTCRayHit4;
 impl Ray4 {
     pub fn empty() -> Ray4 {
         Ray4::segment(
-            [Vector3::new(0.0, 0.0, 0.0); 4],
-            [Vector3::new(0.0, 0.0, 0.0); 4],
+            [[0.0, 0.0, 0.0]; 4],
+            [[0.0, 0.0, 0.0]; 4],
             [0.0; 4],
             [f32::INFINITY; 4],
         )
     }
-    pub fn new(origin: [Vector3<f32>; 4], dir: [Vector3<f32>; 4]) -> Ray4 {
+    pub fn new(origin: [[f32; 3]; 4], dir: [[f32; 3]; 4]) -> Ray4 {
         Ray4::segment(origin, dir, [0.0; 4], [f32::INFINITY; 4])
     }
     pub fn segment(
-        origin: [Vector3<f32>; 4],
-        dir: [Vector3<f32>; 4],
+        origin: [[f32; 3]; 4],
+        dir: [[f32; 3]; 4],
         tnear: [f32; 4],
         tfar: [f32; 4],
     ) -> Ray4 {
         sys::RTCRay4 {
-            org_x: [origin[0].x, origin[1].x, origin[2].x, origin[3].x],
-            org_y: [origin[0].y, origin[1].y, origin[2].y, origin[3].y],
-            org_z: [origin[0].z, origin[1].z, origin[2].z, origin[3].z],
-            dir_x: [dir[0].x, dir[1].x, dir[2].x, dir[3].x],
-            dir_y: [dir[0].y, dir[1].y, dir[2].y, dir[3].y],
-            dir_z: [dir[0].z, dir[1].z, dir[2].z, dir[3].z],
+            org_x: [origin[0][0], origin[1][0], origin[2][0], origin[3][0]],
+            org_y: [origin[0][1], origin[1][1], origin[2][1], origin[3][1]],
+            org_z: [origin[0][2], origin[1][2], origin[2][2], origin[3][2]],
+            dir_x: [dir[0][0], dir[1][0], dir[2][0], dir[3][0]],
+            dir_y: [dir[0][1], dir[1][1], dir[2][1], dir[3][1]],
+            dir_z: [dir[0][2], dir[1][2], dir[2][2], dir[3][2]],
             tnear: tnear,
             tfar: tfar,
             time: [0.0; 4],
@@ -50,22 +49,22 @@ impl Ray4 {
 }
 
 impl SoARay for Ray4 {
-    fn org(&self, i: usize) -> Vector3<f32> {
-        Vector3::new(self.org_x[i], self.org_y[i], self.org_z[i])
+    fn org(&self, i: usize) -> [f32; 3] {
+        [self.org_x[i], self.org_y[i], self.org_z[i]]
     }
-    fn set_org(&mut self, i: usize, o: Vector3<f32>) {
-        self.org_x[i] = o.x;
-        self.org_y[i] = o.y;
-        self.org_z[i] = o.z;
+    fn set_org(&mut self, i: usize, o: [f32; 3]) {
+        self.org_x[i] = o[0];
+        self.org_y[i] = o[1];
+        self.org_z[i] = o[2];
     }
 
-    fn dir(&self, i: usize) -> Vector3<f32> {
-        Vector3::new(self.dir_x[i], self.dir_y[i], self.dir_z[i])
+    fn dir(&self, i: usize) -> [f32; 3] {
+        [self.dir_x[i], self.dir_y[i], self.dir_z[i]]
     }
-    fn set_dir(&mut self, i: usize, d: Vector3<f32>) {
-        self.dir_x[i] = d.x;
-        self.dir_y[i] = d.y;
-        self.dir_z[i] = d.z;
+    fn set_dir(&mut self, i: usize, d: [f32; 3]) {
+        self.dir_x[i] = d[0];
+        self.dir_y[i] = d[1];
+        self.dir_z[i] = d[2];
     }
 
     fn tnear(&self, i: usize) -> f32 {
@@ -139,13 +138,13 @@ impl Hit4 {
 }
 
 impl SoAHit for Hit4 {
-    fn normal(&self, i: usize) -> Vector3<f32> {
-        Vector3::new(self.Ng_x[i], self.Ng_y[i], self.Ng_z[i])
+    fn normal(&self, i: usize) -> [f32; 3] {
+        [self.Ng_x[i], self.Ng_y[i], self.Ng_z[i]]
     }
-    fn set_normal(&mut self, i: usize, n: Vector3<f32>) {
-        self.Ng_x[i] = n.x;
-        self.Ng_y[i] = n.y;
-        self.Ng_z[i] = n.z;
+    fn set_normal(&mut self, i: usize, n: [f32; 3]) {
+        self.Ng_x[i] = n[0];
+        self.Ng_y[i] = n[1];
+        self.Ng_z[i] = n[2];
     }
 
     fn uv(&self, i: usize) -> (f32, f32) {

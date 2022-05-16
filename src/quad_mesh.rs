@@ -1,4 +1,3 @@
-use cgmath::Vector4;
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
@@ -10,8 +9,8 @@ use crate::{BufferType, Format, GeometryType};
 pub struct QuadMesh {
     device: Arc<Device>,
     pub(crate) handle: RTCGeometry,
-    pub vertex_buffer: Buffer<Vector4<f32>>,
-    pub index_buffer: Buffer<Vector4<u32>>,
+    pub vertex_buffer: Buffer<[f32; 4]>,
+    pub index_buffer: Buffer<[u32; 4]>,
 }
 
 impl QuadMesh {
