@@ -15,13 +15,14 @@ if (!$?) {
 
 # build the examples
 cd examples
-Get-ChildItem .\ -Directory | ForEach-Object {
-	Write-Output $_
-	cd $_
+#Get-ChildItem .\ -Directory | ForEach-Object {
+#	Write-Output $_
+	#cd $_
+    cd triangle
 	cargo build
 	if (!$?) {
 		exit 1
 	}
 	cd ..
-}
+#}
 

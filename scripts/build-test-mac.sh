@@ -9,7 +9,8 @@ fi
 
 # build the examples
 cd examples
-for d in `ls ./`; do
+#for d in `ls ./`; do
+for d in ./triangle; do
 	cd $d
 	pwd
 	cargo build
