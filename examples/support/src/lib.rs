@@ -1,8 +1,8 @@
 extern crate arcball;
 extern crate cgmath;
 extern crate clock_ticks;
-extern crate image;
 extern crate futures;
+extern crate image;
 
 type Mat4 = cgmath::Matrix4<f32>;
 type CgPoint = cgmath::Point3<f32>;
