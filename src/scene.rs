@@ -111,8 +111,13 @@ impl Scene {
     /// scene.set_flags(flags | SceneFlags::ROBUST);
     /// ```
     pub fn flags(&self) -> SceneFlags {
+        unsafe { rtcGetSceneFlags(self.handle).into() }
+    }
+
+    /// Set the build quatity of the scene. See [`RTCBuildQuality`] for all possible values.
+    pub fn set_build_quality(&self, quality: RTCBuildQuality) {
         unsafe {
-            rtcGetSceneFlags(self.handle).into()
+            rtcSetSceneBuildQuality(self.handle, quality);
         }
     }
 
