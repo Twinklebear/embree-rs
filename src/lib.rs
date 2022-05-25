@@ -49,7 +49,7 @@ pub use quad_mesh::QuadMesh;
 pub use ray::{Hit, IntersectContext, Ray, RayHit};
 pub use ray_packet::{Hit4, Ray4, RayHit4};
 pub use ray_stream::{HitN, RayHitN, RayN};
-pub use scene::Scene;
+pub use scene::{Scene, SceneFlags};
 pub use soa_ray::{
     SoAHit, SoAHitIter, SoAHitIterMut, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, SoARayRef,
     SoARayRefMut,
@@ -69,7 +69,6 @@ pub use sys::RTCSubdivisionMode as SubdivisionMode;
 pub use sys::RTCBuildFlags as BuildFlags;
 pub use sys::RTCCurveFlags as CurveFlags;
 pub use sys::RTCIntersectContextFlags as IntersectContextFlags;
-pub use sys::RTCSceneFlags as SceneFlags;
 
 /// Utility for making specifically aligned vectors
 pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {

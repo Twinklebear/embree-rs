@@ -19,6 +19,38 @@ pub struct Scene {
     geometry: HashMap<u32, Arc<dyn Geometry>>,
 }
 
+bitflags::bitflags! {
+    #[repr(C)]
+    pub struct SceneFlags: u32 {
+        /// No flags.
+        const NONE = 0;
+
+        /// Provides better build performance for dynamic scenes (higher memory consumption).
+        const DYNAMIC = 1 << 0;
+
+        /// Uses compact acceleration structures and avoids memory consuming algorithms.
+        const COMPACT = 1 << 1;
+
+        /// Uses robust acceleration structures and avoids optimizations reducing arithmetic accuracy.
+        const ROBUST = 1 << 2;
+
+        /// Enabls support for a filter function inside the intersection context. See [`IntersectContext::init`] for more information.
+        const CONTEXT_FILTER_FUNCTION = 1 << 3;
+    }
+}
+
+impl From<RTCSceneFlags> for SceneFlags {
+    fn from(flags: RTCSceneFlags) -> Self {
+        SceneFlags::from_bits_truncate(flags.0)
+    }
+}
+
+impl Into<RTCSceneFlags> for SceneFlags {
+    fn into(self) -> RTCSceneFlags {
+        RTCSceneFlags(self.bits())
+    }
+}
+
 impl Scene {
     pub fn new(device: Arc<Device>) -> Arc<Scene> {
         Arc::new(Scene {
@@ -58,6 +90,29 @@ impl Scene {
     pub fn commit(&self) {
         unsafe {
             rtcCommitScene(self.handle);
+        }
+    }
+
+    /// Set the scene flags. Multiple flags can be enabled using an OR operation.
+    /// See [`SceneFlags`] for all possible flags.
+    /// On failure an error code is set that can be queried using [`rtcGetDeviceError`].
+    pub fn set_flags(&self, flags: SceneFlags) {
+        unsafe {
+            rtcSetSceneFlags(self.handle, flags.into());
+        }
+    }
+
+    /// Query the flags of the scene.
+    ///
+    /// Useful when setting individual falgs, e.g. to just set the robust mode without
+    /// changing other flags the following way:
+    /// ```
+    /// let flags = scene.flags();
+    /// scene.set_flags(flags | SceneFlags::ROBUST);
+    /// ```
+    pub fn flags(&self) -> SceneFlags {
+        unsafe {
+            rtcGetSceneFlags(self.handle).into()
         }
     }
 
