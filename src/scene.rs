@@ -107,6 +107,7 @@ impl Scene {
     /// Useful when setting individual falgs, e.g. to just set the robust mode without
     /// changing other flags the following way:
     /// ```
+    /// # use embree::SceneFlags;
     /// let flags = scene.flags();
     /// scene.set_flags(flags | SceneFlags::ROBUST);
     /// ```
@@ -118,6 +119,45 @@ impl Scene {
     pub fn set_build_quality(&self, quality: RTCBuildQuality) {
         unsafe {
             rtcSetSceneBuildQuality(self.handle, quality);
+        }
+    }
+
+    /// Register a progress monitor callback function.
+    ///
+    /// Only one progress monitor callback can be registered per scene,
+    /// and further invocations overwrite the previously registered callback.
+    ///
+    /// Unregister with [`Scene::unset_progress_monitor_function`].
+    ///
+    /// # Arguments
+    ///
+    /// * `progress` - A callback function that takes a number in range [0.0, 1.0]
+    /// indicating the progress of the operation.
+    ///
+    /// # Warning
+    ///
+    /// Must be called after the scene has been committed.
+    pub fn set_progress_monitor_function<F>(&self, progress: F)
+    where
+        F: FnMut(f64) -> bool,
+    {
+        unsafe {
+            let mut closure = progress;
+
+            rtcSetSceneProgressMonitorFunction(
+                self.handle,
+                Some(crate::callback::progress_monitor_function_helper(
+                    &mut closure,
+                )),
+                &mut closure as *mut _ as *mut ::std::os::raw::c_void,
+            );
+        }
+    }
+
+    /// Unregister the progress monitor callback function.
+    pub fn unset_progress_monitor_function(&self) {
+        unsafe {
+            rtcSetSceneProgressMonitorFunction(self.handle, None, ::std::ptr::null_mut());
         }
     }
 

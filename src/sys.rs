@@ -939,27 +939,24 @@ pub enum RTCError {
 extern "C" {
     pub fn rtcGetDeviceError(device: RTCDevice) -> RTCError;
 }
-pub type RTCErrorFunction = ::std::option::Option<
-    unsafe extern "C" fn(
-        userPtr: *mut ::std::os::raw::c_void,
-        code: RTCError,
-        str_: *const ::std::os::raw::c_char,
-    ),
->;
+pub type RTCErrorFunction = unsafe extern "C" fn(
+    userPtr: *mut ::std::os::raw::c_void,
+    code: RTCError,
+    str_: *const ::std::os::raw::c_char,
+);
 extern "C" {
     pub fn rtcSetDeviceErrorFunction(
         device: RTCDevice,
-        error: RTCErrorFunction,
+        error: Option<RTCErrorFunction>,
         userPtr: *mut ::std::os::raw::c_void,
     );
 }
-pub type RTCMemoryMonitorFunction = ::std::option::Option<
-    unsafe extern "C" fn(ptr: *mut ::std::os::raw::c_void, bytes: ssize_t, post: bool) -> bool,
->;
+pub type RTCMemoryMonitorFunction =
+    unsafe extern "C" fn(ptr: *mut ::std::os::raw::c_void, bytes: ssize_t, post: bool) -> bool;
 extern "C" {
     pub fn rtcSetDeviceMemoryMonitorFunction(
         device: RTCDevice,
-        memoryMonitor: RTCMemoryMonitorFunction,
+        memoryMonitor: Option<RTCMemoryMonitorFunction>,
         userPtr: *mut ::std::os::raw::c_void,
     );
 }
@@ -4026,11 +4023,11 @@ extern "C" {
     pub fn rtcJoinCommitScene(scene: RTCScene);
 }
 pub type RTCProgressMonitorFunction =
-    ::std::option::Option<unsafe extern "C" fn(ptr: *mut ::std::os::raw::c_void, n: f64) -> bool>;
+    unsafe extern "C" fn(ptr: *mut ::std::os::raw::c_void, n: f64) -> bool;
 extern "C" {
     pub fn rtcSetSceneProgressMonitorFunction(
         scene: RTCScene,
-        progress: RTCProgressMonitorFunction,
+        progress: Option<RTCProgressMonitorFunction>,
         ptr: *mut ::std::os::raw::c_void,
     );
 }

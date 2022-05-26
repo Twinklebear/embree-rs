@@ -34,6 +34,7 @@ pub mod soa_ray;
 #[allow(non_snake_case)]
 pub mod sys;
 pub mod triangle_mesh;
+mod callback;
 
 pub use bezier_curve::BezierCurve;
 pub use bspline_curve::BsplineCurve;

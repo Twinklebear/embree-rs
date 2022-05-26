@@ -32,6 +32,117 @@ impl Device {
             handle: unsafe { rtcNewDevice(cfg.as_ptr()) },
         })
     }
+
+    /// Register a callback function to be called when an error occurs.
+    ///
+    /// Only a single callback function can be registered per device,
+    /// and further invocations overwrite the previously registered callback.
+    ///
+    /// The error code is also set if an error callback function is registered.
+    ///
+    /// Unregister with [`Device::unset_error_function`].
+    ///
+    /// # Arguments
+    ///
+    /// * `error_fn` - A callback function that takes an error code and a message.
+    ///
+    /// When the callback function is invoked, it gets the error code of the occurred
+    /// error, as well as a message of type `&'static str` that further describes the error.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use embree::Device;
+    /// let device = Device::new();
+    /// device.set_error_function(|error, msg| {
+    ///    println!("Error: {:?} {}", error, msg);
+    /// });
+    /// ```
+    pub fn set_error_function<F>(&self, error_fn: F)
+    where
+        F: FnMut(RTCError, &'static str),
+    {
+        let mut closure = error_fn;
+        unsafe {
+            rtcSetDeviceErrorFunction(
+                self.handle,
+                Some(crate::callback::error_function_helper(&mut closure)),
+                &mut closure as *mut _ as *mut ::std::os::raw::c_void,
+            );
+        }
+    }
+
+    /// Disable the registered error callback function.
+    pub fn unset_error_function(&self) {
+        unsafe {
+            rtcSetDeviceErrorFunction(self.handle, None, ptr::null_mut());
+        }
+    }
+
+    /// Register a callback function to track memory consumption of the device.
+    ///
+    /// Only a single callback function can be registered per device, and further invocations
+    /// overwrite the previously registered callback.
+    ///
+    /// Once registered, the Embree device will invoke the callback function before or after
+    /// it allocates or frees important memory blocks. The callback function might get called
+    /// from multiple threads concurrently.
+    ///
+    /// Unregister with [`Device::unset_memory_monitor_function`].
+    ///
+    /// # Arguments
+    /// * `monitor_fn` - A callback function that takes two arguments:
+    ///    * `bytes: isize` - The number of bytes allocated or deallocated
+    /// (> 0 for allocations and < 0 for deallocations). The Embree `Device`
+    ///   atomically accumulating `bytes` input parameter.
+    ///    * `post: bool` - Whether the callback is invoked after the allocation or deallocation took place.
+    ///
+    /// Embree will continue its operation normally when the callback function returns `true`. If `false`
+    /// returned, Embree will cancel the current operation with `RTC_ERROR_OUT_OF_MEMORY` error code.
+    /// Issuing multiple cancel requests from different threads is allowed. Cancelling will only happen when
+    /// the callback was called for allocations (bytes > 0), otherwise the cancel request will be ignored.
+    ///
+    /// If a callback to cancel was invoked before the allocation happens (`post == false`), then
+    /// the `bytes` parameter should not be accumulated, as the allocation will never happen.
+    /// If the callback to cancel was invoked after the allocation happened (`post == true`), then
+    /// the `bytes` parameter should be accumulated, as the allocation properly happened and a
+    /// deallocation will later free that data block.
+    ///
+    /// # Example
+    /// ```
+    /// # use embree::Device;
+    /// let device = Device::new();
+    /// device.set_memory_monitor_function(|bytes, post| {
+    ///     if bytes > 0 {
+    ///        println!("allocated {} bytes", bytes);
+    ///     } else {
+    ///        println!("deallocated {} bytes", -bytes);
+    ///     };
+    ///     true
+    /// });
+    /// ```
+    pub fn set_memory_monitor_function<F>(&self, monitor_fn: F)
+    where
+        F: FnMut(isize, bool) -> bool,
+    {
+        let mut closure = monitor_fn;
+        unsafe {
+            rtcSetDeviceMemoryMonitorFunction(
+                self.handle,
+                Some(crate::callback::memory_monitor_function_helper(
+                    &mut closure,
+                )),
+                &mut closure as *mut _ as *mut ::std::os::raw::c_void,
+            );
+        }
+    }
+
+    /// Disable the registered memory monitor callback function.
+    pub fn unset_memory_monitor_function(&self) {
+        unsafe {
+            rtcSetDeviceMemoryMonitorFunction(self.handle, None, ptr::null_mut());
+        }
+    }
 }
 
 impl Drop for Device {
