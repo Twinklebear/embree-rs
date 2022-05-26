@@ -143,6 +143,35 @@ impl Device {
             rtcSetDeviceMemoryMonitorFunction(self.handle, None, ptr::null_mut());
         }
     }
+
+    /// Query properties of the device.
+    ///
+    /// # Arguments
+    ///
+    /// * `prop` - The property to query. See `RTCDeviceProp` for possible values.
+    ///
+    /// # Returns
+    ///
+    /// An integer of type `isize`.
+    pub fn query_property(&self, prop: RTCDeviceProperty) -> isize {
+        unsafe { rtcGetDeviceProperty(self.handle, prop) }
+    }
+
+    /// Query the error code of the device.
+    ///
+    ///
+    /// Each thread has its own error code per device. If an error occurs when calling
+    /// an API function, this error code is set to the occurred error if it stores no
+    /// previous error. The `error_code` function reads and returns the currently stored
+    /// error and clears the error code. This assures that the returned error code is
+    /// always the first error occurred since the last invocation of `error_code`.
+    ///
+    /// # Returns
+    ///
+    /// Error code encoded as `RTCError`.
+    pub fn error_code(&self) -> RTCError {
+        unsafe { rtcGetDeviceError(self.handle) }
+    }
 }
 
 impl Drop for Device {

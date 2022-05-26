@@ -16,6 +16,7 @@ use std::{alloc, mem};
 pub mod bezier_curve;
 pub mod bspline_curve;
 pub mod buffer;
+mod callback;
 pub mod catmull_rom_curve;
 pub mod curve;
 pub mod device;
@@ -34,7 +35,6 @@ pub mod soa_ray;
 #[allow(non_snake_case)]
 pub mod sys;
 pub mod triangle_mesh;
-mod callback;
 
 pub use bezier_curve::BezierCurve;
 pub use bspline_curve::BsplineCurve;
