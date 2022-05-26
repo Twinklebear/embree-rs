@@ -159,7 +159,6 @@ impl Device {
 
     /// Query the error code of the device.
     ///
-    ///
     /// Each thread has its own error code per device. If an error occurs when calling
     /// an API function, this error code is set to the occurred error if it stores no
     /// previous error. The `error_code` function reads and returns the currently stored

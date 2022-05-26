@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
 
+use crate::callback;
 use crate::device::Device;
 use crate::geometry::Geometry;
 use crate::ray::{IntersectContext, Ray, RayHit};
@@ -34,7 +35,7 @@ bitflags::bitflags! {
         /// Uses robust acceleration structures and avoids optimizations reducing arithmetic accuracy.
         const ROBUST = 1 << 2;
 
-        /// Enabls support for a filter function inside the intersection context. See [`IntersectContext::init`] for more information.
+        /// Enables support for a filter function inside the intersection context. See [`IntersectContext::init`] for more information.
         const CONTEXT_FILTER_FUNCTION = 1 << 3;
     }
 }
@@ -55,7 +56,7 @@ impl Scene {
     pub fn new(device: Arc<Device>) -> Arc<Scene> {
         Arc::new(Scene {
             handle: unsafe { rtcNewScene(device.handle) },
-            device: device,
+            device,
             geometry: HashMap::new(),
         })
     }
@@ -72,7 +73,7 @@ impl Scene {
     }
 
     /// Detach the geometry from the scene
-    pub fn deattach_geometry(&mut self, id: u32) {
+    pub fn detach(&mut self, id: u32) {
         unsafe {
             rtcDetachGeometry(self.handle, id);
         }
@@ -104,7 +105,7 @@ impl Scene {
 
     /// Query the flags of the scene.
     ///
-    /// Useful when setting individual falgs, e.g. to just set the robust mode without
+    /// Useful when setting individual flags, e.g. to just set the robust mode without
     /// changing other flags the following way:
     /// ```
     /// # use embree::SceneFlags;
@@ -115,7 +116,7 @@ impl Scene {
         unsafe { rtcGetSceneFlags(self.handle).into() }
     }
 
-    /// Set the build quatity of the scene. See [`RTCBuildQuality`] for all possible values.
+    /// Set the build quality of the scene. See [`RTCBuildQuality`] for all possible values.
     pub fn set_build_quality(&self, quality: RTCBuildQuality) {
         unsafe {
             rtcSetSceneBuildQuality(self.handle, quality);
@@ -146,9 +147,7 @@ impl Scene {
 
             rtcSetSceneProgressMonitorFunction(
                 self.handle,
-                Some(crate::callback::progress_monitor_function_helper(
-                    &mut closure,
-                )),
+                Some(callback::progress_monitor_function_helper(&mut closure)),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }
