@@ -51,8 +51,8 @@ impl Device {
     ///
     /// # Example
     ///
-    /// ```
-    /// # use embree::Device;
+    /// ```no_run
+    /// use embree::Device;
     /// let device = Device::new();
     /// device.set_error_function(|error, msg| {
     ///    println!("Error: {:?} {}", error, msg);
@@ -109,8 +109,8 @@ impl Device {
     /// deallocation will later free that data block.
     ///
     /// # Example
-    /// ```
-    /// # use embree::Device;
+    /// ```no_run
+    /// use embree::Device;
     /// let device = Device::new();
     /// device.set_memory_monitor_function(|bytes, post| {
     ///     if bytes > 0 {

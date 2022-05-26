@@ -76,8 +76,8 @@ impl Scene {
     ///
     /// Useful when setting individual flags, e.g. to just set the robust mode without
     /// changing other flags the following way:
-    /// ```
-    /// # use embree::{Device, Scene, SceneFlags};
+    /// ```no_run
+    /// use embree::{Device, Scene, SceneFlags};
     /// let device = Device::new();
     /// let scene = Scene::new(device.clone());
     /// let flags = scene.flags();
