@@ -5,7 +5,6 @@ use crate::sys;
 pub type Ray = sys::RTCRay;
 pub type Hit = sys::RTCHit;
 pub type RayHit = sys::RTCRayHit;
-pub type IntersectContext = sys::RTCIntersectContext;
 
 impl Ray {
     /// Create a new ray starting at `origin` and heading in direction `dir`
@@ -51,24 +50,8 @@ impl Hit {
 impl RayHit {
     pub fn new(ray: Ray) -> RayHit {
         sys::RTCRayHit {
-            ray: ray,
+            ray,
             hit: Hit::new(),
-        }
-    }
-}
-
-impl IntersectContext {
-    pub fn coherent() -> IntersectContext {
-        IntersectContext::new(sys::RTCIntersectContextFlags::COHERENT)
-    }
-    pub fn incoherent() -> IntersectContext {
-        IntersectContext::new(sys::RTCIntersectContextFlags::INCOHERENT)
-    }
-    fn new(flags: sys::RTCIntersectContextFlags) -> IntersectContext {
-        sys::RTCIntersectContext {
-            flags: flags,
-            filter: None,
-            instID: [u32::MAX; 1],
         }
     }
 }

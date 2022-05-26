@@ -21,6 +21,3 @@ exclude = [
 	"examples/*"
 ]
 
-[dependencies]
-bitflags = "1.3"
-

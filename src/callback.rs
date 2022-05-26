@@ -3,7 +3,7 @@ use std::os::raw::c_void;
 use crate::sys::*;
 
 /// Helper function to convert a Rust closure to `RTCProgressMonitorFunction` callback.
-pub(crate) fn progress_monitor_function_helper<F>(f: &mut F) -> RTCProgressMonitorFunction
+pub(crate) fn progress_monitor_function_helper<F>(_f: &mut F) -> RTCProgressMonitorFunction
 where
     F: FnMut(f64) -> bool,
 {
@@ -19,7 +19,7 @@ where
 }
 
 /// Helper function to convert a Rust closure to `RTCErrorFunction` callback.
-pub(crate) fn error_function_helper<F>(f: &mut F) -> RTCErrorFunction
+pub(crate) fn error_function_helper<F>(_f: &mut F) -> RTCErrorFunction
 where
     F: FnMut(RTCError, &'static str),
 {
@@ -38,7 +38,7 @@ where
 }
 
 /// Helper function to convert a Rust closure to `RTCMemoryMonitorFunction` callback.
-pub(crate) fn memory_monitor_function_helper<F>(f: &mut F) -> RTCMemoryMonitorFunction
+pub(crate) fn memory_monitor_function_helper<F>(_f: &mut F) -> RTCMemoryMonitorFunction
 where
     F: FnMut(isize, bool) -> bool,
 {

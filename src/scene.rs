@@ -5,7 +5,8 @@ use std::sync::Arc;
 use crate::callback;
 use crate::device::Device;
 use crate::geometry::Geometry;
-use crate::ray::{IntersectContext, Ray, RayHit};
+use crate::intersect_context::IntersectContext;
+use crate::ray::{Ray, RayHit};
 use crate::ray_packet::{Ray4, RayHit4};
 use crate::ray_stream::{RayHitN, RayN};
 use crate::sys::*;
@@ -18,38 +19,6 @@ pub struct Scene {
     pub(crate) handle: RTCScene,
     pub(crate) device: Arc<Device>,
     geometry: HashMap<u32, Arc<dyn Geometry>>,
-}
-
-bitflags::bitflags! {
-    #[repr(C)]
-    pub struct SceneFlags: u32 {
-        /// No flags.
-        const NONE = 0;
-
-        /// Provides better build performance for dynamic scenes (higher memory consumption).
-        const DYNAMIC = 1 << 0;
-
-        /// Uses compact acceleration structures and avoids memory consuming algorithms.
-        const COMPACT = 1 << 1;
-
-        /// Uses robust acceleration structures and avoids optimizations reducing arithmetic accuracy.
-        const ROBUST = 1 << 2;
-
-        /// Enables support for a filter function inside the intersection context. See [`IntersectContext::init`] for more information.
-        const CONTEXT_FILTER_FUNCTION = 1 << 3;
-    }
-}
-
-impl From<RTCSceneFlags> for SceneFlags {
-    fn from(flags: RTCSceneFlags) -> Self {
-        SceneFlags::from_bits_truncate(flags.0)
-    }
-}
-
-impl Into<RTCSceneFlags> for SceneFlags {
-    fn into(self) -> RTCSceneFlags {
-        RTCSceneFlags(self.bits())
-    }
 }
 
 impl Scene {
@@ -95,11 +64,11 @@ impl Scene {
     }
 
     /// Set the scene flags. Multiple flags can be enabled using an OR operation.
-    /// See [`SceneFlags`] for all possible flags.
+    /// See [`RTCSceneFlags`] for all possible flags.
     /// On failure an error code is set that can be queried using [`rtcGetDeviceError`].
-    pub fn set_flags(&self, flags: SceneFlags) {
+    pub fn set_flags(&self, flags: RTCSceneFlags) {
         unsafe {
-            rtcSetSceneFlags(self.handle, flags.into());
+            rtcSetSceneFlags(self.handle, flags);
         }
     }
 
@@ -112,8 +81,8 @@ impl Scene {
     /// let flags = scene.flags();
     /// scene.set_flags(flags | SceneFlags::ROBUST);
     /// ```
-    pub fn flags(&self) -> SceneFlags {
-        unsafe { rtcGetSceneFlags(self.handle).into() }
+    pub fn flags(&self) -> RTCSceneFlags {
+        unsafe { rtcGetSceneFlags(self.handle) }
     }
 
     /// Set the build quality of the scene. See [`RTCBuildQuality`] for all possible values.
