@@ -374,9 +374,6 @@ pub struct RTCIntersectContext {
     pub filter: RTCFilterFunctionN,
     pub instID: [::std::os::raw::c_uint; 1usize],
 }
-extern "C" {
-    pub fn rtcInitIntersectContext(context: *mut RTCIntersectContext);
-}
 #[test]
 fn bindgen_test_layout_RTCIntersectContext() {
     assert_eq!(

@@ -48,13 +48,4 @@ impl IntersectContext {
             instID: [u32::MAX; 1],
         }
     }
-
-    /// Initialize the context to default values.
-    ///
-    /// This function should be called to initialize every intersection context.
-    pub fn init(&mut self) {
-        unsafe {
-            rtcInitIntersectContext(self as *mut _);
-        }
-    }
 }
