@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
 
+use crate::callback;
 use crate::device::Device;
 use crate::geometry::Geometry;
-use crate::ray::{IntersectContext, Ray, RayHit};
+use crate::intersect_context::IntersectContext;
+use crate::ray::{Ray, RayHit};
 use crate::ray_packet::{Ray4, RayHit4};
 use crate::ray_stream::{RayHitN, RayN};
 use crate::sys::*;
@@ -23,7 +25,7 @@ impl Scene {
     pub fn new(device: Arc<Device>) -> Arc<Scene> {
         Arc::new(Scene {
             handle: unsafe { rtcNewScene(device.handle) },
-            device: device,
+            device,
             geometry: HashMap::new(),
         })
     }
@@ -40,7 +42,7 @@ impl Scene {
     }
 
     /// Detach the geometry from the scene
-    pub fn deattach_geometry(&mut self, id: u32) {
+    pub fn detach(&mut self, id: u32) {
         unsafe {
             rtcDetachGeometry(self.handle, id);
         }
@@ -58,6 +60,74 @@ impl Scene {
     pub fn commit(&self) {
         unsafe {
             rtcCommitScene(self.handle);
+        }
+    }
+
+    /// Set the scene flags. Multiple flags can be enabled using an OR operation.
+    /// See [`RTCSceneFlags`] for all possible flags.
+    /// On failure an error code is set that can be queried using [`rtcGetDeviceError`].
+    pub fn set_flags(&self, flags: RTCSceneFlags) {
+        unsafe {
+            rtcSetSceneFlags(self.handle, flags);
+        }
+    }
+
+    /// Query the flags of the scene.
+    ///
+    /// Useful when setting individual flags, e.g. to just set the robust mode without
+    /// changing other flags the following way:
+    /// ```no_run
+    /// use embree::{Device, Scene, SceneFlags};
+    /// let device = Device::new();
+    /// let scene = Scene::new(device.clone());
+    /// let flags = scene.flags();
+    /// scene.set_flags(flags | SceneFlags::ROBUST);
+    /// ```
+    pub fn flags(&self) -> RTCSceneFlags {
+        unsafe { rtcGetSceneFlags(self.handle) }
+    }
+
+    /// Set the build quality of the scene. See [`RTCBuildQuality`] for all possible values.
+    pub fn set_build_quality(&self, quality: RTCBuildQuality) {
+        unsafe {
+            rtcSetSceneBuildQuality(self.handle, quality);
+        }
+    }
+
+    /// Register a progress monitor callback function.
+    ///
+    /// Only one progress monitor callback can be registered per scene,
+    /// and further invocations overwrite the previously registered callback.
+    ///
+    /// Unregister with [`Scene::unset_progress_monitor_function`].
+    ///
+    /// # Arguments
+    ///
+    /// * `progress` - A callback function that takes a number in range [0.0, 1.0]
+    /// indicating the progress of the operation.
+    ///
+    /// # Warning
+    ///
+    /// Must be called after the scene has been committed.
+    pub fn set_progress_monitor_function<F>(&self, progress: F)
+    where
+        F: FnMut(f64) -> bool,
+    {
+        unsafe {
+            let mut closure = progress;
+
+            rtcSetSceneProgressMonitorFunction(
+                self.handle,
+                Some(callback::progress_monitor_function_helper(&mut closure)),
+                &mut closure as *mut _ as *mut ::std::os::raw::c_void,
+            );
+        }
+    }
+
+    /// Unregister the progress monitor callback function.
+    pub fn unset_progress_monitor_function(&self) {
+        unsafe {
+            rtcSetSceneProgressMonitorFunction(self.handle, None, ::std::ptr::null_mut());
         }
     }
 
