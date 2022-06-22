@@ -12,7 +12,7 @@ use cgmath::{InnerSpace, Matrix3, Point2, Vector2, Vector3, Vector4};
 use embree::{Device, Geometry, IntersectContext, Ray, RayHit, Scene, TriangleMesh};
 use rand::prelude::*;
 use rayon::prelude::*;
-use support::Camera;
+use support::{Camera, AABB};
 
 /// Function to sample a point inside a 2D disk
 pub fn concentric_sample_disk(u: Point2<f32>) -> Point2<f32> {
@@ -222,7 +222,7 @@ fn main() {
     // Load the obj
     let (models, _) = tobj::load_obj(&Path::new(&args[1])).unwrap();
     let mut tri_geoms = Vec::new();
-
+    let mut aabb = AABB::default();
     for m in models.iter() {
         let mesh = &m.mesh;
         println!(
@@ -237,6 +237,11 @@ fn main() {
             let mut verts = tris.vertex_buffer.map();
             let mut tris = tris.index_buffer.map();
             for i in 0..mesh.positions.len() / 3 {
+                aabb = aabb.union_vec(&Vector3::new(
+                    mesh.positions[i * 3],
+                    mesh.positions[i * 3 + 1],
+                    mesh.positions[i * 3 + 2],
+                ));
                 verts[i] = Vector4::new(
                     mesh.positions[i * 3],
                     mesh.positions[i * 3 + 1],
@@ -257,7 +262,9 @@ fn main() {
         tri_geom.commit();
         tri_geoms.push(tri_geom);
     }
+    display = display.aabb(aabb);
 
+    println!("Commit the scene ... ");
     let mut scene = Scene::new(&device);
     let mut mesh_ids = Vec::with_capacity(models.len());
     for g in tri_geoms.drain(0..) {
@@ -285,6 +292,7 @@ fn main() {
     let mut spp = 0;
     let mut img = Vec::new();
 
+    println!("Rendering launched ... ");
     display.run(|image, camera_pose, _| {
         for p in image.iter_mut() {
             *p = 0;

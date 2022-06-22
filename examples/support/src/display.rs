@@ -1,4 +1,5 @@
 use arcball::ArcballCamera;
+use cgmath::InnerSpace;
 use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
 use clock_ticks;
 use glium::glutin::{
@@ -8,12 +9,14 @@ use glium::texture::RawImage2d;
 use glium::Texture2d;
 use glium::{self, glutin, Surface};
 use image::RgbImage;
+use AABB;
 
 /// Manager to display the rendered image in an interactive window.
 pub struct Display {
     window_dims: (u32, u32),
     event_loop: glutin::EventsLoop,
     display: glium::Display,
+    aabb: Option<AABB>,
 }
 
 #[derive(Debug)]
@@ -38,10 +41,17 @@ impl Display {
         let display = glium::Display::new(window_builder, context_builder, &event_loop).unwrap();
         Display {
             window_dims: (w, h),
-            event_loop: event_loop,
-            display: display,
+            event_loop,
+            display,
+            aabb: None,
         }
     }
+
+    pub fn aabb(mut self, aabb: AABB) -> Display {
+        self.aabb = Some(aabb);
+        self
+    }
+
     /// The function passed should render and update the image to be displayed in the window,
     /// optionally using the camera pose information passed.
     pub fn run<F>(&mut self, mut render: F)
@@ -50,12 +60,23 @@ impl Display {
     {
         let mut embree_target = RgbImage::new(self.window_dims.0, self.window_dims.1);
 
-        let mut arcball_camera = ArcballCamera::new(
-            Vector3::new(0.0, 0.0, 0.0),
-            1.0,
-            [self.window_dims.0 as f32, self.window_dims.1 as f32],
-        );
-        arcball_camera.zoom(-50.0, 0.16);
+        let mut arcball_camera = if let Some(aabb) = &self.aabb {
+            let mut arcball = ArcballCamera::new(
+                aabb.center(),
+                aabb.size().magnitude() / 2.0,
+                [self.window_dims.0 as f32, self.window_dims.1 as f32],
+            );
+            arcball.zoom(-10.0, 0.16);
+            arcball
+        } else {
+            let mut arcball = ArcballCamera::new(
+                Vector3::new(0.0, 0.0, 0.0),
+                0.1,
+                [self.window_dims.0 as f32, self.window_dims.1 as f32],
+            );
+            arcball.zoom(-50.0, 0.16);
+            arcball
+        };
         arcball_camera.rotate(
             Vector2::new(
                 self.window_dims.0 as f32 / 2.0,
@@ -94,7 +115,7 @@ impl Display {
                                 (prev.x - position.x) as f32,
                                 (position.y - prev.y) as f32,
                             );
-                            arcball_camera.pan(mouse_delta, 0.16);
+                            arcball_camera.pan(mouse_delta * 0.16);
                         }
                         prev_mouse = Some(position);
                     }
