@@ -2,7 +2,7 @@ name: CI
 on: [push, pull_request]
 env:
     CARGO_TERM_COLOR: always
-    EMBREE_VERSION: 3.12.1
+    EMBREE_VERSION: 3.13.4
 jobs:
     build_linux:
         runs-on: ubuntu-latest
