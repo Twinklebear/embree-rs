@@ -175,8 +175,8 @@ impl<'a> CommittedScene<'a> {
     }
     pub fn occluded_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayN) {
         let n = rays.len();
+        let mut r = unsafe {rays.as_raynp()};
         unsafe {
-            let mut r = rays.as_raynp();
             rtcOccludedNp(
                 self.scene.handle,
                 ctx as *mut RTCIntersectContext,
