@@ -1,6 +1,6 @@
 [package]
 name = "embree"
-version = "0.3.7"
+version = "0.3.8"
 authors = ["Will Usher <will@willusher.io>"]
 homepage = "https://github.com/Twinklebear/embree-rs"
 documentation = "https://docs.rs/embree/"
