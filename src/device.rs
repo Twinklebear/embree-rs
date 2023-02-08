@@ -1,8 +1,9 @@
 use std::ffi::CString;
-use std::fmt::{Display, Error, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::ptr;
 use std::sync::Arc;
 
+use crate::error::Error;
 use crate::sys::*;
 
 pub struct Device {
@@ -10,27 +11,36 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn new() -> Arc<Device> {
+    pub fn new() -> Result<Arc<Device>, Error> {
         enable_ftz_and_daz();
-        Arc::new(Device {
-            handle: unsafe { rtcNewDevice(ptr::null()) },
-        })
+        let handle = unsafe { rtcNewDevice(ptr::null()) };
+        if handle.is_null() {
+            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
+        } else {
+            Ok(Arc::new(Device { handle }))
+        }
     }
 
-    pub fn debug() -> Arc<Device> {
+    pub fn debug() -> Result<Arc<Device>, Error> {
         let cfg = CString::new("verbose=4").unwrap();
         enable_ftz_and_daz();
-        Arc::new(Device {
-            handle: unsafe { rtcNewDevice(cfg.as_ptr()) },
-        })
+        let handle = unsafe { rtcNewDevice(cfg.as_ptr()) };
+        if handle.is_null() {
+            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
+        } else {
+            Ok(Arc::new(Device { handle }))
+        }
     }
 
-    pub fn with_config(config: Config) -> Arc<Device> {
+    pub fn with_config(config: Config) -> Result<Arc<Device>, Error> {
         enable_ftz_and_daz();
         let cfg = config.to_c_string();
-        Arc::new(Device {
-            handle: unsafe { rtcNewDevice(cfg.as_ptr()) },
-        })
+        let handle = unsafe { rtcNewDevice(cfg.as_ptr()) };
+        if handle.is_null() {
+            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
+        } else {
+            Ok(Arc::new(Device { handle }))
+        }
     }
 
     /// Register a callback function to be called when an error occurs.
@@ -192,7 +202,7 @@ pub enum Isa {
 }
 
 impl Display for Isa {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             Isa::Sse2 => write!(f, "sse2"),
             Isa::Sse4_2 => write!(f, "sse4.2"),
@@ -217,7 +227,7 @@ pub enum FrequencyLevel {
 }
 
 impl Display for FrequencyLevel {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             FrequencyLevel::Simd128 => write!(f, "simd128"),
             FrequencyLevel::Simd256 => write!(f, "simd256"),

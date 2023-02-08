@@ -11,7 +11,7 @@ use std::sync::Arc;
 fn main() {
     let display = support::Display::new(512, 512, "triangle");
 
-    let device = Device::new();
+    let device = Device::new().unwrap();
 
     // Make a triangle
     let mut triangle = TriangleMesh::unanimated(device.clone(), 1, 3);

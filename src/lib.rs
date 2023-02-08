@@ -20,6 +20,7 @@ mod callback;
 pub mod catmull_rom_curve;
 pub mod curve;
 pub mod device;
+pub mod error;
 pub mod geometry;
 pub mod hermite_curve;
 pub mod instance;
