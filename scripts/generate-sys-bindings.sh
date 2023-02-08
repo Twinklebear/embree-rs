@@ -3,9 +3,9 @@
 bindgen $1 -o $2 \
 	--no-doc-comments \
 	--distrust-clang-mangling \
-	--whitelist-function "rtc.*" \
-	--whitelist-type "RTC.*" \
-	--whitelist-var "RTC.*" \
+	--allowlist-function "rtc.*" \
+	--allowlist-type "RTC.*" \
+	--allowlist-var "RTC.*" \
 	--rustified-enum "RTCDeviceProperty" \
 	--rustified-enum "RTCError" \
 	--rustified-enum "RTCBufferType" \
