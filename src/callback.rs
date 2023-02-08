@@ -15,7 +15,7 @@ where
         cb(n)
     }
 
-    inner::<F>
+    Some(inner::<F>)
 }
 
 /// Helper function to convert a Rust closure to `RTCErrorFunction` callback.
@@ -34,7 +34,7 @@ where
         cb(error, std::ffi::CStr::from_ptr(msg).to_str().unwrap())
     }
 
-    inner::<F>
+    Some(inner::<F>)
 }
 
 /// Helper function to convert a Rust closure to `RTCMemoryMonitorFunction` callback.
@@ -50,5 +50,5 @@ where
         cb(bytes, post)
     }
 
-    inner::<F>
+    Some(inner::<F>)
 }

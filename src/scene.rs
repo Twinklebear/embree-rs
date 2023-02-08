@@ -118,7 +118,7 @@ impl Scene {
 
             rtcSetSceneProgressMonitorFunction(
                 self.handle,
-                Some(callback::progress_monitor_function_helper(&mut closure)),
+                callback::progress_monitor_function_helper(&mut closure),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }

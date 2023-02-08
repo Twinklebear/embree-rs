@@ -1,4 +1,3 @@
-use crate::callback;
 use crate::sys::*;
 
 /// Geometry trait implemented by all Embree Geometry types

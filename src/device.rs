@@ -66,7 +66,7 @@ impl Device {
         unsafe {
             rtcSetDeviceErrorFunction(
                 self.handle,
-                Some(crate::callback::error_function_helper(&mut closure)),
+                crate::callback::error_function_helper(&mut closure),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }
@@ -129,9 +129,7 @@ impl Device {
         unsafe {
             rtcSetDeviceMemoryMonitorFunction(
                 self.handle,
-                Some(crate::callback::memory_monitor_function_helper(
-                    &mut closure,
-                )),
+                crate::callback::memory_monitor_function_helper(&mut closure),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }
