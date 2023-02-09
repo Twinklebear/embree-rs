@@ -1,10 +1,9 @@
+use crate::sys::*;
+use crate::Error;
 use std::ffi::CString;
 use std::fmt::{self, Display, Formatter};
 use std::ptr;
 use std::sync::Arc;
-
-use crate::error::Error;
-use crate::sys::*;
 
 pub struct Device {
     pub(crate) handle: RTCDevice,

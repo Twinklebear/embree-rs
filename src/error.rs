@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::sys::RTCEqrror;
+use crate::sys::RTCError;
 
 impl Display for RTCError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
