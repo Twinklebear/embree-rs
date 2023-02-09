@@ -1,11 +1,40 @@
-use crate::sys::*;
+use std::collections::HashMap;
 
-/// Geometry trait implemented by all Embree Geometry types
-pub trait Geometry {
-    fn handle(&self) -> RTCGeometry;
-    fn commit(&mut self) {
+use crate::{sys::*, Device, Error};
+use crate::{Buffer, BufferType, GeometryType};
+
+/// Handle to an Embree geometry object.
+pub struct Geometry {
+    pub(crate) device: Device,
+    pub(crate) handle: RTCGeometry,
+    attachments: HashMap<BufferType, Vec<Buffer>>,
+}
+
+impl Drop for Geometry {
+    fn drop(&mut self) {
         unsafe {
-            rtcCommitGeometry(self.handle());
+            rtcReleaseGeometry(self.handle);
+        }
+    }
+}
+
+impl Geometry {
+    pub(crate) fn new(device: Device, kind: GeometryType) -> Result<Geometry, Error> {
+        let handle = unsafe { rtcNewGeometry(device.handle, kind) };
+        if handle.is_null() {
+            Err(device.get_error())
+        } else {
+            Ok(Geometry {
+                device,
+                handle,
+                attachments: HashMap::new(),
+            })
+        }
+    }
+
+    pub fn commit(&mut self) {
+        unsafe {
+            rtcCommitGeometry(self.handle);
         }
     }
 
@@ -35,7 +64,7 @@ pub trait Geometry {
     /// interpolated.
     fn set_subdivision_mode(&self, topology_id: u32, mode: RTCSubdivisionMode) {
         unsafe {
-            rtcSetGeometrySubdivisionMode(self.handle(), topology_id, mode);
+            rtcSetGeometrySubdivisionMode(self.handle, topology_id, mode);
         }
     }
 

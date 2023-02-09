@@ -1,5 +1,8 @@
+use crate::geometry::Geometry;
 use crate::sys::*;
+use crate::Buffer;
 use crate::Error;
+use crate::GeometryType;
 use crate::Scene;
 use std::ffi::CString;
 use std::fmt::{self, Display, Formatter};
@@ -200,6 +203,17 @@ impl Device {
     /// See [`SceneConfig`] for possible values.
     pub fn create_scene_with_flags(&self, flags: RTCSceneFlags) -> Result<Scene, Error> {
         Scene::new_with_flags(self.clone(), flags)
+    }
+
+    /// Creates a new data buffer.
+    /// The created buffer is always aligned to 16 bytes.
+    pub fn create_buffer(&self, size: usize) -> Result<Buffer, Error> {
+        Buffer::new(self.clone(), size)
+    }
+
+    /// Creates a [`Geometry`] object bound to the device.
+    pub fn create_geometry(&self, kind: GeometryType) -> Result<Geometry, Error> {
+        Geometry::new(self.clone(), kind)
     }
 }
 

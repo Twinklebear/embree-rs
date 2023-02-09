@@ -1,99 +1,64 @@
+use crate::Error;
 use std::marker::PhantomData;
-use std::ops::{Index, IndexMut};
+use std::ops::{Bound, Index, IndexMut, RangeBounds};
 use std::{mem, ptr};
 
 use crate::device::Device;
 use crate::sys::*;
 use crate::BufferType;
 
-#[derive(Copy, Clone)]
-pub(crate) struct BufferAttachment {
-    geom: RTCGeometry,
-    buf_type: BufferType,
-    slot: u32,
-}
-
-impl BufferAttachment {
-    pub(crate) fn none() -> BufferAttachment {
-        BufferAttachment {
-            geom: ptr::null_mut(),
-            buf_type: BufferType::VERTEX,
-            slot: std::u32::MAX,
-        }
-    }
-    fn is_attached(&self) -> bool {
-        self.geom != ptr::null_mut()
-    }
-}
-
-// TODO: To handle this nicely for sharing/re-using/changing buffer views
-// we basically need an API/struct for making buffer views of existing
-// larger buffers.
 /// Handle to a buffer managed by Embree.
-pub struct Buffer<T> {
+pub struct Buffer {
     pub(crate) device: Device,
     pub(crate) handle: RTCBuffer,
-    // TODO: We need a list of RTCGeometry handles
-    // that we're attached to to mark buffers as updated on
-    // the geometries.
-    pub(crate) bytes: usize,
-    pub(crate) attachment: BufferAttachment,
-    pub(crate) marker: PhantomData<T>,
+    pub(crate) size: usize,
 }
 
-impl<T> Buffer<T> {
-    /// Allocate a buffer with some raw capacity in bytes
-    pub fn raw(device: Device, bytes: usize) -> Buffer<T> {
+impl Buffer {
+    /// Creates a new data buffer of the given size.
+    pub(crate) fn new(device: Device, size: usize) -> Result<Buffer, Error> {
         // Pad to a multiple of 16 bytes
-        let bytes = if bytes % 16 == 0 {
-            bytes
+        let size = if size % 16 == 0 {
+            size
         } else {
-            (bytes + 15) & !15
+            (size + 15) & !15
         };
-        let h = unsafe { rtcNewBuffer(device.handle, bytes) };
-        Buffer {
-            device: device.clone(),
-            handle: h,
-            bytes,
-            attachment: BufferAttachment::none(),
-            marker: PhantomData,
-        }
-    }
-    pub fn new(device: Device, len: usize) -> Buffer<T> {
-        let mut bytes = len * mem::size_of::<T>();
-        // Pad to a multiple of 16 bytes
-        bytes = if bytes % 16 == 0 {
-            bytes
+        let handle = unsafe { rtcNewBuffer(device.handle, size) };
+        if handle.is_null() {
+            Err(device.get_error())
         } else {
-            (bytes + 15) & !15
-        };
-        let h = unsafe { rtcNewBuffer(device.handle, bytes) };
-        Buffer {
-            device: device.clone(),
-            handle: h,
-            bytes,
-            attachment: BufferAttachment::none(),
-            marker: PhantomData,
+            Ok(Buffer {
+                device,
+                handle,
+                size,
+            })
         }
     }
-    pub fn map<'a>(&'a mut self) -> MappedBuffer<'a, T> {
-        let len = self.bytes / mem::size_of::<T>();
-        let slice = unsafe { rtcGetBufferData(self.handle) as *mut T };
-        MappedBuffer {
-            buffer: PhantomData,
-            attachment: self.attachment,
-            slice: slice,
-            len: len,
+
+    /// Slices into the buffer for the given range.
+    ///
+    /// Choosing a range with no end will slice to the end of the buffer:
+    ///
+    /// ```
+    /// buffer.slice(16..)
+    /// ```
+    ///
+    /// Choosing a totally unbounded range will use the entire buffer:
+    ///
+    /// ```
+    /// buffer.slice(..)
+    /// ```
+    pub fn slice<S: RangeBounds<usize>>(&self, bounds: S) -> BufferSlice<'_> {
+        let (offset, size) = range_bounds_to_offset_and_size(bounds);
+        BufferSlice {
+            buffer: self,
+            offset,
+            size,
         }
-    }
-    pub(crate) fn set_attachment(&mut self, geom: RTCGeometry, buf_type: BufferType, slot: u32) {
-        self.attachment.geom = geom;
-        self.attachment.buf_type = buf_type;
-        self.attachment.slot = slot;
     }
 }
 
-impl<T> Drop for Buffer<T> {
+impl Drop for Buffer {
     fn drop(&mut self) {
         unsafe {
             rtcReleaseBuffer(self.handle);
@@ -101,51 +66,86 @@ impl<T> Drop for Buffer<T> {
     }
 }
 
+static_assertions::assert_impl_all!(Buffer: Send, Sync);
+
+/// Slice into a [`Buffer`].
+///
+/// Created with [`Buffer::slice`].
+#[derive(Debug, Clone, Copy)]
+pub struct BufferSlice<'a> {
+    buffer: &'a Buffer,
+    offset: usize,
+    size: Option<usize>,
+}
+
+static_assertions::assert_impl_all!(BufferSlice: Send, Sync);
+
+impl<'a> BufferSlice<'a> {
+    /// Returns a immutable slice into the buffer.
+    pub fn view(&self) -> BufferView<'a> {
+        BufferView {
+            buffer: self.buffer,
+            offset: self.offset,
+            size: self.size.unwrap_or(self.buffer.size - self.offset),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Returns a mutable slice into the buffer.
+    pub fn view_mut(&mut self) -> BufferViewMut<'a> {
+        BufferViewMut {
+            buffer: self.buffer,
+            offset: self.offset,
+            size: self.size.unwrap_or(self.buffer.size - self.offset),
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// A read-only view of a buffer.
+pub struct BufferView<'a, T: 'a> {
+    slice: BufferSlice<'a>,
+    data: MappedBuffer<'a, T>,
+}
+
+/// A mutable view of a buffer.
+pub struct BufferViewMut<'a, T: 'a> {
+    slice: BufferSlice<'a>,
+    data: MappedBuffer<'a, T>,
+}
+
+#[derive(Debug)]
 pub struct MappedBuffer<'a, T: 'a> {
-    buffer: PhantomData<&'a mut Buffer<T>>,
-    attachment: BufferAttachment,
-    slice: *mut T,
+    ptr: *mut T,
     len: usize,
+    _marker: PhantomData<&'a mut T>,
 }
 
-impl<'a, T: 'a> MappedBuffer<'a, T> {
-    pub fn len(&self) -> usize {
-        self.len
+impl<T> AsRef<[T]> for BufferView<'_, T> {
+    fn as_ref(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.data.ptr, self.len) }
     }
 }
 
-impl<'a, T: 'a> Drop for MappedBuffer<'a, T> {
-    fn drop(&mut self) {
-        if self.attachment.is_attached() {
-            // TODO: support for attaching one buffer to multiple geoms?
-            unsafe {
-                rtcUpdateGeometryBuffer(
-                    self.attachment.geom,
-                    self.attachment.buf_type,
-                    self.attachment.slot,
-                );
-            }
-        }
+impl<T> AsMut<[T]> for BufferViewMut<'_, T> {
+    fn as_mut(&mut self) -> &mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.data.ptr, self.len) }
     }
 }
 
-impl<'a, T: 'a> Index<usize> for MappedBuffer<'a, T> {
-    type Output = T;
+fn range_bounds_to_offset_and_size<S: RangeBounds>(
+    bounds: RangeBounds<usize>,
+) -> (usize, Option<usize>) {
+    let offset = match bounds.start_bound() {
+        Bound::Included(&n) => n,
+        Bound::Excluded(&n) => n + 1,
+        Bound::Unbounded => 0,
+    };
+    let size = match bounds.end_bound() {
+        Bound::Included(&n) => Some(n - offset + 1),
+        Bound::Excluded(&n) => Some(n - offset),
+        Bound::Unbounded => None,
+    };
 
-    fn index(&self, index: usize) -> &T {
-        // TODO: We should only check in debug build
-        if index >= self.len {
-            panic!("MappedBuffer index out of bounds");
-        }
-        unsafe { &*self.slice.offset(index as isize) }
-    }
-}
-
-impl<'a, T: 'a> IndexMut<usize> for MappedBuffer<'a, T> {
-    fn index_mut(&mut self, index: usize) -> &mut T {
-        if index >= self.len {
-            panic!("MappedBuffer index out of bounds");
-        }
-        unsafe { &mut *self.slice.offset(index as isize) }
-    }
+    (offset, size)
 }
