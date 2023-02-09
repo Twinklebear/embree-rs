@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-use std::sync::Arc;
 use std::{mem, ptr};
 
 use crate::device::Device;
@@ -8,14 +7,14 @@ use crate::sys::*;
 use crate::BufferType;
 
 #[derive(Copy, Clone)]
-struct BufferAttachment {
+pub(crate) struct BufferAttachment {
     geom: RTCGeometry,
     buf_type: BufferType,
     slot: u32,
 }
 
 impl BufferAttachment {
-    fn none() -> BufferAttachment {
+    pub(crate) fn none() -> BufferAttachment {
         BufferAttachment {
             geom: ptr::null_mut(),
             buf_type: BufferType::VERTEX,
@@ -32,35 +31,35 @@ impl BufferAttachment {
 // larger buffers.
 /// Handle to a buffer managed by Embree.
 pub struct Buffer<T> {
-    device: Arc<Device>,
+    pub(crate) device: Device,
     pub(crate) handle: RTCBuffer,
     // TODO: We need a list of RTCGeometry handles
     // that we're attached to to mark buffers as updated on
     // the geometries.
-    bytes: usize,
-    attachment: BufferAttachment,
-    marker: PhantomData<T>,
+    pub(crate) bytes: usize,
+    pub(crate) attachment: BufferAttachment,
+    pub(crate) marker: PhantomData<T>,
 }
 
 impl<T> Buffer<T> {
     /// Allocate a buffer with some raw capacity in bytes
-    pub fn raw(device: Arc<Device>, bytes: usize) -> Buffer<T> {
+    pub fn raw(device: Device, bytes: usize) -> Buffer<T> {
         // Pad to a multiple of 16 bytes
         let bytes = if bytes % 16 == 0 {
             bytes
         } else {
-            bytes + bytes / 16
+            (bytes + 15) & !15
         };
         let h = unsafe { rtcNewBuffer(device.handle, bytes) };
         Buffer {
-            device: device,
+            device: device.clone(),
             handle: h,
-            bytes: bytes,
+            bytes,
             attachment: BufferAttachment::none(),
             marker: PhantomData,
         }
     }
-    pub fn new(device: Arc<Device>, len: usize) -> Buffer<T> {
+    pub fn new(device: Device, len: usize) -> Buffer<T> {
         let mut bytes = len * mem::size_of::<T>();
         // Pad to a multiple of 16 bytes
         bytes = if bytes % 16 == 0 {
@@ -70,9 +69,9 @@ impl<T> Buffer<T> {
         };
         let h = unsafe { rtcNewBuffer(device.handle, bytes) };
         Buffer {
-            device: device,
+            device: device.clone(),
             handle: h,
-            bytes: bytes,
+            bytes,
             attachment: BufferAttachment::none(),
             marker: PhantomData,
         }

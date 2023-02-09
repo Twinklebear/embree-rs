@@ -1,3 +1,4 @@
+use crate::Error;
 use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
@@ -17,17 +18,33 @@ use crate::sys::*;
 /// return a `CommittedScene` which can be used for ray queries.
 pub struct Scene {
     pub(crate) handle: RTCScene,
-    pub(crate) device: Arc<Device>,
+    pub(crate) device: Device,
     geometry: HashMap<u32, Arc<dyn Geometry>>,
 }
 
+impl Clone for Scene {
+    fn clone(&self) -> Self {
+        unsafe { rtcRetainScene(self.handle) }
+        Self {
+            handle: self.handle,
+            device: self.device.clone(),
+            geometry: self.geometry.clone(),
+        }
+    }
+}
+
 impl Scene {
-    pub fn new(device: Arc<Device>) -> Arc<Scene> {
-        Arc::new(Scene {
-            handle: unsafe { rtcNewScene(device.handle) },
-            device,
-            geometry: HashMap::new(),
-        })
+    pub fn new(device: Device) -> Result<Scene, Error> {
+        let handle = unsafe { rtcNewScene(device.handle) };
+        if handle.is_null() {
+            Err(device.error_code())
+        } else {
+            Ok(Scene {
+                handle,
+                device,
+                geometry: HashMap::new(),
+            })
+        }
     }
 
     /// Attach a new geometry to the scene. Returns the scene local ID which

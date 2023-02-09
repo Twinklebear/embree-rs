@@ -7,14 +7,14 @@ use crate::sys::*;
 use crate::{BufferType, Format, GeometryType};
 
 pub struct QuadMesh {
-    device: Arc<Device>,
+    device: Device,
     pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<[f32; 4]>,
     pub index_buffer: Buffer<[u32; 4]>,
 }
 
 impl QuadMesh {
-    pub fn unanimated(device: Arc<Device>, num_quads: usize, num_verts: usize) -> Arc<QuadMesh> {
+    pub fn unanimated(device: Device, num_quads: usize, num_verts: usize) -> Arc<QuadMesh> {
         let h = unsafe { rtcNewGeometry(device.handle, GeometryType::QUAD) };
         let mut vertex_buffer = Buffer::new(device.clone(), num_verts);
         let mut index_buffer = Buffer::new(device.clone(), num_quads);

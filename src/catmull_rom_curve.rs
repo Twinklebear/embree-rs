@@ -7,7 +7,7 @@ use crate::sys::*;
 use crate::{BufferType, CurveType, Format, GeometryType};
 
 pub struct CatmullRomCurve {
-    device: Arc<Device>,
+    device: Device,
     pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<[f32; 4]>,
     pub index_buffer: Buffer<u32>,
@@ -16,7 +16,7 @@ pub struct CatmullRomCurve {
 
 impl CatmullRomCurve {
     pub fn flat(
-        device: Arc<Device>,
+        device: Device,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
@@ -30,7 +30,7 @@ impl CatmullRomCurve {
         )
     }
     pub fn round(
-        device: Arc<Device>,
+        device: Device,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
@@ -44,7 +44,7 @@ impl CatmullRomCurve {
         )
     }
     pub fn normal_oriented(
-        device: Arc<Device>,
+        device: Device,
         num_segments: usize,
         num_verts: usize,
     ) -> Arc<CatmullRomCurve> {
@@ -58,7 +58,7 @@ impl CatmullRomCurve {
     }
 
     fn unanimated(
-        device: Arc<Device>,
+        device: Device,
         num_segments: usize,
         num_verts: usize,
         curve_type: CurveType,

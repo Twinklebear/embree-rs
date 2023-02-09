@@ -31,12 +31,9 @@ fn main() {
         tri_mut.commit();
     }
 
-    let mut scene = Scene::new(device.clone());
-    {
-        let scene_mut = Arc::get_mut(&mut scene).unwrap();
-        scene_mut.attach_geometry(triangle);
-        scene_mut.commit();
-    }
+    let mut scene = Scene::new(device.clone()).unwrap();
+    scene.attach_geometry(triangle);
+    scene.commit();
 
     support::display::run(display, move |image, _, _| {
         let mut intersection_ctx = IntersectContext::coherent();

@@ -7,7 +7,7 @@ use crate::sys::*;
 use crate::{BufferType, CurveType, Format, GeometryType};
 
 pub struct LinearCurve {
-    device: Arc<Device>,
+    device: Device,
     pub(crate) handle: RTCGeometry,
     pub vertex_buffer: Buffer<[f32; 4]>,
     pub index_buffer: Buffer<u32>,
@@ -17,7 +17,7 @@ pub struct LinearCurve {
 
 impl LinearCurve {
     pub fn flat(
-        device: Arc<Device>,
+        device: Device,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
@@ -31,7 +31,7 @@ impl LinearCurve {
         )
     }
     pub fn round(
-        device: Arc<Device>,
+        device: Device,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
@@ -45,7 +45,7 @@ impl LinearCurve {
         )
     }
     pub fn cone(
-        device: Arc<Device>,
+        device: Device,
         num_segments: usize,
         num_verts: usize,
         use_normals: bool,
@@ -59,7 +59,7 @@ impl LinearCurve {
         )
     }
     fn unanimated(
-        device: Arc<Device>,
+        device: Device,
         num_segments: usize,
         num_verts: usize,
         curve_type: CurveType,

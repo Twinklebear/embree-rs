@@ -3,42 +3,51 @@ use crate::Error;
 use std::ffi::CString;
 use std::fmt::{self, Display, Formatter};
 use std::ptr;
-use std::sync::Arc;
 
+/// Handle to an Embree device.
 pub struct Device {
     pub(crate) handle: RTCDevice,
 }
 
+impl Clone for Device {
+    fn clone(&self) -> Self {
+        unsafe { rtcRetainDevice(self.handle) }
+        Self {
+            handle: self.handle,
+        }
+    }
+}
+
 impl Device {
-    pub fn new() -> Result<Arc<Device>, Error> {
+    pub fn new() -> Result<Device, Error> {
         enable_ftz_and_daz();
         let handle = unsafe { rtcNewDevice(ptr::null()) };
         if handle.is_null() {
             Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
         } else {
-            Ok(Arc::new(Device { handle }))
+            Ok(Device { handle })
         }
     }
 
-    pub fn debug() -> Result<Arc<Device>, Error> {
+    pub fn debug() -> Result<Device, Error> {
         let cfg = CString::new("verbose=4").unwrap();
         enable_ftz_and_daz();
         let handle = unsafe { rtcNewDevice(cfg.as_ptr()) };
         if handle.is_null() {
             Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
         } else {
-            Ok(Arc::new(Device { handle }))
+            Ok(Device { handle })
         }
     }
 
-    pub fn with_config(config: Config) -> Result<Arc<Device>, Error> {
+    pub fn with_config(config: Config) -> Result<Device, Error> {
         enable_ftz_and_daz();
         let cfg = config.to_c_string();
         let handle = unsafe { rtcNewDevice(cfg.as_ptr()) };
         if handle.is_null() {
             Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
         } else {
-            Ok(Arc::new(Device { handle }))
+            Ok(Device { handle })
         }
     }
 
