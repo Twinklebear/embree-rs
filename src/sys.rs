@@ -239,16 +239,13 @@ fn bindgen_test_layout_RTCLinearBounds() {
     );
 }
 impl RTCIntersectContextFlags {
-    pub const NONE: RTCIntersectContextFlags =
-        RTCIntersectContextFlags(0);
+    pub const NONE: RTCIntersectContextFlags = RTCIntersectContextFlags(0);
 }
 impl RTCIntersectContextFlags {
-    pub const INCOHERENT: RTCIntersectContextFlags =
-        RTCIntersectContextFlags(0);
+    pub const INCOHERENT: RTCIntersectContextFlags = RTCIntersectContextFlags(0);
 }
 impl RTCIntersectContextFlags {
-    pub const COHERENT: RTCIntersectContextFlags =
-        RTCIntersectContextFlags(1);
+    pub const COHERENT: RTCIntersectContextFlags = RTCIntersectContextFlags(1);
 }
 impl ::std::ops::BitOr<RTCIntersectContextFlags> for RTCIntersectContextFlags {
     type Output = Self;
