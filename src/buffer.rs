@@ -30,6 +30,7 @@ impl BufferAttachment {
 // TODO: To handle this nicely for sharing/re-using/changing buffer views
 // we basically need an API/struct for making buffer views of existing
 // larger buffers.
+/// Handle to a buffer managed by Embree.
 pub struct Buffer<T> {
     device: Arc<Device>,
     pub(crate) handle: RTCBuffer,
@@ -65,7 +66,7 @@ impl<T> Buffer<T> {
         bytes = if bytes % 16 == 0 {
             bytes
         } else {
-            bytes + bytes / 16
+            (bytes + 15) & !15
         };
         let h = unsafe { rtcNewBuffer(device.handle, bytes) };
         Buffer {
