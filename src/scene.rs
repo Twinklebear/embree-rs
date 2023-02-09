@@ -78,7 +78,7 @@ impl Scene {
     /// changing other flags the following way:
     /// ```no_run
     /// use embree::{Device, Scene, SceneFlags};
-    /// let device = Device::new();
+    /// let device = Device::new().unwrap();
     /// let scene = Scene::new(device.clone());
     /// let flags = scene.flags();
     /// scene.set_flags(flags | SceneFlags::ROBUST);
