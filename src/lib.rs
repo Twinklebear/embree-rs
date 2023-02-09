@@ -40,11 +40,11 @@ pub mod triangle_mesh;
 
 pub use bezier_curve::BezierCurve;
 pub use bspline_curve::BsplineCurve;
-pub use buffer::{Buffer, MappedBuffer};
+pub use buffer::{Buffer, BufferView};
 pub use catmull_rom_curve::CatmullRomCurve;
 pub use curve::CurveType;
 pub use device::{Config, Device, FrequencyLevel, Isa};
-pub use geometry::Geometry;
+pub use geometry::GeometryTrait;
 pub use hermite_curve::HermiteCurve;
 pub use instance::Instance;
 pub use intersect_context::IntersectContext;

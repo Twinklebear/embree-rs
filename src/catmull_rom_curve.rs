@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::device::Device;
-use crate::geometry::Geometry;
+use crate::geometry::GeometryTrait;
 use crate::sys::*;
 use crate::{BufferType, CurveType, Format, GeometryType};
 
@@ -134,7 +134,7 @@ impl CatmullRomCurve {
     }
 }
 
-impl Geometry for CatmullRomCurve {
+impl GeometryTrait for CatmullRomCurve {
     fn handle(&self) -> RTCGeometry {
         self.handle
     }

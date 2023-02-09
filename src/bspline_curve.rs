@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::device::Device;
-use crate::geometry::Geometry;
+use crate::geometry::GeometryTrait;
 use crate::sys::*;
 use crate::{BufferType, CurveType, Format, GeometryType};
 
@@ -131,7 +131,7 @@ impl BsplineCurve {
     }
 }
 
-impl Geometry for BsplineCurve {
+impl GeometryTrait for BsplineCurve {
     fn handle(&self) -> RTCGeometry {
         self.handle
     }

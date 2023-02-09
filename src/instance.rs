@@ -1,7 +1,7 @@
 use std::os::raw;
 use std::sync::Arc;
 
-use crate::geometry::Geometry;
+use crate::geometry::GeometryTrait;
 use crate::scene::Scene;
 use crate::sys::*;
 use crate::{Format, GeometryType};
@@ -37,7 +37,7 @@ impl Instance {
     }
 }
 
-impl Geometry for Instance {
+impl GeometryTrait for Instance {
     fn handle(&self) -> RTCGeometry {
         self.handle
     }
