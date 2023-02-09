@@ -105,7 +105,7 @@ impl Scene {
     /// ```no_run
     /// use embree::{Device, Scene, SceneFlags};
     /// let device = Device::new().unwrap();
-    /// let scene = Scene::new(device.clone()).unwrap();
+    /// let scene = device.create_scene().unwrap();
     /// let flags = scene.flags();
     /// scene.set_flags(flags | SceneFlags::ROBUST);
     /// ```
