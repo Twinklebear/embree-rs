@@ -1,5 +1,6 @@
 use crate::sys::*;
 use crate::Error;
+use crate::Scene;
 use std::ffi::CString;
 use std::fmt::{self, Display, Formatter};
 use std::ptr;
@@ -186,6 +187,19 @@ impl Device {
     /// Error code encoded as `RTCError`.
     pub fn error_code(&self) -> RTCError {
         unsafe { rtcGetDeviceError(self.handle) }
+    }
+
+    /// Creates a new scene bound to the device.
+    pub fn create_scene(&self) -> Result<Scene, Error> {
+        Scene::new(self.clone())
+    }
+
+    /// Creates a new scene bound to the device with the given configuration.
+    /// It's the same as calling [`Device::create_scene`] and then
+    /// [`Scene::set_flags`].
+    /// See [`SceneConfig`] for possible values.
+    pub fn create_scene_with_flags(&self, flags: RTCSceneFlags) -> Result<Scene, Error> {
+        Scene::new_with_flags(self.clone(), flags)
     }
 }
 

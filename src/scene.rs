@@ -1,4 +1,5 @@
 use crate::Error;
+use crate::SceneFlags;
 use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
@@ -34,7 +35,8 @@ impl Clone for Scene {
 }
 
 impl Scene {
-    pub fn new(device: Device) -> Result<Scene, Error> {
+    /// Creates a new scene with the given device.
+    pub(crate) fn new(device: Device) -> Result<Scene, Error> {
         let handle = unsafe { rtcNewScene(device.handle) };
         if handle.is_null() {
             Err(device.error_code())
@@ -45,6 +47,13 @@ impl Scene {
                 geometry: HashMap::new(),
             })
         }
+    }
+
+    /// Creates a new scene with the given device and flags.
+    pub(crate) fn new_with_flags(device: Device, flags: SceneFlags) -> Result<Scene, Error> {
+        let scene = Self::new(device)?;
+        scene.set_flags(flags);
+        Ok(scene)
     }
 
     /// Attach a new geometry to the scene. Returns the scene local ID which
