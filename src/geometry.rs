@@ -1,16 +1,24 @@
 use std::collections::HashMap;
 
+use crate::buffer::BufferSlice;
 use crate::{sys::*, Device, Error};
-use crate::{Buffer, BufferType, GeometryType};
+use crate::{BufferUsage, Format, GeometryType};
 
-/// Handle to an Embree geometry object.
-pub struct Geometry {
-    pub(crate) device: Device,
-    pub(crate) handle: RTCGeometry,
-    attachments: HashMap<BufferType, Vec<Buffer>>,
+mod triangle_mesh;
+
+pub trait Geometry {
+    fn geometry_type(&self) -> GeometryType;
 }
 
-impl Drop for Geometry {
+/// Handle to an Embree geometry object.
+pub struct GeometryData {
+    pub(crate) device: Device,
+    pub(crate) handle: RTCGeometry,
+    pub(crate) kind: GeometryType,
+    pub(crate) bindings: HashMap<BufferUsage, Vec<BufferSlice>>,
+}
+
+impl Drop for GeometryData {
     fn drop(&mut self) {
         unsafe {
             rtcReleaseGeometry(self.handle);
@@ -18,17 +26,51 @@ impl Drop for Geometry {
     }
 }
 
-impl Geometry {
-    pub(crate) fn new(device: Device, kind: GeometryType) -> Result<Geometry, Error> {
+impl GeometryData {
+    pub(crate) fn new(device: Device, kind: GeometryType) -> Result<GeometryData, Error> {
         let handle = unsafe { rtcNewGeometry(device.handle, kind) };
         if handle.is_null() {
             Err(device.get_error())
         } else {
-            Ok(Geometry {
+            Ok(GeometryData {
                 device,
                 handle,
-                attachments: HashMap::new(),
+                kind,
+                bindings: HashMap::new(),
             })
+        }
+    }
+
+    // pub fn bind_new_buffer<T: Copy>(
+    //     &mut self,
+    //     usage: BufferUsage,
+    //     format: Format,
+    //     data: &[T],
+    // ) -> Result<BufferSlice, Error> {
+    //     let buffer = self.device.create_buffer(usage, format, data)?;
+    //     self.bind_buffer(usage, buffer)
+    // }
+
+    /// Binds a view of a buffer to a geometry.
+    pub fn bind_buffer<T>(
+        &mut self,
+        buffer: BufferSlice,
+        slot: u32,
+        usage: BufferUsage,
+        format: Format,
+    ) -> Result<(), Error> {
+        self.bindings.entry(usage).or_insert(vec![])
+        unsafe {
+            rtcSetGeometryBuffer(
+                self.handle,
+                usage,
+                slot,
+                format,
+                buffer,
+                buffer.offset,
+                std::mem::size_of::<T>(),
+                buffer.size / std::mem::size_of::<T>(),
+            )
         }
     }
 

@@ -1,16 +1,27 @@
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::device::Device;
-use crate::geometry::GeometryTrait;
 use crate::sys::*;
 use crate::{BufferType, Format, GeometryType};
 
-pub struct TriangleMesh {
-    device: Device,
-    pub(crate) handle: RTCGeometry,
-    pub vertex_buffer: Buffer<[f32; 4]>,
-    pub index_buffer: Buffer<[u32; 3]>,
+use super::GeometryData;
+
+pub struct TriangleMesh(GeometryData);
+
+impl Deref for TriangleMesh {
+    type Target = GeometryData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for TriangleMesh {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 impl TriangleMesh {

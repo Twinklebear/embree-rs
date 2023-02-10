@@ -1,3 +1,4 @@
+use crate::buffer::BufferSize;
 use crate::geometry::Geometry;
 use crate::sys::*;
 use crate::Buffer;
@@ -207,7 +208,7 @@ impl Device {
 
     /// Creates a new data buffer.
     /// The created buffer is always aligned to 16 bytes.
-    pub fn create_buffer(&self, size: usize) -> Result<Buffer, Error> {
+    pub fn create_buffer(&self, size: BufferSize) -> Result<Buffer, Error> {
         Buffer::new(self.clone(), size)
     }
 

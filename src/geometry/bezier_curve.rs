@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::buffer::Buffer;
 use crate::device::Device;
-use crate::geometry::GeometryTrait;
 use crate::sys::*;
 use crate::{BufferType, CurveType, Format, GeometryType};
 
