@@ -1,15 +1,15 @@
-use std::collections::HashMap;
-use std::num::NonZeroUsize;
+use std::{collections::HashMap, num::NonZeroUsize};
 
-use crate::{sys::*, Device, Error};
-use crate::{BufferUsage, Format, GeometryType, BufferSlice};
+use crate::{sys::*, BufferSlice, BufferUsage, Device, Error, Format, GeometryType};
 
 mod triangle_mesh;
 
 pub use triangle_mesh::TriangleMesh;
 
 pub trait Geometry {
-    fn new(device: &Device) -> Result<Self, Error> where Self: Sized;
+    fn new(device: &Device) -> Result<Self, Error>
+    where
+        Self: Sized;
     fn kind(&self) -> GeometryType;
     fn handle(&self) -> RTCGeometry;
     fn commit(&mut self) {
@@ -29,8 +29,9 @@ pub(crate) struct AttachedBuffer {
 
 /// Handle to an Embree geometry object.
 ///
-/// BufferGeometry is a wrapper around an Embree geometry object. It does not own the
-/// buffers that are bound to it, but it does own the geometry object itself.
+/// BufferGeometry is a wrapper around an Embree geometry object. It does not
+/// own the buffers that are bound to it, but it does own the geometry object
+/// itself.
 #[derive(Debug)]
 pub struct BufferGeometry {
     pub(crate) device: Device,
@@ -96,8 +97,10 @@ impl BufferGeometry {
             } => {
                 let mut bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
                 if bindings.iter().find(|a| a.slot == slot).is_none() {
-                    println!("Binding buffer to slot {}, offset {}, stride {}, count {}", slot,
-                    offset, stride, count);
+                    println!(
+                        "Binding buffer to slot {}, offset {}, stride {}, count {}",
+                        slot, offset, stride, count
+                    );
                     unsafe {
                         rtcSetGeometryBuffer(
                             self.handle,
@@ -133,16 +136,18 @@ impl BufferGeometry {
         }
     }
 
-    /// Creates a new [`Buffer`] and binds it as a specific attribute for this geometry.
+    /// Creates a new [`Buffer`] and binds it as a specific attribute for this
+    /// geometry.
     ///
     /// Analogous to [`rtcSetNewGeometryBuffer`](https://spec.oneapi.io/oneart/0.5-rev-1/embree-spec.html#rtcsetnewgeometrybuffer).
     ///
-    /// The allocated buffer will be automatically over-allocated slightly when used as a
-    /// [`BufferUsage::VERTEX`] buffer, where a requirement is that each buffer element should
-    /// be readable using 16-byte SSE load instructions.
+    /// The allocated buffer will be automatically over-allocated slightly when
+    /// used as a [`BufferUsage::VERTEX`] buffer, where a requirement is
+    /// that each buffer element should be readable using 16-byte SSE load
+    /// instructions.
     ///
-    /// The allocated buffer is managed internally and automatically released when the geometry
-    /// is destroyed by Embree.
+    /// The allocated buffer is managed internally and automatically released
+    /// when the geometry is destroyed by Embree.
     ///
     /// # Arguments
     ///
@@ -150,7 +155,8 @@ impl BufferGeometry {
     ///
     /// * `slot` - The slot to bind the buffer to.
     ///
-    /// * `format` - The format of the buffer items. See [`Format`] for more information.
+    /// * `format` - The format of the buffer items. See [`Format`] for more
+    ///   information.
     ///
     /// * `count` - The number of items in the buffer.
     ///
@@ -166,7 +172,14 @@ impl BufferGeometry {
         let bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
         if bindings.iter().find(|a| a.slot == slot).is_none() {
             let raw_ptr = unsafe {
-                rtcSetNewGeometryBuffer(self.handle, usage, slot, format, stride as usize, count as usize)
+                rtcSetNewGeometryBuffer(
+                    self.handle,
+                    usage,
+                    slot,
+                    format,
+                    stride as usize,
+                    count as usize,
+                )
             };
             if raw_ptr.is_null() {
                 Err(self.device.get_error())
@@ -207,8 +220,8 @@ impl BufferGeometry {
     /// Set the subdivision mode for the topology of the specified subdivision
     /// geometry.
     ///
-    /// The subdivision modes can be used to force linear interpolation for certain
-    /// parts of the subdivision mesh:
+    /// The subdivision modes can be used to force linear interpolation for
+    /// certain parts of the subdivision mesh:
     ///
     /// * [`RTCSubdivisionMode::NO_BOUNDARY`]: Boundary patches are ignored.
     /// This way each rendered patch has a full set of control vertices.
@@ -222,8 +235,8 @@ impl BufferGeometry {
     ///
     /// * [`RTCSubdivisionMode::PIN_BOUNDARY`]: All vertices at the border are
     /// pinned to their location during subdivision. This way the boundary is
-    /// interpolated linearly. This mode is typically used for texturing to also map
-    /// texels at the border of the texture to the mesh.
+    /// interpolated linearly. This mode is typically used for texturing to also
+    /// map texels at the border of the texture to the mesh.
     ///
     /// * [`RTCSubdivisionMode::PIN_ALL`]: All vertices at the border are pinned
     /// to their location during subdivision. This way all patches are linearly
@@ -237,17 +250,19 @@ impl BufferGeometry {
     /// Binds a vertex attribute to a topology of the geometry.
     ///
     /// This function binds a vertex attribute buffer slot to a topology for the
-    /// specified subdivision geometry. Standard vertex buffers are always bound to
-    /// the default topology (topology 0) and cannot be bound differently. A vertex
-    /// attribute buffer always uses the topology it is bound to when used in the
-    /// `rtcInterpolate` and `rtcInterpolateN` calls.
+    /// specified subdivision geometry. Standard vertex buffers are always bound
+    /// to the default topology (topology 0) and cannot be bound
+    /// differently. A vertex attribute buffer always uses the topology it
+    /// is bound to when used in the `rtcInterpolate` and `rtcInterpolateN`
+    /// calls.
     ///
     /// A topology with ID `i` consists of a subdivision mode set through
     /// `Geometry::set_subdivision_mode` and the index buffer bound to the index
-    /// buffer slot `i`. This index buffer can assign indices for each face of the
-    /// subdivision geometry that are different to the indices of the default topology.
-    /// These new indices can for example be used to introduce additional borders into
-    /// the subdivision mesh to map multiple textures onto one subdivision geometry.
+    /// buffer slot `i`. This index buffer can assign indices for each face of
+    /// the subdivision geometry that are different to the indices of the
+    /// default topology. These new indices can for example be used to
+    /// introduce additional borders into the subdivision mesh to map
+    /// multiple textures onto one subdivision geometry.
     fn set_vertex_attribute_topology(&self, vertex_attribute_id: u32, topology_id: u32) {
         unsafe {
             rtcSetGeometryVertexAttributeTopology(self.handle, vertex_attribute_id, topology_id);

@@ -1,8 +1,9 @@
-use crate::sys::*;
-use crate::{Error, Scene, BufferSize, Buffer, Geometry};
-use std::ffi::CString;
-use std::fmt::{self, Display, Formatter};
-use std::ptr;
+use crate::{sys::*, Buffer, BufferSize, Error, Geometry, Scene};
+use std::{
+    ffi::CString,
+    fmt::{self, Display, Formatter},
+    ptr,
+};
 
 /// Handle to an Embree device.
 #[derive(Debug)]
@@ -63,10 +64,12 @@ impl Device {
     ///
     /// # Arguments
     ///
-    /// * `error_fn` - A callback function that takes an error code and a message.
+    /// * `error_fn` - A callback function that takes an error code and a
+    ///   message.
     ///
-    /// When the callback function is invoked, it gets the error code of the occurred
-    /// error, as well as a message of type `&'static str` that further describes the error.
+    /// When the callback function is invoked, it gets the error code of the
+    /// occurred error, as well as a message of type `&'static str` that
+    /// further describes the error.
     ///
     /// # Example
     ///
@@ -74,7 +77,7 @@ impl Device {
     /// use embree::Device;
     /// let device = Device::new().unwrap();
     /// device.set_error_function(|error, msg| {
-    ///    println!("Error: {:?} {}", error, msg);
+    ///     println!("Error: {:?} {}", error, msg);
     /// });
     /// ```
     pub fn set_error_function<F>(&self, error_fn: F)
@@ -100,12 +103,13 @@ impl Device {
 
     /// Register a callback function to track memory consumption of the device.
     ///
-    /// Only a single callback function can be registered per device, and further invocations
-    /// overwrite the previously registered callback.
+    /// Only a single callback function can be registered per device, and
+    /// further invocations overwrite the previously registered callback.
     ///
-    /// Once registered, the Embree device will invoke the callback function before or after
-    /// it allocates or frees important memory blocks. The callback function might get called
-    /// from multiple threads concurrently.
+    /// Once registered, the Embree device will invoke the callback function
+    /// before or after it allocates or frees important memory blocks. The
+    /// callback function might get called from multiple threads
+    /// concurrently.
     ///
     /// Unregister with [`Device::unset_memory_monitor_function`].
     ///
@@ -114,18 +118,22 @@ impl Device {
     ///    * `bytes: isize` - The number of bytes allocated or deallocated
     /// (> 0 for allocations and < 0 for deallocations). The Embree `Device`
     ///   atomically accumulating `bytes` input parameter.
-    ///    * `post: bool` - Whether the callback is invoked after the allocation or deallocation took place.
+    ///    * `post: bool` - Whether the callback is invoked after the allocation
+    ///      or deallocation took place.
     ///
-    /// Embree will continue its operation normally when the callback function returns `true`. If `false`
-    /// returned, Embree will cancel the current operation with `RTC_ERROR_OUT_OF_MEMORY` error code.
-    /// Issuing multiple cancel requests from different threads is allowed. Cancelling will only happen when
-    /// the callback was called for allocations (bytes > 0), otherwise the cancel request will be ignored.
+    /// Embree will continue its operation normally when the callback function
+    /// returns `true`. If `false` returned, Embree will cancel the current
+    /// operation with `RTC_ERROR_OUT_OF_MEMORY` error code.
+    /// Issuing multiple cancel requests from different threads is allowed.
+    /// Cancelling will only happen when the callback was called for
+    /// allocations (bytes > 0), otherwise the cancel request will be ignored.
     ///
-    /// If a callback to cancel was invoked before the allocation happens (`post == false`), then
-    /// the `bytes` parameter should not be accumulated, as the allocation will never happen.
-    /// If the callback to cancel was invoked after the allocation happened (`post == true`), then
-    /// the `bytes` parameter should be accumulated, as the allocation properly happened and a
-    /// deallocation will later free that data block.
+    /// If a callback to cancel was invoked before the allocation happens (`post
+    /// == false`), then the `bytes` parameter should not be accumulated, as
+    /// the allocation will never happen. If the callback to cancel was
+    /// invoked after the allocation happened (`post == true`), then
+    /// the `bytes` parameter should be accumulated, as the allocation properly
+    /// happened and a deallocation will later free that data block.
     ///
     /// # Example
     /// ```no_run
@@ -133,9 +141,9 @@ impl Device {
     /// let device = Device::new().unwrap();
     /// device.set_memory_monitor_function(|bytes, post| {
     ///     if bytes > 0 {
-    ///        println!("allocated {} bytes", bytes);
+    ///         println!("allocated {} bytes", bytes);
     ///     } else {
-    ///        println!("deallocated {} bytes", -bytes);
+    ///         println!("deallocated {} bytes", -bytes);
     ///     };
     ///     true
     /// });
@@ -165,7 +173,8 @@ impl Device {
     ///
     /// # Arguments
     ///
-    /// * `prop` - The property to query. See `RTCDeviceProp` for possible values.
+    /// * `prop` - The property to query. See `RTCDeviceProp` for possible
+    ///   values.
     ///
     /// # Returns
     ///
@@ -176,23 +185,20 @@ impl Device {
 
     /// Query the error code of the device.
     ///
-    /// Each thread has its own error code per device. If an error occurs when calling
-    /// an API function, this error code is set to the occurred error if it stores no
-    /// previous error. The `error_code` function reads and returns the currently stored
-    /// error and clears the error code. This assures that the returned error code is
-    /// always the first error occurred since the last invocation of `error_code`.
+    /// Each thread has its own error code per device. If an error occurs when
+    /// calling an API function, this error code is set to the occurred
+    /// error if it stores no previous error. The `error_code` function
+    /// reads and returns the currently stored error and clears the error
+    /// code. This assures that the returned error code is always the first
+    /// error occurred since the last invocation of `error_code`.
     ///
     /// # Returns
     ///
     /// Error code encoded as `RTCError`.
-    pub fn get_error(&self) -> RTCError {
-        unsafe { rtcGetDeviceError(self.handle) }
-    }
+    pub fn get_error(&self) -> RTCError { unsafe { rtcGetDeviceError(self.handle) } }
 
     /// Creates a new scene bound to the device.
-    pub fn create_scene(&self) -> Result<Scene, Error> {
-        Scene::new(self.clone())
-    }
+    pub fn create_scene(&self) -> Result<Scene, Error> { Scene::new(self.clone()) }
 
     /// Creates a new scene bound to the device with the given configuration.
     /// It's the same as calling [`Device::create_scene`] and then
@@ -209,9 +215,7 @@ impl Device {
     }
 
     /// Creates a [`Geometry`] object bound to the device.
-    pub fn create_geometry<G: Geometry>(&self) -> Result<G, Error> {
-        G::new(self)
-    }
+    pub fn create_geometry<G: Geometry>(&self) -> Result<G, Error> { G::new(self) }
 }
 
 impl Drop for Device {
@@ -279,36 +283,41 @@ pub struct Config {
     /// scene commit using `rtcJoinCommitScene`.
     pub user_threads: u32,
 
-    /// Whether build threads are affinitized to hardware threads. This is disabled
-    /// by default on standard CPUs, and enabled by default on Xeon Phi Processors.
+    /// Whether build threads are affinitized to hardware threads. This is
+    /// disabled by default on standard CPUs, and enabled by default on Xeon
+    /// Phi Processors.
     pub set_affinity: bool,
 
-    /// When enabled, the build threads are started upfront. Useful for benchmarking
-    /// to exclude thread creation time. This is disabled by default.
+    /// When enabled, the build threads are started upfront. Useful for
+    /// benchmarking to exclude thread creation time. This is disabled by
+    /// default.
     pub start_threads: bool,
 
     /// ISA selection. By default the ISA is chosen automatically.
     pub isa: Option<Isa>,
 
-    /// Configures the automated ISA selection to use maximally the specified ISA.
+    /// Configures the automated ISA selection to use maximally the specified
+    /// ISA.
     pub max_isa: Isa,
 
-    /// Enables or disables usage of huge pages. Enabled by default under Linux but
-    /// disabled by default on Windows and macOS.
+    /// Enables or disables usage of huge pages. Enabled by default under Linux
+    /// but disabled by default on Windows and macOS.
     pub hugepages: bool,
 
-    /// Enables or disables the SeLockMemoryPrivilege privilege which is required to
-    /// use huge pages on Windows. This option has only effect on Windows and is ignored
-    /// on other platforms.
+    /// Enables or disables the SeLockMemoryPrivilege privilege which is
+    /// required to use huge pages on Windows. This option has only effect
+    /// on Windows and is ignored on other platforms.
     pub enable_selockmemoryprivilege: bool,
 
-    /// Verbosity of the output [0, 1, 2, 3]. No output when set to 0. The higher the
-    /// level, the more the output. By default the output is set to 0.
+    /// Verbosity of the output [0, 1, 2, 3]. No output when set to 0. The
+    /// higher the level, the more the output. By default the output is set
+    /// to 0.
     pub verbose: u32,
 
     /// Frequency level the application want to run on. See [`FrequencyLevel`].
-    /// When some frequency level is specified, Embree will avoid doing optimizations
-    /// that may reduce the frequency level below the level specified.
+    /// When some frequency level is specified, Embree will avoid doing
+    /// optimizations that may reduce the frequency level below the level
+    /// specified.
     pub frequency_level: Option<FrequencyLevel>,
 }
 
@@ -324,8 +333,8 @@ impl Config {
             .map(|frequency_level| format!("frequency_level={}", frequency_level))
             .unwrap_or_default();
         let formated = format!(
-            "threads={},verbose={},set_affinity={},start_threads={},\
-        max_isa={},hugepages={},enable_selockmemoryprivilege={},{}{}",
+            "threads={},verbose={},set_affinity={},start_threads={},max_isa={},hugepages={},\
+             enable_selockmemoryprivilege={},{}{}",
             self.threads,
             self.verbose,
             self.set_affinity as u32,

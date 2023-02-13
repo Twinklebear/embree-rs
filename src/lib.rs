@@ -29,7 +29,7 @@ pub mod soa_ray;
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
 pub mod sys;
-pub use buffer::{Buffer, BufferSlice, BufferView, BufferViewMut, BufferSize};
+pub use buffer::{Buffer, BufferSize, BufferSlice, BufferView, BufferViewMut};
 pub use device::{Config, Device, FrequencyLevel, Isa};
 pub use instance::Instance;
 pub use intersect_context::IntersectContext;
@@ -46,18 +46,16 @@ pub use geometry::*;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases
-pub use sys::RTCBufferType as BufferUsage;
-pub use sys::RTCBuildQuality as BuildQuality;
-pub use sys::RTCDeviceProperty as DeviceProperty;
-pub use sys::RTCError as Error;
-pub use sys::RTCFormat as Format;
-pub use sys::RTCGeometryType as GeometryType;
-pub use sys::RTCSubdivisionMode as SubdivisionMode;
+pub use sys::{
+    RTCBufferType as BufferUsage, RTCBuildQuality as BuildQuality,
+    RTCDeviceProperty as DeviceProperty, RTCError as Error, RTCFormat as Format,
+    RTCGeometryType as GeometryType, RTCSubdivisionMode as SubdivisionMode,
+};
 
-pub use sys::RTCBuildFlags as BuildFlags;
-pub use sys::RTCCurveFlags as CurveFlags;
-pub use sys::RTCIntersectContextFlags as IntersectContextFlags;
-pub use sys::RTCSceneFlags as SceneFlags;
+pub use sys::{
+    RTCBuildFlags as BuildFlags, RTCCurveFlags as CurveFlags,
+    RTCIntersectContextFlags as IntersectContextFlags, RTCSceneFlags as SceneFlags,
+};
 
 /// Utility for making specifically aligned vectors
 pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {

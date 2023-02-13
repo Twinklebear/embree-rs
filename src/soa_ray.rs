@@ -1,6 +1,8 @@
-use std::iter::{ExactSizeIterator, Iterator};
-use std::marker::PhantomData;
-use std::u32;
+use std::{
+    iter::{ExactSizeIterator, Iterator},
+    marker::PhantomData,
+    u32,
+};
 
 pub trait SoARay {
     fn org(&self, i: usize) -> [f32; 3];
@@ -45,9 +47,7 @@ pub trait SoAHit {
     fn inst_id(&self, i: usize) -> u32;
     fn set_inst_id(&mut self, i: usize, id: u32);
 
-    fn hit(&self, i: usize) -> bool {
-        self.geom_id(i) != u32::MAX
-    }
+    fn hit(&self, i: usize) -> bool { self.geom_id(i) != u32::MAX }
 }
 
 pub struct SoARayRef<'a, T> {
@@ -56,27 +56,13 @@ pub struct SoARayRef<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> SoARayRef<'a, T> {
-    pub fn origin(&self) -> [f32; 3] {
-        self.ray.org(self.idx)
-    }
-    pub fn dir(&self) -> [f32; 3] {
-        self.ray.dir(self.idx)
-    }
-    pub fn tnear(&self) -> f32 {
-        self.ray.tnear(self.idx)
-    }
-    pub fn tfar(&self) -> f32 {
-        self.ray.tfar(self.idx)
-    }
-    pub fn mask(&self) -> u32 {
-        self.ray.mask(self.idx)
-    }
-    pub fn id(&self) -> u32 {
-        self.ray.id(self.idx)
-    }
-    pub fn flags(&self) -> u32 {
-        self.ray.flags(self.idx)
-    }
+    pub fn origin(&self) -> [f32; 3] { self.ray.org(self.idx) }
+    pub fn dir(&self) -> [f32; 3] { self.ray.dir(self.idx) }
+    pub fn tnear(&self) -> f32 { self.ray.tnear(self.idx) }
+    pub fn tfar(&self) -> f32 { self.ray.tfar(self.idx) }
+    pub fn mask(&self) -> u32 { self.ray.mask(self.idx) }
+    pub fn id(&self) -> u32 { self.ray.id(self.idx) }
+    pub fn flags(&self) -> u32 { self.ray.flags(self.idx) }
 }
 
 // TODO: Is this going to work well?
@@ -179,9 +165,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIter<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> ExactSizeIterator for SoARayIter<'a, T> {
-    fn len(&self) -> usize {
-        self.len - self.cur
-    }
+    fn len(&self) -> usize { self.len - self.cur }
 }
 
 pub struct SoARayIterMut<'a, T> {
@@ -219,9 +203,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIterMut<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> ExactSizeIterator for SoARayIterMut<'a, T> {
-    fn len(&self) -> usize {
-        self.len - self.cur
-    }
+    fn len(&self) -> usize { self.len - self.cur }
 }
 
 pub struct SoAHitRef<'a, T> {
@@ -230,24 +212,12 @@ pub struct SoAHitRef<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> SoAHitRef<'a, T> {
-    pub fn normal(&self) -> [f32; 3] {
-        self.hit.normal(self.idx)
-    }
-    pub fn uv(&self) -> (f32, f32) {
-        self.hit.uv(self.idx)
-    }
-    pub fn prim_id(&self) -> u32 {
-        self.hit.prim_id(self.idx)
-    }
-    pub fn geom_id(&self) -> u32 {
-        self.hit.geom_id(self.idx)
-    }
-    pub fn inst_id(&self) -> u32 {
-        self.hit.inst_id(self.idx)
-    }
-    pub fn hit(&self) -> bool {
-        self.hit.hit(self.idx)
-    }
+    pub fn normal(&self) -> [f32; 3] { self.hit.normal(self.idx) }
+    pub fn uv(&self) -> (f32, f32) { self.hit.uv(self.idx) }
+    pub fn prim_id(&self) -> u32 { self.hit.prim_id(self.idx) }
+    pub fn geom_id(&self) -> u32 { self.hit.geom_id(self.idx) }
+    pub fn inst_id(&self) -> u32 { self.hit.inst_id(self.idx) }
+    pub fn hit(&self) -> bool { self.hit.hit(self.idx) }
 }
 
 pub struct SoAHitIter<'a, T> {
@@ -284,9 +254,7 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIter<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> ExactSizeIterator for SoAHitIter<'a, T> {
-    fn len(&self) -> usize {
-        self.len - self.cur
-    }
+    fn len(&self) -> usize { self.len - self.cur }
 }
 
 pub struct SoAHitRefMut<'a, T> {
@@ -381,7 +349,5 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIterMut<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> ExactSizeIterator for SoAHitIterMut<'a, T> {
-    fn len(&self) -> usize {
-        self.len - self.cur
-    }
+    fn len(&self) -> usize { self.len - self.cur }
 }

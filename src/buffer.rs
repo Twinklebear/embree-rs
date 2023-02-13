@@ -1,11 +1,12 @@
 use crate::Error;
-use std::marker::PhantomData;
-use std::mem;
-use std::num::NonZeroUsize;
-use std::ops::{Bound, Deref, DerefMut, RangeBounds};
+use std::{
+    marker::PhantomData,
+    mem,
+    num::NonZeroUsize,
+    ops::{Bound, Deref, DerefMut, RangeBounds},
+};
 
-use crate::device::Device;
-use crate::sys::*;
+use crate::{device::Device, sys::*};
 
 /// Non-zero integer type used to describe the size of a buffer.
 pub type BufferSize = NonZeroUsize;
@@ -50,9 +51,7 @@ impl Buffer {
         }
     }
 
-    pub fn handle(&self) -> RTCBuffer {
-        self.handle
-    }
+    pub fn handle(&self) -> RTCBuffer { self.handle }
 
     /// Returns the a slice of the buffer.
     pub fn slice<S: RangeBounds<usize>>(&self, bounds: S) -> BufferSlice {
@@ -182,13 +181,11 @@ impl BufferSlice {
                 buffer,
                 offset,
                 size,
-            } => {
-                Ok(BufferViewMut {
-                    range: self.clone(),
-                    mapped: BufferMappedRange::from_buffer(buffer, *offset, size.get())?,
-                    marker: PhantomData,
-                })
-            }
+            } => Ok(BufferViewMut {
+                range: self.clone(),
+                mapped: BufferMappedRange::from_buffer(buffer, *offset, size.get())?,
+                marker: PhantomData,
+            }),
             BufferSlice::Managed { ptr, size, .. } => {
                 debug_assert!(
                     size.get() % mem::size_of::<T>() == 0,
@@ -207,9 +204,13 @@ impl BufferSlice {
 }
 
 impl<'a, T> BufferView<'a, T> {
-    /// Creates a new slice from the given Buffer with the given offset and size.
-    /// Only used internally by [`Buffer::mapped_range`].
-    fn new(buffer: &'a Buffer, offset: usize, size: BufferSize) -> Result<BufferView<'a, T>, Error> {
+    /// Creates a new slice from the given Buffer with the given offset and
+    /// size. Only used internally by [`Buffer::mapped_range`].
+    fn new(
+        buffer: &'a Buffer,
+        offset: usize,
+        size: BufferSize,
+    ) -> Result<BufferView<'a, T>, Error> {
         Ok(BufferView {
             range: BufferSlice::Created {
                 buffer: buffer.clone(),
@@ -223,8 +224,8 @@ impl<'a, T> BufferView<'a, T> {
 }
 
 impl<'a, T> BufferViewMut<'a, T> {
-    /// Creates a new slice from the given Buffer with the given offset and size.
-    /// Only used internally by [`Buffer::mapped_range_mut`].
+    /// Creates a new slice from the given Buffer with the given offset and
+    /// size. Only used internally by [`Buffer::mapped_range_mut`].
     fn new(
         buffer: &'a Buffer,
         offset: usize,
@@ -250,9 +251,11 @@ struct BufferMappedRange<'a, T: 'a> {
 }
 
 impl<'a, T: 'a> BufferMappedRange<'a, T> {
-    /// Creates a new slice from the given Buffer with the given offset and size.
+    /// Creates a new slice from the given Buffer with the given offset and
+    /// size.
     ///
-    /// The offset and size must be in bytes and must be a multiple of the size of `T`.
+    /// The offset and size must be in bytes and must be a multiple of the size
+    /// of `T`.
     ///
     /// # Safety
     ///
@@ -293,9 +296,7 @@ impl<'a, T: 'a> BufferMappedRange<'a, T> {
         }
     }
 
-    fn as_slice(&self) -> &[T] {
-        unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
-    }
+    fn as_slice(&self) -> &[T] { unsafe { std::slice::from_raw_parts(self.ptr, self.len) } }
 
     fn as_mut_slice(&mut self) -> &mut [T] {
         unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
@@ -303,37 +304,27 @@ impl<'a, T: 'a> BufferMappedRange<'a, T> {
 }
 
 impl<T> AsRef<[T]> for BufferView<'_, T> {
-    fn as_ref(&self) -> &[T] {
-        self.mapped.as_slice()
-    }
+    fn as_ref(&self) -> &[T] { self.mapped.as_slice() }
 }
 
 impl<T> AsMut<[T]> for BufferViewMut<'_, T> {
-    fn as_mut(&mut self) -> &mut [T] {
-        self.mapped.as_mut_slice()
-    }
+    fn as_mut(&mut self) -> &mut [T] { self.mapped.as_mut_slice() }
 }
 
 impl<T> Deref for BufferView<'_, T> {
     type Target = [T];
 
-    fn deref(&self) -> &Self::Target {
-        self.mapped.as_slice()
-    }
+    fn deref(&self) -> &Self::Target { self.mapped.as_slice() }
 }
 
 impl<T> Deref for BufferViewMut<'_, T> {
     type Target = [T];
 
-    fn deref(&self) -> &Self::Target {
-        self.mapped.as_slice()
-    }
+    fn deref(&self) -> &Self::Target { self.mapped.as_slice() }
 }
 
 impl<T> DerefMut for BufferViewMut<'_, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.mapped.as_mut_slice()
-    }
+    fn deref_mut(&mut self) -> &mut Self::Target { self.mapped.as_mut_slice() }
 }
 
 /// Converts a range bounds into an offset and size.

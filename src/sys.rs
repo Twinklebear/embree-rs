@@ -250,28 +250,20 @@ impl RTCIntersectContextFlags {
 impl ::std::ops::BitOr<RTCIntersectContextFlags> for RTCIntersectContextFlags {
     type Output = Self;
     #[inline]
-    fn bitor(self, other: Self) -> Self {
-        RTCIntersectContextFlags(self.0 | other.0)
-    }
+    fn bitor(self, other: Self) -> Self { RTCIntersectContextFlags(self.0 | other.0) }
 }
 impl ::std::ops::BitOrAssign for RTCIntersectContextFlags {
     #[inline]
-    fn bitor_assign(&mut self, rhs: RTCIntersectContextFlags) {
-        self.0 |= rhs.0;
-    }
+    fn bitor_assign(&mut self, rhs: RTCIntersectContextFlags) { self.0 |= rhs.0; }
 }
 impl ::std::ops::BitAnd<RTCIntersectContextFlags> for RTCIntersectContextFlags {
     type Output = Self;
     #[inline]
-    fn bitand(self, other: Self) -> Self {
-        RTCIntersectContextFlags(self.0 & other.0)
-    }
+    fn bitand(self, other: Self) -> Self { RTCIntersectContextFlags(self.0 & other.0) }
 }
 impl ::std::ops::BitAndAssign for RTCIntersectContextFlags {
     #[inline]
-    fn bitand_assign(&mut self, rhs: RTCIntersectContextFlags) {
-        self.0 &= rhs.0;
-    }
+    fn bitand_assign(&mut self, rhs: RTCIntersectContextFlags) { self.0 &= rhs.0; }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2771,28 +2763,20 @@ impl RTCCurveFlags {
 impl ::std::ops::BitOr<RTCCurveFlags> for RTCCurveFlags {
     type Output = Self;
     #[inline]
-    fn bitor(self, other: Self) -> Self {
-        RTCCurveFlags(self.0 | other.0)
-    }
+    fn bitor(self, other: Self) -> Self { RTCCurveFlags(self.0 | other.0) }
 }
 impl ::std::ops::BitOrAssign for RTCCurveFlags {
     #[inline]
-    fn bitor_assign(&mut self, rhs: RTCCurveFlags) {
-        self.0 |= rhs.0;
-    }
+    fn bitor_assign(&mut self, rhs: RTCCurveFlags) { self.0 |= rhs.0; }
 }
 impl ::std::ops::BitAnd<RTCCurveFlags> for RTCCurveFlags {
     type Output = Self;
     #[inline]
-    fn bitand(self, other: Self) -> Self {
-        RTCCurveFlags(self.0 & other.0)
-    }
+    fn bitand(self, other: Self) -> Self { RTCCurveFlags(self.0 & other.0) }
 }
 impl ::std::ops::BitAndAssign for RTCCurveFlags {
     #[inline]
-    fn bitand_assign(&mut self, rhs: RTCCurveFlags) {
-        self.0 &= rhs.0;
-    }
+    fn bitand_assign(&mut self, rhs: RTCCurveFlags) { self.0 &= rhs.0; }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -3889,28 +3873,20 @@ impl RTCSceneFlags {
 impl ::std::ops::BitOr<RTCSceneFlags> for RTCSceneFlags {
     type Output = Self;
     #[inline]
-    fn bitor(self, other: Self) -> Self {
-        RTCSceneFlags(self.0 | other.0)
-    }
+    fn bitor(self, other: Self) -> Self { RTCSceneFlags(self.0 | other.0) }
 }
 impl ::std::ops::BitOrAssign for RTCSceneFlags {
     #[inline]
-    fn bitor_assign(&mut self, rhs: RTCSceneFlags) {
-        self.0 |= rhs.0;
-    }
+    fn bitor_assign(&mut self, rhs: RTCSceneFlags) { self.0 |= rhs.0; }
 }
 impl ::std::ops::BitAnd<RTCSceneFlags> for RTCSceneFlags {
     type Output = Self;
     #[inline]
-    fn bitand(self, other: Self) -> Self {
-        RTCSceneFlags(self.0 & other.0)
-    }
+    fn bitand(self, other: Self) -> Self { RTCSceneFlags(self.0 & other.0) }
 }
 impl ::std::ops::BitAndAssign for RTCSceneFlags {
     #[inline]
-    fn bitand_assign(&mut self, rhs: RTCSceneFlags) {
-        self.0 &= rhs.0;
-    }
+    fn bitand_assign(&mut self, rhs: RTCSceneFlags) { self.0 &= rhs.0; }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -4392,28 +4368,20 @@ impl RTCBuildFlags {
 impl ::std::ops::BitOr<RTCBuildFlags> for RTCBuildFlags {
     type Output = Self;
     #[inline]
-    fn bitor(self, other: Self) -> Self {
-        RTCBuildFlags(self.0 | other.0)
-    }
+    fn bitor(self, other: Self) -> Self { RTCBuildFlags(self.0 | other.0) }
 }
 impl ::std::ops::BitOrAssign for RTCBuildFlags {
     #[inline]
-    fn bitor_assign(&mut self, rhs: RTCBuildFlags) {
-        self.0 |= rhs.0;
-    }
+    fn bitor_assign(&mut self, rhs: RTCBuildFlags) { self.0 |= rhs.0; }
 }
 impl ::std::ops::BitAnd<RTCBuildFlags> for RTCBuildFlags {
     type Output = Self;
     #[inline]
-    fn bitand(self, other: Self) -> Self {
-        RTCBuildFlags(self.0 & other.0)
-    }
+    fn bitand(self, other: Self) -> Self { RTCBuildFlags(self.0 & other.0) }
 }
 impl ::std::ops::BitAndAssign for RTCBuildFlags {
     #[inline]
-    fn bitand_assign(&mut self, rhs: RTCBuildFlags) {
-        self.0 &= rhs.0;
-    }
+    fn bitand_assign(&mut self, rhs: RTCBuildFlags) { self.0 &= rhs.0; }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]

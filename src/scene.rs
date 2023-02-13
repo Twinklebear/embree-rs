@@ -1,17 +1,16 @@
-use crate::Error;
-use crate::SceneFlags;
-use std::collections::HashMap;
-use std::mem;
-use std::sync::Arc;
+use crate::{Error, SceneFlags};
+use std::{collections::HashMap, mem, sync::Arc};
 
-use crate::callback;
-use crate::device::Device;
-use crate::geometry::Geometry;
-use crate::intersect_context::IntersectContext;
-use crate::ray::{Ray, RayHit};
-use crate::ray_packet::{Ray4, RayHit4};
-use crate::ray_stream::{RayHitN, RayN};
-use crate::sys::*;
+use crate::{
+    callback,
+    device::Device,
+    geometry::Geometry,
+    intersect_context::IntersectContext,
+    ray::{Ray, RayHit},
+    ray_packet::{Ray4, RayHit4},
+    ray_stream::{RayHitN, RayN},
+    sys::*,
+};
 
 /// A scene containing various geometry for rendering. Geometry
 /// can be added and removed by attaching and detaching it, after
@@ -77,9 +76,7 @@ impl Scene {
 
     /// Get the underlying handle to the scene, e.g. for passing it to
     /// native code or ISPC kernels.
-    pub unsafe fn handle(&self) -> RTCScene {
-        self.handle
-    }
+    pub unsafe fn handle(&self) -> RTCScene { self.handle }
 
     /// Commit the scene to build the BVH on top of the geometry to allow
     /// for ray tracing the scene using the intersect/occluded methods
@@ -89,9 +86,10 @@ impl Scene {
         }
     }
 
-    /// Set the scene flags. Multiple flags can be enabled using an OR operation.
-    /// See [`RTCSceneFlags`] for all possible flags.
-    /// On failure an error code is set that can be queried using [`rtcGetDeviceError`].
+    /// Set the scene flags. Multiple flags can be enabled using an OR
+    /// operation. See [`RTCSceneFlags`] for all possible flags.
+    /// On failure an error code is set that can be queried using
+    /// [`rtcGetDeviceError`].
     pub fn set_flags(&self, flags: RTCSceneFlags) {
         unsafe {
             rtcSetSceneFlags(self.handle, flags);
@@ -100,8 +98,8 @@ impl Scene {
 
     /// Query the flags of the scene.
     ///
-    /// Useful when setting individual flags, e.g. to just set the robust mode without
-    /// changing other flags the following way:
+    /// Useful when setting individual flags, e.g. to just set the robust mode
+    /// without changing other flags the following way:
     /// ```no_run
     /// use embree::{Device, Scene, SceneFlags};
     /// let device = Device::new().unwrap();
@@ -109,11 +107,10 @@ impl Scene {
     /// let flags = scene.flags();
     /// scene.set_flags(flags | SceneFlags::ROBUST);
     /// ```
-    pub fn flags(&self) -> RTCSceneFlags {
-        unsafe { rtcGetSceneFlags(self.handle) }
-    }
+    pub fn flags(&self) -> RTCSceneFlags { unsafe { rtcGetSceneFlags(self.handle) } }
 
-    /// Set the build quality of the scene. See [`RTCBuildQuality`] for all possible values.
+    /// Set the build quality of the scene. See [`RTCBuildQuality`] for all
+    /// possible values.
     pub fn set_build_quality(&self, quality: RTCBuildQuality) {
         unsafe {
             rtcSetSceneBuildQuality(self.handle, quality);
@@ -129,7 +126,8 @@ impl Scene {
     ///
     /// # Arguments
     ///
-    /// * `progress` - A callback function that takes a number in range [0.0, 1.0]
+    /// * `progress` - A callback function that takes a number in range [0.0,
+    ///   1.0]
     /// indicating the progress of the operation.
     ///
     /// # Warning

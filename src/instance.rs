@@ -1,10 +1,6 @@
-use std::os::raw;
-use std::sync::Arc;
+use std::{os::raw, sync::Arc};
 
-use crate::geometry::Geometry;
-use crate::scene::Scene;
-use crate::sys::*;
-use crate::{Format, GeometryType, Device};
+use crate::{geometry::Geometry, scene::Scene, sys::*, Device, Format, GeometryType};
 
 pub struct Instance {
     /// The scene being instanced
@@ -22,7 +18,8 @@ impl Instance {
     }
     pub fn set_transform<Transform: AsRef<[f32; 16]>>(&mut self, transform: Transform) {
         let mat: &[f32; 16] = transform.as_ref();
-        // Will this be fine if we don't set the number of timesteps? Default should be 1?
+        // Will this be fine if we don't set the number of timesteps? Default should be
+        // 1?
         unsafe {
             rtcSetGeometryTransform(
                 self.handle,
@@ -35,17 +32,16 @@ impl Instance {
 }
 
 impl Geometry for Instance {
-    fn new(device: &Device) -> Result<Self, RTCError> where Self: Sized {
+    fn new(device: &Device) -> Result<Self, RTCError>
+    where
+        Self: Sized,
+    {
         unimplemented!()
     }
 
-    fn handle(&self) -> RTCGeometry {
-        self.handle
-    }
+    fn handle(&self) -> RTCGeometry { self.handle }
 
-    fn kind(&self) -> GeometryType {
-        GeometryType::INSTANCE
-    }
+    fn kind(&self) -> GeometryType { GeometryType::INSTANCE }
 }
 
 impl Drop for Instance {
