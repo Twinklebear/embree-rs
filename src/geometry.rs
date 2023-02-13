@@ -1,24 +1,45 @@
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 
-use crate::buffer::BufferSlice;
 use crate::{sys::*, Device, Error};
-use crate::{BufferUsage, Format, GeometryType};
+use crate::{BufferUsage, Format, GeometryType, BufferSlice};
 
 mod triangle_mesh;
 
+pub use triangle_mesh::TriangleMesh;
+
 pub trait Geometry {
-    fn geometry_type(&self) -> GeometryType;
+    fn new(device: &Device) -> Result<Self, Error> where Self: Sized;
+    fn kind(&self) -> GeometryType;
+    fn handle(&self) -> RTCGeometry;
+    fn commit(&mut self) {
+        unsafe {
+            rtcCommitGeometry(self.handle());
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct AttachedBuffer {
+    pub slot: u32,
+    pub buffer: BufferSlice,
+    pub format: Format,
+    pub stride: usize,
 }
 
 /// Handle to an Embree geometry object.
-pub struct GeometryData {
+///
+/// BufferGeometry is a wrapper around an Embree geometry object. It does not own the
+/// buffers that are bound to it, but it does own the geometry object itself.
+#[derive(Debug)]
+pub struct BufferGeometry {
     pub(crate) device: Device,
     pub(crate) handle: RTCGeometry,
     pub(crate) kind: GeometryType,
-    pub(crate) bindings: HashMap<BufferUsage, Vec<BufferSlice>>,
+    pub(crate) attachments: HashMap<BufferUsage, Vec<AttachedBuffer>>,
 }
 
-impl Drop for GeometryData {
+impl<'a> Drop for BufferGeometry {
     fn drop(&mut self) {
         unsafe {
             rtcReleaseGeometry(self.handle);
@@ -26,52 +47,155 @@ impl Drop for GeometryData {
     }
 }
 
-impl GeometryData {
-    pub(crate) fn new(device: Device, kind: GeometryType) -> Result<GeometryData, Error> {
+impl BufferGeometry {
+    pub(crate) fn new(device: &Device, kind: GeometryType) -> Result<BufferGeometry, Error> {
         let handle = unsafe { rtcNewGeometry(device.handle, kind) };
         if handle.is_null() {
             Err(device.get_error())
         } else {
-            Ok(GeometryData {
-                device,
+            Ok(BufferGeometry {
+                device: device.clone(),
                 handle,
                 kind,
-                bindings: HashMap::new(),
+                attachments: HashMap::new(),
             })
         }
     }
 
-    // pub fn bind_new_buffer<T: Copy>(
-    //     &mut self,
-    //     usage: BufferUsage,
-    //     format: Format,
-    //     data: &[T],
-    // ) -> Result<BufferSlice, Error> {
-    //     let buffer = self.device.create_buffer(usage, format, data)?;
-    //     self.bind_buffer(usage, buffer)
-    // }
-
-    /// Binds a view of a buffer to a geometry.
-    pub fn bind_buffer<T>(
+    /// Binds a view of a buffer to the geometry.
+    ///
+    /// Analogous to [`rtcSetGeometryBuffer`](https://spec.oneapi.io/oneart/0.5-rev-1/embree-spec.html#rtcsetgeometrybuffer).
+    ///
+    /// # Arguments
+    ///
+    /// * `usage` - The usage of the buffer.
+    ///
+    /// * `slot` - The slot to bind the buffer to.
+    ///
+    /// * `format` - The format of the buffer.
+    ///
+    /// * `slice` - The buffer slice to bind.
+    ///
+    /// * `stride` - The stride of the elements in the buffer.
+    ///
+    /// * `count` - The number of elements in the buffer.
+    pub fn set_buffer(
         &mut self,
-        buffer: BufferSlice,
-        slot: u32,
         usage: BufferUsage,
+        slot: u32,
         format: Format,
+        slice: BufferSlice,
+        stride: usize,
+        count: usize,
     ) -> Result<(), Error> {
-        self.bindings.entry(usage).or_insert(vec![])
-        unsafe {
-            rtcSetGeometryBuffer(
-                self.handle,
-                usage,
-                slot,
-                format,
+        match slice {
+            BufferSlice::Created {
                 buffer,
-                buffer.offset,
-                std::mem::size_of::<T>(),
-                buffer.size / std::mem::size_of::<T>(),
-            )
+                offset,
+                size,
+            } => {
+                let mut bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
+                if bindings.iter().find(|a| a.slot == slot).is_none() {
+                    println!("Binding buffer to slot {}, offset {}, stride {}, count {}", slot,
+                    offset, stride, count);
+                    unsafe {
+                        rtcSetGeometryBuffer(
+                            self.handle,
+                            usage,
+                            slot,
+                            format,
+                            buffer.handle,
+                            offset,
+                            stride as usize,
+                            count as usize,
+                        )
+                    };
+                    bindings.push(AttachedBuffer {
+                        slot,
+                        buffer: BufferSlice::Created {
+                            buffer,
+                            offset,
+                            size,
+                        },
+                        format,
+                        stride,
+                    });
+                    Ok(())
+                } else {
+                    eprint!("Buffer already attached to slot {}", slot);
+                    Err(Error::INVALID_ARGUMENT)
+                }
+            }
+            BufferSlice::Managed { .. } => {
+                eprint!("Internal buffer cannot be shared!");
+                Err(Error::INVALID_ARGUMENT)
+            }
         }
+    }
+
+    /// Creates a new [`Buffer`] and binds it as a specific attribute for this geometry.
+    ///
+    /// Analogous to [`rtcSetNewGeometryBuffer`](https://spec.oneapi.io/oneart/0.5-rev-1/embree-spec.html#rtcsetnewgeometrybuffer).
+    ///
+    /// The allocated buffer will be automatically over-allocated slightly when used as a
+    /// [`BufferUsage::VERTEX`] buffer, where a requirement is that each buffer element should
+    /// be readable using 16-byte SSE load instructions.
+    ///
+    /// The allocated buffer is managed internally and automatically released when the geometry
+    /// is destroyed by Embree.
+    ///
+    /// # Arguments
+    ///
+    /// * `usage` - The usage of the buffer.
+    ///
+    /// * `slot` - The slot to bind the buffer to.
+    ///
+    /// * `format` - The format of the buffer items. See [`Format`] for more information.
+    ///
+    /// * `count` - The number of items in the buffer.
+    ///
+    /// * `stride` - The stride of the buffer items. MUST be aligned to 4 bytes.
+    pub fn set_new_buffer(
+        &mut self,
+        usage: BufferUsage,
+        slot: u32,
+        format: Format,
+        stride: usize,
+        count: usize,
+    ) -> Result<(), Error> {
+        let bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
+        if bindings.iter().find(|a| a.slot == slot).is_none() {
+            let raw_ptr = unsafe {
+                rtcSetNewGeometryBuffer(self.handle, usage, slot, format, stride as usize, count as usize)
+            };
+            if raw_ptr.is_null() {
+                Err(self.device.get_error())
+            } else {
+                let buffer_slice = BufferSlice::Managed {
+                    ptr: raw_ptr,
+                    size: NonZeroUsize::new(count * stride as usize).unwrap(),
+                    marker: std::marker::PhantomData,
+                };
+                bindings.push(AttachedBuffer {
+                    slot,
+                    buffer: buffer_slice,
+                    format,
+                    stride,
+                });
+                Ok(())
+            }
+        } else {
+            eprint!("Buffer already attached to slot {}", slot);
+            Err(Error::INVALID_ARGUMENT)
+        }
+    }
+
+    /// Returns the buffer bound to the given slot and usage.
+    pub fn get_buffer(&self, usage: BufferUsage, slot: u32) -> Option<&BufferSlice> {
+        self.attachments
+            .get(&usage)
+            .and_then(|v| v.iter().find(|a| a.slot == slot))
+            .map(|a| &a.buffer)
     }
 
     pub fn commit(&mut self) {
@@ -126,7 +250,7 @@ impl GeometryData {
     /// the subdivision mesh to map multiple textures onto one subdivision geometry.
     fn set_vertex_attribute_topology(&self, vertex_attribute_id: u32, topology_id: u32) {
         unsafe {
-            rtcSetGeometryVertexAttributeTopology(self.handle(), vertex_attribute_id, topology_id);
+            rtcSetGeometryVertexAttributeTopology(self.handle, vertex_attribute_id, topology_id);
         }
     }
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::callback;
 use crate::device::Device;
-use crate::geometry::GeometryTrait;
+use crate::geometry::Geometry;
 use crate::intersect_context::IntersectContext;
 use crate::ray::{Ray, RayHit};
 use crate::ray_packet::{Ray4, RayHit4};
@@ -20,7 +20,7 @@ use crate::sys::*;
 pub struct Scene {
     pub(crate) handle: RTCScene,
     pub(crate) device: Device,
-    geometry: HashMap<u32, Arc<dyn GeometryTrait>>,
+    geometry: HashMap<u32, Arc<dyn Geometry>>,
 }
 
 impl Clone for Scene {
@@ -39,7 +39,7 @@ impl Scene {
     pub(crate) fn new(device: Device) -> Result<Scene, Error> {
         let handle = unsafe { rtcNewScene(device.handle) };
         if handle.is_null() {
-            Err(device.error_code())
+            Err(device.get_error())
         } else {
             Ok(Scene {
                 handle,
@@ -61,7 +61,7 @@ impl Scene {
     /// A geometry can only be attached to one Scene at a time, per the Embree
     /// documentation. The geometry can be detached from the scene to move
     /// it to another one.
-    pub fn attach_geometry(&mut self, mesh: Arc<dyn GeometryTrait>) -> u32 {
+    pub fn attach_geometry(&mut self, mesh: Arc<dyn Geometry>) -> u32 {
         let id = unsafe { rtcAttachGeometry(self.handle, mesh.handle()) };
         self.geometry.insert(id, mesh);
         id

@@ -1,17 +1,12 @@
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
-
-use crate::buffer::Buffer;
-use crate::device::Device;
 use crate::sys::*;
-use crate::{BufferType, Format, GeometryType};
+use crate::{BufferUsage, Device, Format, GeometryType, BufferGeometry, Geometry};
+use std::ops::{Deref, DerefMut};
 
-use super::GeometryData;
-
-pub struct TriangleMesh(GeometryData);
+#[derive(Debug)]
+pub struct TriangleMesh(BufferGeometry);
 
 impl Deref for TriangleMesh {
-    type Target = GeometryData;
+    type Target = BufferGeometry;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -25,54 +20,30 @@ impl DerefMut for TriangleMesh {
 }
 
 impl TriangleMesh {
-    pub fn unanimated(device: Device, num_tris: usize, num_verts: usize) -> Arc<TriangleMesh> {
-        let h = unsafe { rtcNewGeometry(device.handle, GeometryType::TRIANGLE) };
-        let mut vertex_buffer = Buffer::new(device.clone(), num_verts);
-        let mut index_buffer = Buffer::new(device.clone(), num_tris);
-        unsafe {
-            rtcSetGeometryBuffer(
-                h,
-                BufferType::VERTEX,
-                0,
-                Format::FLOAT3,
-                vertex_buffer.handle,
-                0,
-                16,
-                num_verts,
-            );
-            vertex_buffer.set_attachment(h, BufferType::VERTEX, 0);
+    pub fn unanimated(device: &Device, num_tris: usize, num_verts: usize) -> TriangleMesh {
+        let mut geometry = BufferGeometry::new(device, GeometryType::TRIANGLE).unwrap();
 
-            rtcSetGeometryBuffer(
-                h,
-                BufferType::INDEX,
-                0,
-                Format::UINT3,
-                index_buffer.handle,
-                0,
-                12,
-                num_tris,
-            );
-            index_buffer.set_attachment(h, BufferType::INDEX, 0);
-        }
-        Arc::new(TriangleMesh {
-            device: device,
-            handle: h,
-            vertex_buffer: vertex_buffer,
-            index_buffer: index_buffer,
-        })
+        geometry
+            .set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, num_verts)
+            .unwrap();
+        geometry
+            .set_new_buffer(BufferUsage::INDEX, 0, Format::UINT3, 12, num_tris)
+            .unwrap();
+
+        Self(geometry)
     }
 }
 
-impl GeometryTrait for TriangleMesh {
+impl Geometry for TriangleMesh {
+    fn new(device: &Device) -> Result<Self, RTCError> where Self: Sized {
+        Ok(Self(BufferGeometry::new(device, GeometryType::TRIANGLE)?))
+    }
+
+    fn kind(&self) -> GeometryType {
+        GeometryType::TRIANGLE
+    }
+
     fn handle(&self) -> RTCGeometry {
         self.handle
-    }
-}
-
-impl Drop for TriangleMesh {
-    fn drop(&mut self) {
-        unsafe {
-            rtcReleaseGeometry(self.handle);
-        }
     }
 }

@@ -1,15 +1,11 @@
-use crate::buffer::BufferSize;
-use crate::geometry::Geometry;
 use crate::sys::*;
-use crate::Buffer;
-use crate::Error;
-use crate::GeometryType;
-use crate::Scene;
+use crate::{Error, Scene, BufferSize, Buffer, Geometry};
 use std::ffi::CString;
 use std::fmt::{self, Display, Formatter};
 use std::ptr;
 
 /// Handle to an Embree device.
+#[derive(Debug)]
 pub struct Device {
     pub(crate) handle: RTCDevice,
 }
@@ -189,7 +185,7 @@ impl Device {
     /// # Returns
     ///
     /// Error code encoded as `RTCError`.
-    pub fn error_code(&self) -> RTCError {
+    pub fn get_error(&self) -> RTCError {
         unsafe { rtcGetDeviceError(self.handle) }
     }
 
@@ -208,13 +204,13 @@ impl Device {
 
     /// Creates a new data buffer.
     /// The created buffer is always aligned to 16 bytes.
-    pub fn create_buffer(&self, size: BufferSize) -> Result<Buffer, Error> {
-        Buffer::new(self.clone(), size)
+    pub fn create_buffer(&self, size: usize) -> Result<Buffer, Error> {
+        Buffer::new(self, BufferSize::new(size).unwrap())
     }
 
     /// Creates a [`Geometry`] object bound to the device.
-    pub fn create_geometry(&self, kind: GeometryType) -> Result<Geometry, Error> {
-        Geometry::new(self.clone(), kind)
+    pub fn create_geometry<G: Geometry>(&self) -> Result<G, Error> {
+        G::new(self)
     }
 }
 

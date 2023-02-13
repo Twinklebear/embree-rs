@@ -1,10 +1,10 @@
 use std::os::raw;
 use std::sync::Arc;
 
-use crate::geometry::GeometryTrait;
+use crate::geometry::Geometry;
 use crate::scene::Scene;
 use crate::sys::*;
-use crate::{Format, GeometryType};
+use crate::{Format, GeometryType, Device};
 
 pub struct Instance {
     /// The scene being instanced
@@ -18,10 +18,7 @@ impl Instance {
         unsafe {
             rtcSetGeometryInstancedScene(h, scene.handle);
         }
-        Arc::new(Instance {
-            handle: h,
-            scene: scene,
-        })
+        Arc::new(Instance { handle: h, scene })
     }
     pub fn set_transform<Transform: AsRef<[f32; 16]>>(&mut self, transform: Transform) {
         let mat: &[f32; 16] = transform.as_ref();
@@ -37,9 +34,17 @@ impl Instance {
     }
 }
 
-impl GeometryTrait for Instance {
+impl Geometry for Instance {
+    fn new(device: &Device) -> Result<Self, RTCError> where Self: Sized {
+        unimplemented!()
+    }
+
     fn handle(&self) -> RTCGeometry {
         self.handle
+    }
+
+    fn kind(&self) -> GeometryType {
+        GeometryType::INSTANCE
     }
 }
 

@@ -4,8 +4,7 @@ extern crate cgmath;
 extern crate embree;
 extern crate support;
 
-use cgmath::{Vector3, Vector4};
-use embree::{Device, Geometry, IntersectContext, RayHitN, RayN, Scene, TriangleMesh};
+use embree::{BufferUsage, Device, Geometry, IntersectContext, RayHitN, RayN, TriangleMesh};
 use std::sync::Arc;
 
 fn main() {
@@ -13,24 +12,20 @@ fn main() {
 
     let device = Device::new().unwrap();
 
+    device.set_error_function(|error, message| {
+        println!("Embree error {}: {}", error, message);
+    });
+
     // Make a triangle
-    let mut triangle = TriangleMesh::unanimated(device.clone(), 1, 3);
-    {
-        // TODO: API ergonomics are also pretty rough here w/ all the Arc::get_mut etc
-        let tri_mut = Arc::get_mut(&mut triangle).unwrap();
-        {
-            let mut verts = tri_mut.vertex_buffer.map();
-            let mut tris = tri_mut.index_buffer.map();
-            verts[0] = [-1.0, 0.0, 0.0, 0.0];
-            verts[1] = [0.0, 1.0, 0.0, 0.0];
-            verts[2] = [1.0, 0.0, 0.0, 0.0];
+    let mut triangle = TriangleMesh::unanimated(&device, 1, 3);
+    triangle.get_buffer(BufferUsage::VERTEX, 0).unwrap()
+        .view_mut::<[f32; 4]>().unwrap()
+        .copy_from_slice(&[[-1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0]]);
+    triangle.get_buffer(BufferUsage::INDEX, 0).unwrap().view_mut::<[u32; 3]>().unwrap()
+        .copy_from_slice(&[[0, 1, 2]]);
+    triangle.commit();
 
-            tris[0] = [0, 1, 2];
-        }
-
-        tri_mut.commit();
-    }
-
+    let triangle = Arc::new(triangle);
     let mut scene = device.create_scene().unwrap();
     scene.attach_geometry(triangle);
     scene.commit();

@@ -13,20 +13,13 @@
 
 use std::{alloc, mem};
 
-// pub mod bezier_curve;
-// pub mod bspline_curve;
 pub mod buffer;
 mod callback;
-pub mod catmull_rom_curve;
-// pub mod curve;
 pub mod device;
 pub mod error;
-pub mod geometry;
-// pub mod hermite_curve;
+mod geometry;
 pub mod instance;
 pub mod intersect_context;
-// pub mod linear_curve;
-// pub mod quad_mesh;
 pub mod ray;
 pub mod ray_packet;
 pub mod ray_stream;
@@ -36,20 +29,10 @@ pub mod soa_ray;
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
 pub mod sys;
-// pub mod triangle_mesh;
-
-// pub use bezier_curve::BezierCurve;
-// pub use bspline_curve::BsplineCurve;
-pub use buffer::{Buffer, BufferView};
-pub use catmull_rom_curve::CatmullRomCurve;
-// pub use curve::CurveType;
+pub use buffer::{Buffer, BufferSlice, BufferView, BufferViewMut, BufferSize};
 pub use device::{Config, Device, FrequencyLevel, Isa};
-// pub use geometry::GeometryTrait;
-// pub use hermite_curve::HermiteCurve;
 pub use instance::Instance;
 pub use intersect_context::IntersectContext;
-// pub use linear_curve::LinearCurve;
-// pub use quad_mesh::QuadMesh;
 pub use ray::{Hit, Ray, RayHit};
 pub use ray_packet::{Hit4, Ray4, RayHit4};
 pub use ray_stream::{HitN, RayHitN, RayN};
@@ -58,7 +41,8 @@ pub use soa_ray::{
     SoAHit, SoAHitIter, SoAHitIterMut, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, SoARayRef,
     SoARayRefMut,
 };
-pub use triangle_mesh::TriangleMesh;
+
+pub use geometry::*;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases
