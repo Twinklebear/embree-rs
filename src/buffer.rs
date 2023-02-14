@@ -53,7 +53,13 @@ impl Buffer {
 
     pub fn handle(&self) -> RTCBuffer { self.handle }
 
-    /// Returns the a slice of the buffer.
+    /// Returns a slice of the buffer.
+    ///
+    /// This function only returns a slice of the buffer, and does not
+    /// map the buffer into memory. To map the buffer into memory, use
+    /// [`Buffer::mapped_range`] or [`BufferSlice::view`] to create a
+    /// read-only view of the buffer, or [`Buffer::mapped_range_mut`] or
+    /// [`BufferSlice::view_mut`] to create a mutable view of the buffer.
     pub fn slice<S: RangeBounds<usize>>(&self, bounds: S) -> BufferSlice {
         let start = match bounds.start_bound() {
             Bound::Included(&n) => n,
@@ -76,10 +82,10 @@ impl Buffer {
     ///
     /// # Arguments
     ///
-    /// * `range` - The range of indices to slice into the buffer.
+    /// * `bounds` - The range of indices to slice into the buffer.
     ///   - Ranges with no end will slice to the end of the buffer.
     ///   - Totally unbounded range (..) will slice the entire buffer.
-    pub fn mapped_range<'a, S: RangeBounds<usize>, T>(&'a self, bounds: S) -> BufferView<'a, T> {
+    pub fn mapped_range<S: RangeBounds<usize>, T>(&self, bounds: S) -> BufferView<'_, T> {
         let (offset, size) = range_bounds_to_offset_and_size(bounds);
         let size = size.unwrap_or_else(|| self.size.get() - offset);
         debug_assert!(offset + size <= self.size.get() && offset < self.size.get());
@@ -87,6 +93,12 @@ impl Buffer {
     }
 
     /// Mutable slice into the buffer for the given range.
+    ///
+    /// # Arguments
+    ///
+    /// * `bounds` - The range of indices to slice into the buffer.
+    ///  - Ranges with no end will slice to the end of the buffer.
+    /// - Totally unbounded range (..) will slice the entire buffer.
     pub fn mapped_range_mut<S: RangeBounds<usize>, T>(
         &mut self,
         bounds: S,

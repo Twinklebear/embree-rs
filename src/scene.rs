@@ -155,14 +155,24 @@ impl Scene {
         }
     }
 
-    pub fn intersect(&self, ctx: &mut IntersectContext, ray: &mut RayHit) {
+    /// Finds the closest hit of a single ray with the scene.
+    ///
+    /// Analogous to [`rtcIntersect1`].
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query.
+    /// * `ray` - The ray to intersect with the scene.
+    pub fn intersect(&self, ctx: &mut IntersectContext, ray: Ray) -> RayHit {
+        let mut ray_hit = RayHit::new(ray);
         unsafe {
             rtcIntersect1(
                 self.handle,
                 ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRayHit,
+                &mut ray_hit as *mut RTCRayHit,
             );
         }
+        ray_hit
     }
 
     pub fn occluded(&self, ctx: &mut IntersectContext, ray: &mut Ray) {

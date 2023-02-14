@@ -23,3 +23,8 @@ exclude = [
 
 [dependencies]
 static_assertions = "1.1.0"
+
+[workspace]
+members = [
+	"examples/*",
+]

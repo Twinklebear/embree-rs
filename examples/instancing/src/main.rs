@@ -211,7 +211,8 @@ fn main() {
                 rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
 
                 if ray_hit.hit.hit() {
-                    // Transform the normals of the instances into world space with the normal_transforms
+                    // Transform the normals of the instances into world space with the
+                    // normal_transforms
                     let hit = &ray_hit.hit;
                     let geom_id = hit.geomID;
                     let inst_id = hit.instID[0];

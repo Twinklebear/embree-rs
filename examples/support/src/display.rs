@@ -114,8 +114,8 @@ impl Display {
         }
     }
 }
-/// The function passed should render and update the image to be displayed in the window,
-/// optionally using the camera pose information passed.
+/// The function passed should render and update the image to be displayed in
+/// the window, optionally using the camera pose information passed.
 pub fn run<F>(display: Display, mut render: F)
 where
     F: 'static + FnMut(&mut RgbaImage, CameraPose, f32),

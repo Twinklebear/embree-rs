@@ -1,10 +1,11 @@
 #![allow(dead_code)]
 
-extern crate cgmath;
 extern crate embree;
 extern crate support;
 
-use embree::{BufferUsage, Device, Geometry, IntersectContext, RayHitN, RayN, TriangleMesh};
+use embree::{
+    BufferUsage, Device, Format, Geometry, IntersectContext, RayHitN, RayN, TriangleMesh,
+};
 use std::sync::Arc;
 
 fn main() {
@@ -18,10 +19,17 @@ fn main() {
 
     // Make a triangle
     let mut triangle = TriangleMesh::unanimated(&device, 1, 3);
-    triangle.get_buffer(BufferUsage::VERTEX, 0).unwrap()
-        .view_mut::<[f32; 4]>().unwrap()
-        .copy_from_slice(&[[-1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0]]);
-    triangle.get_buffer(BufferUsage::INDEX, 0).unwrap().view_mut::<[u32; 3]>().unwrap()
+    triangle
+        .get_buffer(BufferUsage::VERTEX, 0)
+        .unwrap()
+        .view_mut::<[f32; 3]>()
+        .unwrap()
+        .copy_from_slice(&[[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]);
+    triangle
+        .get_buffer(BufferUsage::INDEX, 0)
+        .unwrap()
+        .view_mut::<[u32; 3]>()
+        .unwrap()
         .copy_from_slice(&[[0, 1, 2]]);
     triangle.commit();
 

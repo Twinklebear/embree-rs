@@ -1,0 +1,10 @@
+[package]
+name = "minimal"
+version = "0.1.0"
+authors = ["Yang Chen <matthiasychen@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+embree = { path = "../../" }
+support = { path = "../support" }
+glam = "0.22"

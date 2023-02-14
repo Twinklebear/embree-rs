@@ -1,6 +1,4 @@
-use std::{f32, u32};
-
-use crate::sys;
+use crate::{sys, INVALID_ID};
 
 pub type Ray = sys::RTCRay;
 pub type Hit = sys::RTCHit;
@@ -11,6 +9,7 @@ impl Ray {
     pub fn new(origin: [f32; 3], dir: [f32; 3]) -> Ray {
         Ray::segment(origin, dir, 0.0, f32::INFINITY)
     }
+
     pub fn segment(origin: [f32; 3], dir: [f32; 3], tnear: f32, tfar: f32) -> Ray {
         sys::RTCRay {
             org_x: origin[0],
@@ -30,26 +29,30 @@ impl Ray {
 }
 
 impl Hit {
-    pub fn new() -> Hit {
-        sys::RTCHit {
+    /// Returns true if the hit is valid (i.e. the ray hit something).
+    pub fn is_valid(&self) -> bool { self.geomID != INVALID_ID }
+}
+
+impl Default for Hit {
+    fn default() -> Self {
+        Hit {
             Ng_x: 0.0,
             Ng_y: 0.0,
             Ng_z: 0.0,
             u: 0.0,
             v: 0.0,
-            primID: u32::MAX,
-            geomID: u32::MAX,
-            instID: [u32::MAX; 1],
+            primID: INVALID_ID,
+            geomID: INVALID_ID,
+            instID: [INVALID_ID; 1],
         }
     }
-    pub fn hit(&self) -> bool { self.geomID != u32::MAX }
 }
 
 impl RayHit {
     pub fn new(ray: Ray) -> RayHit {
         sys::RTCRayHit {
             ray,
-            hit: Hit::new(),
+            hit: Hit::default(),
         }
     }
 }

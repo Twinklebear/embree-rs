@@ -214,7 +214,8 @@ impl Device {
         Buffer::new(self, BufferSize::new(size).unwrap())
     }
 
-    /// Creates a [`Geometry`] object bound to the device.
+    /// Creates a [`Geometry`] object bound to the device without any
+    /// buffers attached.
     pub fn create_geometry<G: Geometry>(&self) -> Result<G, Error> { G::new(self) }
 }
 

@@ -77,7 +77,8 @@ impl BufferGeometry {
     ///
     /// * `slice` - The buffer slice to bind.
     ///
-    /// * `stride` - The stride of the elements in the buffer.
+    /// * `stride` - The stride of the elements in the buffer. Must be a
+    ///   multiple of 4.
     ///
     /// * `count` - The number of elements in the buffer.
     pub fn set_buffer(
@@ -89,6 +90,7 @@ impl BufferGeometry {
         stride: usize,
         count: usize,
     ) -> Result<(), Error> {
+        debug_assert!(stride % 4 == 0, "Stride must be a multiple of 4!");
         match slice {
             BufferSlice::Created {
                 buffer,
@@ -144,7 +146,8 @@ impl BufferGeometry {
     /// The allocated buffer will be automatically over-allocated slightly when
     /// used as a [`BufferUsage::VERTEX`] buffer, where a requirement is
     /// that each buffer element should be readable using 16-byte SSE load
-    /// instructions.
+    /// instructions. This means that the buffer will be padded to a multiple of
+    /// 16 bytes.
     ///
     /// The allocated buffer is managed internally and automatically released
     /// when the geometry is destroyed by Embree.
@@ -160,7 +163,7 @@ impl BufferGeometry {
     ///
     /// * `count` - The number of items in the buffer.
     ///
-    /// * `stride` - The stride of the buffer items. MUST be aligned to 4 bytes.
+    /// * `stride` - The stride of the buffer items. MUST be a multiple of 4.
     pub fn set_new_buffer(
         &mut self,
         usage: BufferUsage,
@@ -169,6 +172,7 @@ impl BufferGeometry {
         stride: usize,
         count: usize,
     ) -> Result<(), Error> {
+        debug_assert!(stride % 4 == 0, "Stride must be a multiple of 4!");
         let bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
         if bindings.iter().find(|a| a.slot == slot).is_none() {
             let raw_ptr = unsafe {
@@ -184,14 +188,13 @@ impl BufferGeometry {
             if raw_ptr.is_null() {
                 Err(self.device.get_error())
             } else {
-                let buffer_slice = BufferSlice::Managed {
-                    ptr: raw_ptr,
-                    size: NonZeroUsize::new(count * stride as usize).unwrap(),
-                    marker: std::marker::PhantomData,
-                };
                 bindings.push(AttachedBuffer {
                     slot,
-                    buffer: buffer_slice,
+                    buffer: BufferSlice::Managed {
+                        ptr: raw_ptr,
+                        size: NonZeroUsize::new(count * stride as usize).unwrap(),
+                        marker: std::marker::PhantomData,
+                    },
                     format,
                     stride,
                 });

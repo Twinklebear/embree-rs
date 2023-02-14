@@ -57,6 +57,10 @@ pub use sys::{
     RTCIntersectContextFlags as IntersectContextFlags, RTCSceneFlags as SceneFlags,
 };
 
+/// The invalid ID for Embree intersection results (e.g. `Hit::geomID`,
+/// `Hit::primID`, etc.)
+pub const INVALID_ID: u32 = u32::MAX;
+
 /// Utility for making specifically aligned vectors
 pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
     let t_size = mem::size_of::<T>();
