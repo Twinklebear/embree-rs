@@ -1,67 +1,55 @@
-use std::sync::Arc;
+use crate::{
+    sys, BufferGeometry, BufferUsage, Device, Error, Format, Geometry, GeometryType,
+    GeometryVertexAttribute,
+};
+use std::ops::{Deref, DerefMut};
 
-use crate::buffer::Buffer;
-use crate::device::Device;
-use crate::geometry::GeometryTrait;
-use crate::sys::*;
-use crate::{BufferType, Format, GeometryType};
+#[derive(Debug)]
+pub struct QuadMesh(BufferGeometry<'static>);
 
-pub struct QuadMesh {
-    device: Device,
-    pub(crate) handle: RTCGeometry,
-    pub vertex_buffer: Buffer<[f32; 4]>,
-    pub index_buffer: Buffer<[u32; 4]>,
+impl Deref for QuadMesh {
+    type Target = BufferGeometry<'static>;
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for QuadMesh {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
 impl QuadMesh {
-    pub fn unanimated(device: Device, num_quads: usize, num_verts: usize) -> Arc<QuadMesh> {
-        let h = unsafe { rtcNewGeometry(device.handle, GeometryType::QUAD) };
-        let mut vertex_buffer = Buffer::new(device.clone(), num_verts);
-        let mut index_buffer = Buffer::new(device.clone(), num_quads);
-        unsafe {
-            rtcSetGeometryBuffer(
-                h,
-                BufferType::VERTEX,
-                0,
-                Format::FLOAT3,
-                vertex_buffer.handle,
-                0,
-                16,
-                num_verts,
-            );
-            vertex_buffer.set_attachment(h, BufferType::VERTEX, 0);
-
-            rtcSetGeometryBuffer(
-                h,
-                BufferType::INDEX,
-                0,
-                Format::UINT4,
-                index_buffer.handle,
-                0,
-                16,
-                num_quads,
-            );
-            index_buffer.set_attachment(h, BufferType::INDEX, 0);
-        }
-        Arc::new(QuadMesh {
-            device: device,
-            handle: h,
-            vertex_buffer: vertex_buffer,
-            index_buffer: index_buffer,
-        })
+    /// Creates a new quad mesh geometry with the given number of quads and
+    /// vertices.
+    ///
+    /// The geometry is unanimated, and the vertex and index buffers are
+    /// allocated but not initialized. The vertex buffer is in
+    /// [`Format::FLOAT3`] format, the index buffer is in
+    /// [`Format::UINT4`] format. They are 16-byte and 4-byte aligned
+    /// respectively, and are bound to the first slot of their respective
+    /// buffers.
+    pub fn unanimated<'a>(device: &'a Device, num_quads: usize, num_verts: usize) -> QuadMesh {
+        let mut geometry = BufferGeometry::new(device, GeometryType::QUAD).unwrap();
+        geometry
+            .set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, num_verts)
+            .unwrap();
+        geometry
+            .set_new_buffer(BufferUsage::INDEX, 0, Format::UINT4, 16, num_quads)
+            .unwrap();
+        Self(geometry)
     }
 }
 
-impl GeometryTrait for QuadMesh {
-    fn handle(&self) -> RTCGeometry {
-        self.handle
+impl Geometry for QuadMesh {
+    fn new(device: &Device) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        Ok(Self(BufferGeometry::new(device, GeometryType::QUAD)?))
     }
+
+    fn kind(&self) -> GeometryType { GeometryType::QUAD }
+
+    fn handle(&self) -> sys::RTCGeometry { self.handle }
 }
 
-impl Drop for QuadMesh {
-    fn drop(&mut self) {
-        unsafe {
-            rtcReleaseGeometry(self.handle);
-        }
-    }
-}
+impl GeometryVertexAttribute for QuadMesh {}

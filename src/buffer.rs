@@ -71,7 +71,7 @@ impl Buffer {
             Bound::Excluded(&n) => n,
             Bound::Unbounded => self.size.get(),
         };
-        BufferSlice::Created {
+        BufferSlice::External {
             buffer: self.clone(),
             offset: start,
             size: NonZeroUsize::new(end - start).unwrap(),
@@ -134,13 +134,15 @@ pub struct BufferViewMut<'a, T: 'a> {
     marker: PhantomData<&'a mut T>,
 }
 
-/// Slice into a [`Buffer`].
+/// Slice into a region of memory managed by Embree. This can either be a
+/// slice to a [`Buffer`] or a slice to memory managed by Embree (mostly created
+/// from [`rtcSetNewGeometryBuffer`]).
 ///
-/// Created with [`Buffer::slice`].
+/// Can be created with [`Buffer::slice`] or [`Geometry::set_new_buffer`].
 #[derive(Debug, Clone)]
 pub enum BufferSlice {
-    /// Slice created from a [`Buffer`].
-    Created {
+    /// Slice created from a [`Buffer`] object.
+    External {
         /// The buffer this slice is a part of.
         buffer: Buffer,
         /// The offset into the buffer in bytes.
@@ -149,7 +151,7 @@ pub enum BufferSlice {
         size: BufferSize,
     },
     /// Slice managed by Embree internally.
-    Managed {
+    Internal {
         ptr: *mut ::std::os::raw::c_void,
         size: BufferSize,
         marker: PhantomData<*mut ::std::os::raw::c_void>,
@@ -159,7 +161,7 @@ pub enum BufferSlice {
 impl BufferSlice {
     pub fn view<T>(&self) -> Result<BufferView<'_, T>, Error> {
         match self {
-            BufferSlice::Created {
+            BufferSlice::External {
                 buffer,
                 offset,
                 size,
@@ -171,7 +173,7 @@ impl BufferSlice {
                     marker: PhantomData,
                 })
             }
-            BufferSlice::Managed { ptr, size, .. } => {
+            BufferSlice::Internal { ptr, size, .. } => {
                 debug_assert!(
                     size.get() % mem::size_of::<T>() == 0,
                     "Size of the range of the mapped buffer must be multiple of T!"
@@ -189,7 +191,7 @@ impl BufferSlice {
 
     pub fn view_mut<T>(&self) -> Result<BufferViewMut<'_, T>, Error> {
         match self {
-            BufferSlice::Created {
+            BufferSlice::External {
                 buffer,
                 offset,
                 size,
@@ -198,7 +200,7 @@ impl BufferSlice {
                 mapped: BufferMappedRange::from_buffer(buffer, *offset, size.get())?,
                 marker: PhantomData,
             }),
-            BufferSlice::Managed { ptr, size, .. } => {
+            BufferSlice::Internal { ptr, size, .. } => {
                 debug_assert!(
                     size.get() % mem::size_of::<T>() == 0,
                     "Size of the range of the mapped buffer must be multiple of T!"
@@ -224,7 +226,7 @@ impl<'a, T> BufferView<'a, T> {
         size: BufferSize,
     ) -> Result<BufferView<'a, T>, Error> {
         Ok(BufferView {
-            range: BufferSlice::Created {
+            range: BufferSlice::External {
                 buffer: buffer.clone(),
                 offset,
                 size,
@@ -244,7 +246,7 @@ impl<'a, T> BufferViewMut<'a, T> {
         size: BufferSize,
     ) -> Result<BufferViewMut<'a, T>, Error> {
         Ok(BufferViewMut {
-            range: BufferSlice::Created {
+            range: BufferSlice::External {
                 buffer: buffer.clone(),
                 offset,
                 size,

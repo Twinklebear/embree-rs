@@ -22,9 +22,13 @@ fn main() {
     triangle
         .get_buffer(BufferUsage::VERTEX, 0)
         .unwrap()
-        .view_mut::<[f32; 3]>()
+        .view_mut::<[f32; 4]>()
         .unwrap()
-        .copy_from_slice(&[[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]);
+        .copy_from_slice(&[
+            [-1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+        ]);
     triangle
         .get_buffer(BufferUsage::INDEX, 0)
         .unwrap()
