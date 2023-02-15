@@ -26,10 +26,10 @@ impl QuadMesh {
     /// buffers.
     pub fn unanimated(device: &Device, num_quads: usize, num_verts: usize) -> QuadMesh {
         let mut geometry = BufferGeometry::new(device, GeometryType::QUAD).unwrap();
-        geometry
+        let _ = geometry
             .set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, num_verts)
             .unwrap();
-        geometry
+        let _ = geometry
             .set_new_buffer(BufferUsage::INDEX, 0, Format::UINT4, 16, num_quads)
             .unwrap();
         Self(geometry)

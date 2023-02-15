@@ -140,9 +140,9 @@ pub struct SoARayIter<'a, T> {
 impl<'a, T: SoARay + 'a> SoARayIter<'a, T> {
     pub fn new(ray: &'a T, len: usize) -> SoARayIter<'a, T> {
         SoARayIter {
-            ray: ray,
+            ray,
             cur: 0,
-            len: len,
+            len,
         }
     }
 }
@@ -155,7 +155,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIter<'a, T> {
             None
         } else {
             let i = self.cur;
-            self.cur = self.cur + 1;
+            self.cur += 1;
             Some(SoARayRef {
                 ray: self.ray,
                 idx: i,
@@ -177,9 +177,9 @@ pub struct SoARayIterMut<'a, T> {
 impl<'a, T: SoARay + 'a> SoARayIterMut<'a, T> {
     pub fn new(ray: &'a mut T, len: usize) -> SoARayIterMut<'a, T> {
         SoARayIterMut {
-            ray: ray,
+            ray,
             cur: 0,
-            len: len,
+            len,
         }
     }
 }
@@ -192,7 +192,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIterMut<'a, T> {
             None
         } else {
             let i = self.cur;
-            self.cur = self.cur + 1;
+            self.cur += 1;
             Some(SoARayRefMut {
                 ray: self.ray as *mut T,
                 idx: i,
@@ -229,9 +229,9 @@ pub struct SoAHitIter<'a, T> {
 impl<'a, T: SoAHit + 'a> SoAHitIter<'a, T> {
     pub fn new(hit: &'a T, len: usize) -> SoAHitIter<'a, T> {
         SoAHitIter {
-            hit: hit,
+            hit,
             cur: 0,
-            len: len,
+            len,
         }
     }
 }
@@ -244,7 +244,7 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIter<'a, T> {
             None
         } else {
             let i = self.cur;
-            self.cur = self.cur + 1;
+            self.cur += 1;
             Some(SoAHitRef {
                 hit: self.hit,
                 idx: i,
@@ -323,9 +323,9 @@ pub struct SoAHitIterMut<'a, T> {
 impl<'a, T: SoAHit + 'a> SoAHitIterMut<'a, T> {
     pub fn new(hit: &'a mut T, len: usize) -> SoAHitIterMut<'a, T> {
         SoAHitIterMut {
-            hit: hit,
+            hit,
             cur: 0,
-            len: len,
+            len,
         }
     }
 }
@@ -338,7 +338,7 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIterMut<'a, T> {
             None
         } else {
             let i = self.cur;
-            self.cur = self.cur + 1;
+            self.cur += 1;
             Some(SoAHitRefMut {
                 hit: self.hit as *mut T,
                 idx: i,

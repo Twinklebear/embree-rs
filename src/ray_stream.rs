@@ -46,6 +46,7 @@ impl RayN {
         SoARayIterMut::new(self, n)
     }
     pub fn len(&self) -> usize { self.org_x.len() }
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
     pub unsafe fn as_raynp(&mut self) -> sys::RTCRayNp {
         sys::RTCRayNp {
             org_x: self.org_x.as_mut_ptr(),
@@ -176,7 +177,7 @@ impl RayHitN {
     pub fn new(ray: RayN) -> RayHitN {
         let n = ray.len();
         RayHitN {
-            ray: ray,
+            ray,
             hit: HitN::new(n),
         }
     }

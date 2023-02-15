@@ -21,11 +21,14 @@ pub trait Geometry {
     }
 }
 
+// TODO(yang): maybe enforce format and stride when get the view?
 /// Information about how a (part of) buffer is bound to a geometry.
 #[derive(Debug)]
 pub(crate) struct AttachedBuffer<'src> {
     slot: u32,
+    #[allow(dead_code)]
     format: Format,
+    #[allow(dead_code)]
     stride: usize,
     source: BufferSlice<'src>,
 }

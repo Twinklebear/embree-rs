@@ -174,9 +174,9 @@ impl<'src> BufferSlice<'src> {
     /// * `buffer` - The buffer to create a slice from.
     /// * `bounds` - The range of indices to slice into the buffer. Different
     ///   from [`Buffer::slice`],
-    pub fn from_slice<'slice, T, S: RangeBounds<usize>>(slice: &'slice [T], bounds: S) -> Self {
+    pub fn from_slice<T, S: RangeBounds<usize>>(slice: &[T], bounds: S) -> Self {
         let (first, count) = range_bounds_to_offset_and_size(bounds);
-        let count = count.unwrap_or_else(|| slice.len() - first);
+        let count = count.unwrap_or(slice.len() - first);
         debug_assert!(
             first + count <= slice.len() && first < slice.len(),
             "Invalid slice range"

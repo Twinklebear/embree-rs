@@ -1,5 +1,3 @@
-use std::{f32, u32};
-
 use crate::{
     soa_ray::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut},
     sys,
