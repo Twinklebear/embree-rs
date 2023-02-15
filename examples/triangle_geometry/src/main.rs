@@ -1,21 +1,19 @@
 #![allow(dead_code)]
 
-extern crate cgmath;
 extern crate embree;
 extern crate support;
 
-use cgmath::{Vector3, Vector4};
 use embree::{
-    BufferUsage, Device, Geometry, GeometryVertexAttribute, IntersectContext, QuadMesh, Ray,
-    RayHit, Scene, TriangleMesh,
+    BufferSlice, BufferUsage, Device, Format, Geometry, IntersectContext, QuadMesh, Ray,
+    TriangleMesh,
 };
 use std::sync::Arc;
 use support::Camera;
 
-fn make_cube(device: &Device) -> Arc<dyn Geometry> {
-    let mut mesh = TriangleMesh::unanimated(device, 12, 8);
+fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh {
+    let mut mesh = TriangleMesh::new(device).unwrap();
     {
-        mesh.get_buffer(BufferUsage::VERTEX, 0)
+        mesh.set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 12, 8)
             .unwrap()
             .view_mut::<[f32; 3]>()
             .unwrap()
@@ -29,8 +27,7 @@ fn make_cube(device: &Device) -> Arc<dyn Geometry> {
                 [1.0, 1.0, -1.0],
                 [1.0, 1.0, 1.0],
             ]);
-
-        mesh.get_buffer(BufferUsage::INDEX, 0)
+        mesh.set_new_buffer(BufferUsage::INDEX, 0, Format::UINT3, 12, 12)
             .unwrap()
             .view_mut::<[u32; 3]>()
             .unwrap()
@@ -54,13 +51,23 @@ fn make_cube(device: &Device) -> Arc<dyn Geometry> {
                 [1, 3, 5],
                 [3, 7, 5],
             ]);
+
+        mesh.set_vertex_attribute_count(1);
+        mesh.set_buffer(
+            BufferUsage::VERTEX_ATTRIBUTE,
+            0,
+            Format::FLOAT3,
+            BufferSlice::from_slice(vertex_colors, ..8),
+            12,
+            8,
+        )
+        .unwrap(); //.expect("failed to set vertex attribute buffer");
     }
-    let mut mesh = Geometry::Triangle(mesh);
     mesh.commit();
-    Arc::new(mesh)
+    mesh
 }
 
-fn make_ground_plane(device: &Device) -> Arc<dyn Geometry> {
+fn make_ground_plane(device: &Device) -> QuadMesh {
     let mut mesh = QuadMesh::unanimated(device, 1, 4);
     {
         mesh.get_buffer(BufferUsage::VERTEX, 0)
@@ -79,42 +86,53 @@ fn make_ground_plane(device: &Device) -> Arc<dyn Geometry> {
             .unwrap()
             .copy_from_slice(&[[0, 1, 2, 3]]);
     }
-    mesh.set_vertex_attribute_count(1);
-    //    mesh.set_shared
     mesh.commit();
-    Arc::new(mesh)
+    mesh
 }
 
 fn main() {
-    let mut display = support::Display::new(512, 512, "triangle geometry");
+    let display = support::Display::new(512, 512, "triangle geometry");
     let device = Device::new().unwrap();
-    let cube = make_cube(&device);
-    let ground = make_ground_plane(&device);
 
-    // TODO: Support for Embree3's new vertex attributes
-    let face_colors = vec![
-        Vector3::new(1.0, 0.0, 0.0),
-        Vector3::new(1.0, 0.0, 0.0),
-        Vector3::new(0.0, 1.0, 0.0),
-        Vector3::new(0.0, 1.0, 0.0),
-        Vector3::new(1.0, 0.0, 1.0),
-        Vector3::new(1.0, 0.0, 1.0),
-        Vector3::new(1.0, 1.0, 1.0),
-        Vector3::new(1.0, 1.0, 1.0),
-        Vector3::new(0.0, 0.0, 1.0),
-        Vector3::new(0.0, 0.0, 1.0),
-        Vector3::new(1.0, 1.0, 0.0),
-        Vector3::new(1.0, 1.0, 0.0),
+    let vertex_colors = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 1.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 0.0],
+        [1.0, 1.0, 1.0],
     ];
 
-    let mut scene = Scene::new(&device);
-    scene.attach_geometry(cube);
+    let face_colors = vec![
+        [1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.5, 0.5, 0.5],
+        [0.5, 0.5, 0.5],
+        [1.0, 1.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 1.0, 0.0],
+        [1.0, 1.0, 0.0],
+    ];
+
+    let cube = Arc::new(make_cube(&device, &vertex_colors));
+    let ground = Arc::new(make_ground_plane(&device));
+
+    let mut scene = device.create_scene().unwrap();
+    let _ = scene.attach_geometry(cube);
     let ground_id = scene.attach_geometry(ground);
-    let rtscene = scene.commit();
+    scene.commit();
 
     let mut intersection_ctx = IntersectContext::coherent();
 
-    display.run(|image, camera_pose, _| {
+    let light_dir = glam::vec3(1.0, 1.0, 1.0).normalize();
+
+    support::display::run(display, move |image, camera_pose, _| {
         for p in image.iter_mut() {
             *p = 0;
         }
@@ -130,16 +148,29 @@ fn main() {
         for j in 0..img_dims.1 {
             for i in 0..img_dims.0 {
                 let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let ray = Ray::new(camera.pos, dir);
-                let mut ray_hit = RayHit::new(ray);
-                rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
-                if ray_hit.hit.hit() {
-                    let mut p = image.get_pixel_mut(i, j);
-                    let color = if ray_hit.hit.geomID == ground_id {
-                        Vector3::new(0.6, 0.6, 0.6)
+                let ray_hit = scene.intersect(
+                    &mut intersection_ctx,
+                    Ray::new(camera.pos.into(), dir.into()),
+                );
+                if ray_hit.is_valid() {
+                    let p = image.get_pixel_mut(i, j);
+                    let diffuse = if ray_hit.hit.geomID == ground_id {
+                        glam::vec3(0.6, 0.6, 0.6)
                     } else {
-                        face_colors[ray_hit.hit.primID as usize]
+                        glam::Vec3::from(face_colors[ray_hit.hit.primID as usize])
                     };
+
+                    let mut shadow_ray =
+                        Ray::segment(ray_hit.hit_point(), light_dir.into(), 0.001, f32::INFINITY);
+
+                    // Check if the shadow ray is occluded.
+                    let color = if !scene.occluded(&mut intersection_ctx, &mut shadow_ray) {
+                        diffuse
+                    } else {
+                        diffuse * 0.5
+                    };
+
+                    // Write the color to the image.
                     p[0] = (color.x * 255.0) as u8;
                     p[1] = (color.y * 255.0) as u8;
                     p[2] = (color.z * 255.0) as u8;

@@ -45,20 +45,6 @@ fn main() {
                 3 * std::mem::size_of::<f32>(),
                 3,
             )
-            .unwrap();
-        triangle
-            .set_new_buffer(
-                BufferUsage::INDEX,
-                0,
-                Format::UINT3,
-                3 * std::mem::size_of::<u32>(),
-                1,
-            )
-            .unwrap();
-
-        // Fill the vertex and index buffers with the triangle data.
-        triangle
-            .get_buffer(BufferUsage::VERTEX, 0)
             .unwrap()
             .view_mut::<[f32; 3]>()
             .unwrap()
@@ -68,7 +54,13 @@ fn main() {
                 [0.0, 1.0, 0.0], // vertex 2
             ]);
         triangle
-            .get_buffer(BufferUsage::INDEX, 0)
+            .set_new_buffer(
+                BufferUsage::INDEX,
+                0,
+                Format::UINT3,
+                3 * std::mem::size_of::<u32>(),
+                1,
+            )
             .unwrap()
             .view_mut::<[u32; 3]>()
             .unwrap()

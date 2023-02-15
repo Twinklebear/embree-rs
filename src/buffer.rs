@@ -23,9 +23,9 @@ impl Clone for Buffer {
     fn clone(&self) -> Self {
         unsafe { rtcRetainBuffer(self.handle) };
         Buffer {
+            device: self.device.clone(),
             handle: self.handle,
             size: self.size,
-            device: self.device.clone(),
         }
     }
 }
@@ -51,7 +51,14 @@ impl Buffer {
         }
     }
 
-    pub fn handle(&self) -> RTCBuffer { self.handle }
+    /// Returns the raw handle to the buffer.
+    ///
+    /// # Safety
+    ///
+    /// The handle returned by this function is a raw pointer to the
+    /// underlying Embree buffer. It is not safe to use this handle
+    /// outside of the Embree API.
+    pub unsafe fn handle(&self) -> RTCBuffer { self.handle }
 
     /// Returns a slice of the buffer.
     ///
@@ -60,21 +67,18 @@ impl Buffer {
     /// [`Buffer::mapped_range`] or [`BufferSlice::view`] to create a
     /// read-only view of the buffer, or [`Buffer::mapped_range_mut`] or
     /// [`BufferSlice::view_mut`] to create a mutable view of the buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `bounds` - The range of bytes to slice into the buffer.
     pub fn slice<S: RangeBounds<usize>>(&self, bounds: S) -> BufferSlice {
-        let start = match bounds.start_bound() {
-            Bound::Included(&n) => n,
-            Bound::Excluded(&n) => n + 1,
-            Bound::Unbounded => 0,
-        };
-        let end = match bounds.end_bound() {
-            Bound::Included(&n) => n + 1,
-            Bound::Excluded(&n) => n,
-            Bound::Unbounded => self.size.get(),
-        };
-        BufferSlice::External {
-            buffer: self.clone(),
-            offset: start,
-            size: NonZeroUsize::new(end - start).unwrap(),
+        let (offset, size) = range_bounds_to_offset_and_size(bounds);
+        let size = size.unwrap_or_else(|| self.size.get() - offset);
+        debug_assert!(offset + size <= self.size.get() && offset < self.size.get());
+        BufferSlice::Buffer {
+            buffer: self,
+            offset,
+            size: NonZeroUsize::new(size).unwrap(),
         }
     }
 
@@ -120,56 +124,83 @@ impl Drop for Buffer {
 
 /// A read-only view into mapped buffer.
 #[derive(Debug)]
-pub struct BufferView<'a, T: 'a> {
-    range: BufferSlice,
-    mapped: BufferMappedRange<'a, T>,
-    marker: PhantomData<&'a T>,
+pub struct BufferView<'buf, T: 'buf> {
+    mapped: BufferMappedRange<'buf, T>,
+    marker: PhantomData<&'buf T>,
 }
 
 /// A write-only view into mapped buffer.
 #[derive(Debug)]
-pub struct BufferViewMut<'a, T: 'a> {
-    range: BufferSlice,
-    mapped: BufferMappedRange<'a, T>,
-    marker: PhantomData<&'a mut T>,
+pub struct BufferViewMut<'buf, T: 'buf> {
+    mapped: BufferMappedRange<'buf, T>,
+    marker: PhantomData<&'buf mut T>,
 }
 
-/// Slice into a region of memory managed by Embree. This can either be a
-/// slice to a [`Buffer`] or a slice to memory managed by Embree (mostly created
-/// from [`rtcSetNewGeometryBuffer`]).
-///
-/// Can be created with [`Buffer::slice`] or [`Geometry::set_new_buffer`].
-#[derive(Debug, Clone)]
-pub enum BufferSlice {
-    /// Slice created from a [`Buffer`] object.
-    External {
-        /// The buffer this slice is a part of.
-        buffer: Buffer,
-        /// The offset into the buffer in bytes.
+/// Slice into a region of memory. This can either be a slice to a [`Buffer`] or
+/// a slice to memory managed by Embree (mostly created from
+/// [`rtcSetNewGeometryBuffer`]) or from user owned memory.
+#[derive(Debug, Clone, Copy)]
+pub enum BufferSlice<'src> {
+    /// Slice into a [`Buffer`] object.
+    Buffer {
+        buffer: &'src Buffer,
         offset: usize,
-        /// The size of the slice in bytes.
         size: BufferSize,
     },
-    /// Slice managed by Embree internally.
+    /// Slice into memory managed by Embree.
     Internal {
         ptr: *mut ::std::os::raw::c_void,
         size: BufferSize,
-        marker: PhantomData<*mut ::std::os::raw::c_void>,
+        marker: PhantomData<&'src mut [::std::os::raw::c_void]>,
+    },
+    /// Slice into user borrowed/owned memory.
+    User {
+        ptr: *const u8,
+        offset: usize,
+        size: BufferSize,
+        marker: PhantomData<&'src mut [u8]>,
     },
 }
 
-impl BufferSlice {
-    pub fn view<T>(&self) -> Result<BufferView<'_, T>, Error> {
+impl<'buf, T> From<&'buf [T]> for BufferSlice<'buf> {
+    fn from(vec: &'buf [T]) -> Self { BufferSlice::from_slice(vec, ..) }
+}
+
+impl<'src> BufferSlice<'src> {
+    /// Creates a new [`BufferSlice`] from a user owned buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `buffer` - The buffer to create a slice from.
+    /// * `bounds` - The range of indices to slice into the buffer. Different
+    ///   from [`Buffer::slice`],
+    pub fn from_slice<'slice, T, S: RangeBounds<usize>>(slice: &'slice [T], bounds: S) -> Self {
+        let (first, count) = range_bounds_to_offset_and_size(bounds);
+        let count = count.unwrap_or_else(|| slice.len() - first);
+        debug_assert!(
+            first + count <= slice.len() && first < slice.len(),
+            "Invalid slice range"
+        );
+        let elem_size = mem::size_of::<T>();
+        BufferSlice::User {
+            ptr: slice.as_ptr() as *const u8,
+            offset: first * elem_size,
+            size: BufferSize::new((first + count) * elem_size).unwrap(),
+            marker: PhantomData,
+        }
+    }
+
+    pub fn view<T>(&self) -> Result<BufferView<'src, T>, Error> {
         match self {
-            BufferSlice::External {
+            BufferSlice::Buffer {
                 buffer,
                 offset,
                 size,
             } => {
-                let slice = BufferMappedRange::from_buffer(buffer, *offset, size.get())?;
+                let mapped = BufferMappedRange::from_buffer(buffer, *offset, size.get())?;
                 Ok(BufferView {
-                    range: self.clone(),
-                    mapped: slice,
+                    // slice: *self,
+                    mapped,
                     marker: PhantomData,
                 })
             }
@@ -179,24 +210,39 @@ impl BufferSlice {
                     "Size of the range of the mapped buffer must be multiple of T!"
                 );
                 let len = size.get() / mem::size_of::<T>();
-                let slice = unsafe { BufferMappedRange::from_raw_parts(*ptr as *mut T, len) };
+                let mapped = unsafe { BufferMappedRange::from_raw_parts(*ptr as *mut T, len) };
                 Ok(BufferView {
-                    range: self.clone(),
-                    mapped: slice,
+                    //slice: *self,
+                    mapped,
+                    marker: PhantomData,
+                })
+            }
+            BufferSlice::User {
+                ptr, offset, size, ..
+            } => {
+                // TODO(yang): should we allow this?
+                debug_assert!(
+                    size.get() % mem::size_of::<T>() == 0,
+                    "Size of the range of the mapped buffer must be multiple of T!"
+                );
+                let len = size.get() / mem::size_of::<T>();
+                let mapped =
+                    unsafe { BufferMappedRange::from_raw_parts(ptr.add(*offset) as *mut T, len) };
+                Ok(BufferView {
+                    mapped,
                     marker: PhantomData,
                 })
             }
         }
     }
 
-    pub fn view_mut<T>(&self) -> Result<BufferViewMut<'_, T>, Error> {
+    pub fn view_mut<T>(&self) -> Result<BufferViewMut<'src, T>, Error> {
         match self {
-            BufferSlice::External {
+            BufferSlice::Buffer {
                 buffer,
                 offset,
                 size,
             } => Ok(BufferViewMut {
-                range: self.clone(),
                 mapped: BufferMappedRange::from_buffer(buffer, *offset, size.get())?,
                 marker: PhantomData,
             }),
@@ -206,10 +252,25 @@ impl BufferSlice {
                     "Size of the range of the mapped buffer must be multiple of T!"
                 );
                 let len = size.get() / mem::size_of::<T>();
-                let slice = unsafe { BufferMappedRange::from_raw_parts(*ptr as *mut T, len) };
+                let mapped = unsafe { BufferMappedRange::from_raw_parts(*ptr as *mut T, len) };
                 Ok(BufferViewMut {
-                    range: self.clone(),
-                    mapped: slice,
+                    mapped,
+                    marker: PhantomData,
+                })
+            }
+            BufferSlice::User {
+                ptr, offset, size, ..
+            } => {
+                // TODO(yang): should we allow this?
+                debug_assert!(
+                    size.get() % mem::size_of::<T>() == 0,
+                    "Size of the range of the mapped buffer must be multiple of T!"
+                );
+                let len = size.get() / mem::size_of::<T>();
+                let mapped =
+                    unsafe { BufferMappedRange::from_raw_parts(ptr.add(*offset) as *mut T, len) };
+                Ok(BufferViewMut {
+                    mapped,
                     marker: PhantomData,
                 })
             }
@@ -217,46 +278,37 @@ impl BufferSlice {
     }
 }
 
-impl<'a, T> BufferView<'a, T> {
+impl<'src, T> BufferView<'src, T> {
     /// Creates a new slice from the given Buffer with the given offset and
     /// size. Only used internally by [`Buffer::mapped_range`].
     fn new(
-        buffer: &'a Buffer,
+        buffer: &'src Buffer,
         offset: usize,
         size: BufferSize,
-    ) -> Result<BufferView<'a, T>, Error> {
+    ) -> Result<BufferView<'src, T>, Error> {
         Ok(BufferView {
-            range: BufferSlice::External {
-                buffer: buffer.clone(),
-                offset,
-                size,
-            },
             mapped: BufferMappedRange::from_buffer(buffer, offset, size.into())?,
             marker: PhantomData,
         })
     }
 }
 
-impl<'a, T> BufferViewMut<'a, T> {
+impl<'src, T> BufferViewMut<'src, T> {
     /// Creates a new slice from the given Buffer with the given offset and
     /// size. Only used internally by [`Buffer::mapped_range_mut`].
     fn new(
-        buffer: &'a Buffer,
+        buffer: &'src Buffer,
         offset: usize,
         size: BufferSize,
-    ) -> Result<BufferViewMut<'a, T>, Error> {
+    ) -> Result<BufferViewMut<'src, T>, Error> {
         Ok(BufferViewMut {
-            range: BufferSlice::External {
-                buffer: buffer.clone(),
-                offset,
-                size,
-            },
             mapped: BufferMappedRange::from_buffer(buffer, offset, size.into())?,
             marker: PhantomData,
         })
     }
 }
 
+/// A slice of a mapped [`Buffer`].
 #[derive(Debug)]
 struct BufferMappedRange<'a, T: 'a> {
     ptr: *mut T,
@@ -292,7 +344,7 @@ impl<'a, T: 'a> BufferMappedRange<'a, T> {
             if ptr.is_null() {
                 return Err(buffer.device.get_error());
             }
-            ptr.offset(offset as isize)
+            ptr.add(offset)
         } as *mut T;
         Ok(BufferMappedRange {
             ptr,
@@ -317,27 +369,27 @@ impl<'a, T: 'a> BufferMappedRange<'a, T> {
     }
 }
 
-impl<T> AsRef<[T]> for BufferView<'_, T> {
+impl<'src, T> AsRef<[T]> for BufferView<'src, T> {
     fn as_ref(&self) -> &[T] { self.mapped.as_slice() }
 }
 
-impl<T> AsMut<[T]> for BufferViewMut<'_, T> {
+impl<'src, T> AsMut<[T]> for BufferViewMut<'src, T> {
     fn as_mut(&mut self) -> &mut [T] { self.mapped.as_mut_slice() }
 }
 
-impl<T> Deref for BufferView<'_, T> {
+impl<'src, T> Deref for BufferView<'src, T> {
     type Target = [T];
 
     fn deref(&self) -> &Self::Target { self.mapped.as_slice() }
 }
 
-impl<T> Deref for BufferViewMut<'_, T> {
+impl<'src, T> Deref for BufferViewMut<'src, T> {
     type Target = [T];
 
     fn deref(&self) -> &Self::Target { self.mapped.as_slice() }
 }
 
-impl<T> DerefMut for BufferViewMut<'_, T> {
+impl<'src, T> DerefMut for BufferViewMut<'src, T> {
     fn deref_mut(&mut self) -> &mut Self::Target { self.mapped.as_mut_slice() }
 }
 

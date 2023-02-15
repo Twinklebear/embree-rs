@@ -76,6 +76,10 @@ impl Scene {
 
     /// Get the underlying handle to the scene, e.g. for passing it to
     /// native code or ISPC kernels.
+    ///
+    /// # Safety
+    ///
+    /// The handle is only valid as long as the scene is alive.
     pub unsafe fn handle(&self) -> RTCScene { self.handle }
 
     /// Commit the scene to build the BVH on top of the geometry to allow
@@ -175,7 +179,8 @@ impl Scene {
         ray_hit
     }
 
-    pub fn occluded(&self, ctx: &mut IntersectContext, ray: &mut Ray) {
+    /// Checks for a single ray if whether there is any hit with the scene.
+    pub fn occluded(&self, ctx: &mut IntersectContext, ray: &mut Ray) -> bool {
         unsafe {
             rtcOccluded1(
                 self.handle,
@@ -183,6 +188,7 @@ impl Scene {
                 ray as *mut RTCRay,
             );
         }
+        ray.tfar == -f32::INFINITY
     }
 
     pub fn intersect4(&self, ctx: &mut IntersectContext, ray: &mut RayHit4, valid: &[i32; 4]) {

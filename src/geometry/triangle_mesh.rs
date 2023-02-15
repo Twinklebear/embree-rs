@@ -1,7 +1,4 @@
-use crate::{
-    sys::*, BufferGeometry, BufferUsage, Device, Format, Geometry, GeometryType,
-    GeometryVertexAttribute,
-};
+use crate::{sys::*, BufferGeometry, BufferUsage, Device, Format, Geometry, GeometryType};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug)]
@@ -40,7 +37,7 @@ impl TriangleMesh {
 }
 
 impl Geometry for TriangleMesh {
-    fn new(device: &Device) -> Result<Self, RTCError>
+    fn new(device: &Device) -> Result<TriangleMesh, RTCError>
     where
         Self: Sized,
     {
@@ -51,5 +48,3 @@ impl Geometry for TriangleMesh {
 
     fn handle(&self) -> RTCGeometry { self.handle }
 }
-
-impl GeometryVertexAttribute for TriangleMesh {}

@@ -3,9 +3,7 @@
 extern crate embree;
 extern crate support;
 
-use embree::{
-    BufferUsage, Device, Format, Geometry, IntersectContext, RayHitN, RayN, TriangleMesh,
-};
+use embree::{BufferUsage, Device, Geometry, IntersectContext, RayHitN, RayN, TriangleMesh};
 use std::sync::Arc;
 
 fn main() {

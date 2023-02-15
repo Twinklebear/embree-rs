@@ -18,19 +18,14 @@ impl Ray {
             dir_x: dir[0],
             dir_y: dir[1],
             dir_z: dir[2],
-            tnear: tnear,
-            tfar: tfar,
+            tnear,
+            tfar,
             time: 0.0,
             mask: u32::MAX,
             id: 0,
             flags: 0,
         }
     }
-}
-
-impl Hit {
-    /// Returns true if the hit is valid (i.e. the ray hit something).
-    pub fn is_valid(&self) -> bool { self.geomID != INVALID_ID }
 }
 
 impl Default for Hit {
@@ -54,5 +49,39 @@ impl RayHit {
             ray,
             hit: Hit::default(),
         }
+    }
+
+    /// Returns true if the hit is valid (i.e. the ray hit something).
+    pub fn is_valid(&self) -> bool { self.hit.geomID != INVALID_ID }
+
+    /// Returns the normal of the hit point (normalized).
+    pub fn normal(&self) -> [f32; 3] {
+        let len = (self.hit.Ng_x * self.hit.Ng_x
+            + self.hit.Ng_y * self.hit.Ng_y
+            + self.hit.Ng_z * self.hit.Ng_z)
+            .sqrt();
+        if len == 0.0 {
+            [0.0, 0.0, 0.0]
+        } else {
+            let len = 1.0 / len;
+            [
+                self.hit.Ng_x * len,
+                self.hit.Ng_y * len,
+                self.hit.Ng_z * len,
+            ]
+        }
+    }
+
+    /// Returns the barycentric coordinates of the hit point.
+    pub fn uv(&self) -> [f32; 2] { [self.hit.u, self.hit.v] }
+
+    /// Returns the hit point.
+    pub fn hit_point(&self) -> [f32; 3] {
+        let t = self.ray.tfar;
+        [
+            self.ray.org_x + self.ray.dir_x * t,
+            self.ray.org_y + self.ray.dir_y * t,
+            self.ray.org_z + self.ray.dir_z * t,
+        ]
     }
 }

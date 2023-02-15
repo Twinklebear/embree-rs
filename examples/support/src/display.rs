@@ -9,7 +9,7 @@ use image::RgbaImage;
 use wgpu;
 use winit::{
     dpi::{LogicalSize, Size},
-    event::{Event, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -293,12 +293,11 @@ where
         a: 1.0,
     };
 
-    let mut mouse_pressed = [false, false];
-    //let mut prev_mouse = None;
+    let mut mouse_prev = Vector2::new(0.0, 0.0);
+    let mut mouse_pressed = [false, false, false];
     let t_start = clock_ticks::precise_time_s();
     display.event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
-
         match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -307,6 +306,30 @@ where
                 {
                     *control_flow = ControlFlow::Exit
                 }
+                WindowEvent::MouseInput { state, button, .. } => match button {
+                    MouseButton::Left => mouse_pressed[0] = state == ElementState::Pressed,
+                    MouseButton::Middle => mouse_pressed[1] = state == ElementState::Pressed,
+                    MouseButton::Right => mouse_pressed[2] = state == ElementState::Pressed,
+                    MouseButton::Other(_) => {}
+                },
+                WindowEvent::CursorMoved { position, .. } => {
+                    let mouse_cur = Vector2::new(position.x as f32, position.y as f32);
+                    if mouse_pressed[0] {
+                        arcball_camera.rotate(mouse_prev, mouse_cur);
+                    }
+                    if mouse_pressed[2] {
+                        arcball_camera.pan(mouse_cur - mouse_prev);
+                    }
+                    mouse_prev = mouse_cur;
+                }
+                WindowEvent::MouseWheel { delta, .. } => match delta {
+                    MouseScrollDelta::LineDelta(_, y) => {
+                        arcball_camera.zoom(y, 0.1);
+                    }
+                    MouseScrollDelta::PixelDelta(pos) => {
+                        arcball_camera.zoom(pos.y as f32, 0.01);
+                    }
+                },
                 _ => (),
             },
             Event::MainEventsCleared => {

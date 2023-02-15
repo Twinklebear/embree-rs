@@ -5,6 +5,7 @@ authors = ["Will Usher <will@willusher.io>"]
 edition = "2021"
 
 [dependencies]
+glam = "0.22.0"
 embree = { path = "../../" }
 support = { path = "../support" }
 

@@ -1,7 +1,4 @@
-use crate::{
-    sys, BufferGeometry, BufferUsage, Device, Error, Format, Geometry, GeometryType,
-    GeometryVertexAttribute,
-};
+use crate::{sys, BufferGeometry, BufferUsage, Device, Error, Format, Geometry, GeometryType};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug)]
@@ -27,7 +24,7 @@ impl QuadMesh {
     /// [`Format::UINT4`] format. They are 16-byte and 4-byte aligned
     /// respectively, and are bound to the first slot of their respective
     /// buffers.
-    pub fn unanimated<'a>(device: &'a Device, num_quads: usize, num_verts: usize) -> QuadMesh {
+    pub fn unanimated(device: &Device, num_quads: usize, num_verts: usize) -> QuadMesh {
         let mut geometry = BufferGeometry::new(device, GeometryType::QUAD).unwrap();
         geometry
             .set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, num_verts)
@@ -51,5 +48,3 @@ impl Geometry for QuadMesh {
 
     fn handle(&self) -> sys::RTCGeometry { self.handle }
 }
-
-impl GeometryVertexAttribute for QuadMesh {}

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize};
+use std::{collections::HashMap, marker::PhantomData, num::NonZeroUsize};
 
 use crate::{sys::*, BufferSlice, BufferUsage, Device, Error, Format, GeometryType};
 
@@ -21,55 +21,29 @@ pub trait Geometry {
     }
 }
 
-/// A trait for geometry objects that can have vertex attributes.
-///
-/// Only supported by triangle meshes, quad meshes, curves, points, and
-/// subdivision geometries.
-pub trait GeometryVertexAttribute: Geometry {
-    /// Sets the number of vertex attributes of the geometry.
-    ///
-    /// This function sets the number of slots for vertex attributes buffers
-    /// (BufferUsage::VERTEX_ATTRIBUTE) that can be used for the specified
-    /// geometry.
-    ///
-    /// # Arguments
-    ///
-    /// * `count` - The number of vertex attribute slots.
-    fn set_vertex_attribute_count(&self, count: u32) {
-        unsafe {
-            rtcSetGeometryVertexAttributeCount(self.handle(), count);
-        }
-    }
-}
-
+/// Information about how a (part of) buffer is bound to a geometry.
 #[derive(Debug)]
-pub(crate) struct AttachedBuffer<'a: 'static> {
+pub(crate) struct AttachedBuffer<'src> {
     slot: u32,
     format: Format,
     stride: usize,
-    source: BufferSource<'a>,
+    source: BufferSlice<'src>,
 }
 
-#[derive(Debug)]
-enum BufferSource<'a> {
-    EmbreeManaged(BufferSlice),
-    UserManaged(Cow<'a, [u8]>)
-}
-
-/// Handle to an Embree geometry object.
+/// Wrapper around an Embree geometry object.
 ///
-/// BufferGeometry is a wrapper around an Embree geometry object. It does not
-/// own the buffers that are bound to it, but it does own the geometry object
-/// itself.
+/// It does not own the buffers that are bound to it, but it does own the
+/// geometry object itself.
 #[derive(Debug)]
-pub struct BufferGeometry<'buf: 'static> {
+pub struct BufferGeometry<'buf> {
     pub(crate) device: Device,
     pub(crate) handle: RTCGeometry,
-    pub(crate) kind: GeometryType,
+    kind: GeometryType,
+    vertex_attribute_count: Option<u32>,
     pub(crate) attachments: HashMap<BufferUsage, Vec<AttachedBuffer<'buf>>>,
 }
 
-impl<'buf: 'static> Drop for BufferGeometry<'buf> {
+impl<'buf> Drop for BufferGeometry<'buf> {
     fn drop(&mut self) {
         unsafe {
             rtcReleaseGeometry(self.handle);
@@ -77,9 +51,16 @@ impl<'buf: 'static> Drop for BufferGeometry<'buf> {
     }
 }
 
-impl<'device, 'buf: 'static> BufferGeometry<'buf> {
-    pub(crate) fn new(device: &'device Device, kind: GeometryType) -> Result<BufferGeometry<'static>, Error> {
+impl<'dev, 'buf> BufferGeometry<'buf> {
+    pub(crate) fn new(
+        device: &'dev Device,
+        kind: GeometryType,
+    ) -> Result<BufferGeometry<'buf>, Error> {
         let handle = unsafe { rtcNewGeometry(device.handle, kind) };
+        let vertex_attribute_count = match kind {
+            GeometryType::GRID | GeometryType::USER | GeometryType::INSTANCE => None,
+            _ => Some(0),
+        };
         if handle.is_null() {
             Err(device.get_error())
         } else {
@@ -87,23 +68,54 @@ impl<'device, 'buf: 'static> BufferGeometry<'buf> {
                 device: device.clone(),
                 handle,
                 kind,
+                vertex_attribute_count,
                 attachments: HashMap::new(),
             })
         }
     }
 
+    /// Checks if the given vertex attribute slot is valid for this geometry.
+    fn check_vertex_attribute(&self, slot: u32) -> Result<(), Error> {
+        match self.vertex_attribute_count {
+            None => {
+                eprint!(
+                    "Vertex attribute not allowed for geometries of type {:?}!",
+                    self.kind
+                );
+                Err(Error::INVALID_OPERATION)
+            }
+            Some(c) => {
+                if slot >= c {
+                    eprint!(
+                        "Vertex attribute slot {} is out of bounds for geometry of type {:?}!",
+                        slot, self.kind
+                    );
+                    Err(Error::INVALID_ARGUMENT)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+
     /// Binds a view of a buffer to the geometry.
     ///
-    /// After successful completion of this function, the geometry will hold
-    /// a reference to the buffer object.
+    /// The buffer must be valid for the lifetime of the geometry. The buffer is
+    /// provided as a [`BufferSlice`], which is a view into a buffer object.
+    /// See the documentation of [`BufferSlice`] for more information.
     ///
-    /// Analogous to [`rtcSetGeometryBuffer`](https://spec.oneapi.io/oneart/0.5-rev-1/embree-spec.html#rtcsetgeometrybuffer).
+    /// Under the hood, function call [`rtcSetGeometryBuffer`] is used to bind
+    /// [`BufferSlice::Buffer`] or [`BufferSlice::Internal`] to the geometry,
+    /// and [`rtcSetSharedGeometryBuffer`] is used to bind
+    /// [`BufferSlice::User`].
     ///
     /// # Arguments
     ///
     /// * `usage` - The usage of the buffer.
     ///
-    /// * `slot` - The slot to bind the buffer to.
+    /// * `slot` - The slot to bind the buffer to. If the provided slot is
+    ///   already bound to a buffer,
+    ///  the old bound buffer will be overwritten with the new one.
     ///
     /// * `format` - The format of the buffer.
     ///
@@ -113,33 +125,37 @@ impl<'device, 'buf: 'static> BufferGeometry<'buf> {
     ///   multiple of 4.
     ///
     /// * `count` - The number of elements in the buffer.
-    pub fn set_buffer(
-        &mut self,
+    pub fn set_buffer<'a>(
+        &'a mut self,
         usage: BufferUsage,
         slot: u32,
         format: Format,
-        slice: BufferSlice,
+        slice: BufferSlice<'buf>,
         stride: usize,
         count: usize,
     ) -> Result<(), Error> {
         debug_assert!(stride % 4 == 0, "Stride must be a multiple of 4!");
+        if usage == BufferUsage::VERTEX {
+            self.check_vertex_attribute(slot)?;
+        }
         match slice {
-            BufferSlice::External {
+            BufferSlice::Buffer {
                 buffer,
                 offset,
                 size,
             } => {
-                let bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
-                println!(
-                    "Binding buffer to slot {}, offset {}, stride {}, count {}",
-                    slot, offset, stride, count
+                dbg!(
+                    "Binding buffer slice to slot {}, offset {}, stride {}, count {}",
+                    slot,
+                    offset,
+                    stride,
+                    count
                 );
+                let bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
                 match bindings.iter().position(|a| a.slot == slot) {
+                    // If the slot is already bound, remove the old binding and
+                    // replace it with the new one.
                     Some(i) => {
-                        eprint!(
-                            "Buffer already attached to slot {}, will be overwritten!",
-                            slot
-                        );
                         bindings.remove(i);
                         unsafe {
                             rtcSetGeometryBuffer(
@@ -149,22 +165,23 @@ impl<'device, 'buf: 'static> BufferGeometry<'buf> {
                                 format,
                                 buffer.handle,
                                 offset,
-                                stride as usize,
-                                count as usize,
+                                stride,
+                                count,
                             )
                         };
                         bindings.push(AttachedBuffer {
                             slot,
-                            source: BufferSource::EmbreeManaged(BufferSlice::External {
+                            source: BufferSlice::Buffer {
                                 buffer,
                                 offset,
                                 size,
-                            }),
+                            },
                             format,
                             stride,
                         });
                         Ok(())
                     }
+                    // If the slot is not bound, just bind the new buffer.
                     None => {
                         unsafe {
                             rtcSetGeometryBuffer(
@@ -174,17 +191,17 @@ impl<'device, 'buf: 'static> BufferGeometry<'buf> {
                                 format,
                                 buffer.handle,
                                 offset,
-                                stride as usize,
-                                count as usize,
+                                stride,
+                                count,
                             )
                         };
                         bindings.push(AttachedBuffer {
                             slot,
-                            source: BufferSource::EmbreeManaged(BufferSlice::External {
+                            source: BufferSlice::Buffer {
                                 buffer,
                                 offset,
                                 size,
-                            }),
+                            },
                             format,
                             stride,
                         });
@@ -195,6 +212,69 @@ impl<'device, 'buf: 'static> BufferGeometry<'buf> {
             BufferSlice::Internal { .. } => {
                 eprint!("Internally managed buffer cannot be shared!");
                 Err(Error::INVALID_ARGUMENT)
+            }
+            BufferSlice::User {
+                ptr, offset, size, ..
+            } => {
+                let bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
+                match bindings.iter().position(|a| a.slot == slot) {
+                    // If the slot is already bound, remove the old binding and
+                    // replace it with the new one.
+                    Some(i) => {
+                        bindings.remove(i);
+                        unsafe {
+                            rtcSetSharedGeometryBuffer(
+                                self.handle,
+                                usage,
+                                slot,
+                                format,
+                                ptr.add(offset) as *mut _,
+                                offset,
+                                stride,
+                                count,
+                            );
+                        };
+                        bindings.push(AttachedBuffer {
+                            slot,
+                            source: BufferSlice::User {
+                                ptr,
+                                offset,
+                                size,
+                                marker: PhantomData,
+                            },
+                            format,
+                            stride,
+                        });
+                        Ok(())
+                    }
+                    // If the slot is not bound, just bind the new buffer.
+                    None => {
+                        unsafe {
+                            rtcSetSharedGeometryBuffer(
+                                self.handle,
+                                usage,
+                                slot,
+                                format,
+                                ptr.add(offset) as *mut _,
+                                offset,
+                                stride,
+                                count,
+                            );
+                        };
+                        bindings.push(AttachedBuffer {
+                            slot,
+                            source: BufferSlice::User {
+                                ptr,
+                                offset,
+                                size,
+                                marker: PhantomData,
+                            },
+                            format,
+                            stride,
+                        });
+                        Ok(())
+                    }
+                }
             }
         }
     }
@@ -232,34 +312,30 @@ impl<'device, 'buf: 'static> BufferGeometry<'buf> {
         format: Format,
         stride: usize,
         count: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<BufferSlice, Error> {
         debug_assert!(stride % 4 == 0, "Stride must be a multiple of 4!");
+        if usage == BufferUsage::VERTEX_ATTRIBUTE {
+            self.check_vertex_attribute(slot)?;
+        }
         let bindings = self.attachments.entry(usage).or_insert_with(Vec::new);
-        if bindings.iter().find(|a| a.slot == slot).is_none() {
-            let raw_ptr = unsafe {
-                rtcSetNewGeometryBuffer(
-                    self.handle,
-                    usage,
-                    slot,
-                    format,
-                    stride as usize,
-                    count as usize,
-                )
-            };
+        if !bindings.iter().any(|a| a.slot == slot) {
+            let raw_ptr =
+                unsafe { rtcSetNewGeometryBuffer(self.handle, usage, slot, format, stride, count) };
             if raw_ptr.is_null() {
                 Err(self.device.get_error())
             } else {
+                let slice = BufferSlice::Internal {
+                    ptr: raw_ptr,
+                    size: NonZeroUsize::new(count * stride).unwrap(),
+                    marker: std::marker::PhantomData,
+                };
                 bindings.push(AttachedBuffer {
                     slot,
-                    source: BufferSource::EmbreeManaged(BufferSlice::Internal {
-                        ptr: raw_ptr,
-                        size: NonZeroUsize::new(count * stride as usize).unwrap(),
-                        marker: std::marker::PhantomData,
-                    }),
+                    source: slice,
                     format,
                     stride,
                 });
-                Ok(())
+                Ok(slice)
             }
         } else {
             eprint!("Buffer already attached to slot {}", slot);
@@ -269,22 +345,53 @@ impl<'device, 'buf: 'static> BufferGeometry<'buf> {
 
     /// Returns the buffer bound to the given slot and usage.
     pub fn get_buffer(&self, usage: BufferUsage, slot: u32) -> Option<&BufferSlice> {
-        let attachment = self.attachments
+        let attachment = self
+            .attachments
             .get(&usage)
             .and_then(|v| v.iter().find(|a| a.slot == slot));
         if let Some(attachment) = attachment {
-            match attachment.source {
-                BufferSource::EmbreeManaged(ref slice) => Some(slice),
-                BufferSource::UserManaged(_) => None,
-            }
+            Some(&attachment.source)
         } else {
             None
         }
     }
 
+    /// Returns the type of geometry of this geometry.
+    pub fn kind(&self) -> GeometryType { self.kind }
+
     pub fn commit(&mut self) {
         unsafe {
             rtcCommitGeometry(self.handle);
+        }
+    }
+
+    /// Sets the number of vertex attributes of the geometry.
+    ///
+    /// This function sets the number of slots for vertex attributes buffers
+    /// (BufferUsage::VERTEX_ATTRIBUTE) that can be used for the specified
+    /// geometry.
+    ///
+    /// Only supported by triangle meshes, quad meshes, curves, points, and
+    /// subdivision geometries.
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - The number of vertex attribute slots.
+    pub fn set_vertex_attribute_count(&mut self, count: u32) {
+        match self.vertex_attribute_count {
+            None => {
+                panic!(
+                    "set_vertex_attribute_count is not supported by geometry of type {:?}.",
+                    self.kind
+                );
+            }
+            Some(_) => {
+                // Update the vertex attribute count.
+                unsafe {
+                    rtcSetGeometryVertexAttributeCount(self.handle, count);
+                }
+                self.vertex_attribute_count = Some(count);
+            }
         }
     }
 
@@ -339,21 +446,4 @@ impl<'device, 'buf: 'static> BufferGeometry<'buf> {
             rtcSetGeometryVertexAttributeTopology(self.handle, vertex_attribute_id, topology_id);
         }
     }
-
-    // /// Assigns a view of a shared data buffer to a geometry.
-    // pub fn set_shared_buffer(&mut self, usage: BufferUsage, slot: u32, buffer:
-    // &[u8], ) -> Result<(), Error> {     let bindings =
-    // self.attachments.entry(usage).or_insert_with(Vec::new);     if bindings.
-    // iter().find(|a| a.slot == slot).is_none() {         bindings.
-    // push(AttachedBuffer {             slot,
-    //             buffer,
-    //             format: Format::FLOAT3,
-    //             stride: 0,
-    //         });
-    //         Ok(())
-    //     } else {
-    //         eprint!("Buffer already attached to slot {}", slot);
-    //         Err(Error::INVALID_ARGUMENT)
-    //     }
-    // }
 }

@@ -25,7 +25,7 @@ impl Device {
         enable_ftz_and_daz();
         let handle = unsafe { rtcNewDevice(ptr::null()) };
         if handle.is_null() {
-            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
+            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
         } else {
             Ok(Device { handle })
         }
@@ -36,7 +36,7 @@ impl Device {
         enable_ftz_and_daz();
         let handle = unsafe { rtcNewDevice(cfg.as_ptr()) };
         if handle.is_null() {
-            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
+            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
         } else {
             Ok(Device { handle })
         }
@@ -47,7 +47,7 @@ impl Device {
         let cfg = config.to_c_string();
         let handle = unsafe { rtcNewDevice(cfg.as_ptr()) };
         if handle.is_null() {
-            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) }.into())
+            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
         } else {
             Ok(Device { handle })
         }

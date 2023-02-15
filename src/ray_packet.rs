@@ -34,8 +34,8 @@ impl Ray4 {
             dir_x: [dir[0][0], dir[1][0], dir[2][0], dir[3][0]],
             dir_y: [dir[0][1], dir[1][1], dir[2][1], dir[3][1]],
             dir_z: [dir[0][2], dir[1][2], dir[2][2], dir[3][2]],
-            tnear: tnear,
-            tfar: tfar,
+            tnear,
+            tfar,
             time: [0.0; 4],
             mask: [u32::MAX; 4],
             id: [0; 4],
@@ -128,7 +128,7 @@ impl SoAHit for Hit4 {
 impl RayHit4 {
     pub fn new(ray: Ray4) -> RayHit4 {
         sys::RTCRayHit4 {
-            ray: ray,
+            ray,
             hit: Hit4::new(),
         }
     }
