@@ -16,7 +16,7 @@ fn cast_ray(scene: &Scene, origin: [f32; 3], direction: [f32; 3]) {
 
     print!("{origin:?} ");
 
-    if ray_hit.hit.is_valid() {
+    if ray_hit.is_valid() {
         println!(
             "Found intersection on geometry {}, primitive {} at tfar = {}",
             ray_hit.hit.geomID, ray_hit.hit.primID, ray_hit.ray.tfar
