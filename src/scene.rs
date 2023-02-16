@@ -104,6 +104,18 @@ impl Scene {
         self.geometries.lock().unwrap().remove(&id);
     }
 
+    /// Returns the geometry bound to the specified geometry ID.
+    pub fn get_geometry(&self, id: u32) -> Option<Geometry> {
+        let geometry = unsafe {
+            rtcGetGeometry(self.handle, id)
+        };
+        if geometry.is_null() {
+            None
+        } else {
+            Some(Geometry::new(geometry))
+        }
+    }
+
     /// Returns the raw underlying handle to the scene, e.g. for passing it to
     /// native code or ISPC kernels.
     ///
@@ -149,6 +161,27 @@ impl Scene {
 
     /// Set the build quality of the scene. See [`RTCBuildQuality`] for all
     /// possible values.
+    ///
+    /// The per-geometry build quality is only a hint and may be ignored. Embree
+    /// currently uses the per-geometry build quality when the scene build
+    /// quality is set to [`BuildQuality::LOW`]. In this mode a two-level
+    /// acceleration structure is build, and geometries build a separate
+    /// acceleration structure using the geometry build quality.
+    ///
+    /// The build quality can be one of the following:
+    ///
+    /// - [`BuildQuality::LOW`]: Creates lower quality data structures, e.g. for
+    ///   dynamic scenes.
+    ///
+    /// - [`BuildQuality::MEDIUM`]: Default build quality for most usages. Gives
+    ///   a good balance between quality and performance.
+    ///
+    /// - [`BuildQuality::HIGH`]: Creates higher quality data structures for
+    ///   final frame rendering. Enables a spatial split builder for certain
+    ///   primitive types.
+    ///
+    /// - [`BuildQuality::REFIT`]: Uses a BVH refitting approach when changing
+    ///   only the vertex buffer.
     pub fn set_build_quality(&self, quality: RTCBuildQuality) {
         unsafe {
             rtcSetSceneBuildQuality(self.handle, quality);

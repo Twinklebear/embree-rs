@@ -128,7 +128,7 @@ where
         1.0,
         [window_size.width as f32, window_size.height as f32],
     );
-    arcball_camera.zoom(-50.0, 0.16);
+    arcball_camera.zoom(-30.0, 0.16);
     arcball_camera.rotate(
         Vector2::new(
             window_size.width as f32 / 2.0,

@@ -5,6 +5,6 @@ authors = ["Yang Chen <matthiasychen@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-embree = { path = "../../" }
+embree = { path = "../.." }
 support = { path = "../support" }
 glam = "0.22"

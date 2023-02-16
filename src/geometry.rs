@@ -5,13 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{sys::*, BufferSlice, BufferUsage, Device, Error, Format, GeometryType};
-
-// mod quad_mesh;
-// mod triangle_mesh;
-
-// pub use quad_mesh::QuadMesh;
-// pub use triangle_mesh::TriangleMesh;
+use crate::{sys::*, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryType};
 
 // TODO(yang): maybe enforce format and stride when get the view?
 /// Information about how a (part of) buffer is bound to a geometry.
@@ -67,7 +61,8 @@ impl<'buf> Drop for Geometry<'buf> {
 }
 
 impl<'dev, 'buf> Geometry<'buf> {
-    pub(crate) fn new(device: &'dev Device, kind: GeometryType) -> Result<Geometry<'buf>, Error> {
+    /// Creates a new geometry object.
+    pub fn new(device: &'dev Device, kind: GeometryType) -> Result<Geometry<'buf>, Error> {
         let handle = unsafe { rtcNewGeometry(device.handle, kind) };
         let vertex_attribute_count = match kind {
             GeometryType::GRID | GeometryType::USER | GeometryType::INSTANCE => None,
@@ -339,7 +334,7 @@ impl<'dev, 'buf> Geometry<'buf> {
         format: Format,
         stride: usize,
         count: usize,
-    ) -> Result<BufferSlice, Error> {
+    ) -> Result<BufferSlice<'static>, Error> {
         debug_assert!(stride % 4 == 0, "Stride must be a multiple of 4!");
         if usage == BufferUsage::VERTEX_ATTRIBUTE {
             self.check_vertex_attribute(slot)?;
@@ -390,6 +385,34 @@ impl<'dev, 'buf> Geometry<'buf> {
     pub fn commit(&mut self) {
         unsafe {
             rtcCommitGeometry(self.handle);
+        }
+    }
+
+    /// Sets the build quality for the geometry.
+    ///
+    /// The per-geometry build quality is only a hint and may be ignored. Embree
+    /// currently uses the per-geometry build quality when the scene build
+    /// quality is set to [`BuildQuality::LOW`]. In this mode a two-level
+    /// acceleration structure is build, and geometries build a separate
+    /// acceleration structure using the geometry build quality.
+    ///
+    /// The build quality can be one of the following:
+    ///
+    /// - [`BuildQuality::LOW`]: Creates lower quality data structures, e.g. for
+    ///   dynamic scenes.
+    ///
+    /// - [`BuildQuality::MEDIUM`]: Default build quality for most usages. Gives
+    ///   a good balance between quality and performance.
+    ///
+    /// - [`BuildQuality::HIGH`]: Creates higher quality data structures for
+    ///   final frame rendering. Enables a spatial split builder for certain
+    ///   primitive types.
+    ///
+    /// - [`BuildQuality::REFIT`]: Uses a BVH refitting approach when changing
+    ///   only the vertex buffer.
+    pub fn set_build_quality(&mut self, quality: BuildQuality) {
+        unsafe {
+            rtcSetGeometryBuildQuality(self.handle, quality);
         }
     }
 
