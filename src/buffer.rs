@@ -55,9 +55,11 @@ impl Buffer {
     ///
     /// # Safety
     ///
-    /// The handle returned by this function is a raw pointer to the
-    /// underlying Embree buffer. It is not safe to use this handle
-    /// outside of the Embree API.
+    /// Use this function only if you know what you are doing. The returned
+    /// handle is a raw pointer to an Embree reference-counted object. The
+    /// reference count is not increased by this function, so the caller must
+    /// ensure that the handle is not used after the buffer object is
+    /// destroyed.
     pub unsafe fn handle(&self) -> RTCBuffer { self.handle }
 
     /// Returns a slice of the buffer.
@@ -138,7 +140,7 @@ pub struct BufferViewMut<'buf, T: 'buf> {
 
 /// Slice into a region of memory. This can either be a slice to a [`Buffer`] or
 /// a slice to memory managed by Embree (mostly created from
-/// [`rtcSetNewGeometryBuffer`]) or from user owned memory.
+/// [`rtcSetNewGeometryBuffer`]) or from user owned/borrowed memory.
 #[derive(Debug, Clone, Copy)]
 pub enum BufferSlice<'src> {
     /// Slice into a [`Buffer`] object.
@@ -147,8 +149,8 @@ pub enum BufferSlice<'src> {
         offset: usize,
         size: BufferSize,
     },
-    /// Slice into memory managed by Embree.
-    Internal {
+    /// Slice into memory created and managed internally inside [`RTCGeometry`].
+    GeometryLocal {
         ptr: *mut ::std::os::raw::c_void,
         size: BufferSize,
         marker: PhantomData<&'src mut [::std::os::raw::c_void]>,
@@ -204,7 +206,7 @@ impl<'src> BufferSlice<'src> {
                     marker: PhantomData,
                 })
             }
-            BufferSlice::Internal { ptr, size, .. } => {
+            BufferSlice::GeometryLocal { ptr, size, .. } => {
                 debug_assert!(
                     size.get() % mem::size_of::<T>() == 0,
                     "Size of the range of the mapped buffer must be multiple of T!"
@@ -212,26 +214,13 @@ impl<'src> BufferSlice<'src> {
                 let len = size.get() / mem::size_of::<T>();
                 let mapped = unsafe { BufferMappedRange::from_raw_parts(*ptr as *mut T, len) };
                 Ok(BufferView {
-                    //slice: *self,
                     mapped,
                     marker: PhantomData,
                 })
             }
-            BufferSlice::User {
-                ptr, offset, size, ..
-            } => {
-                // TODO(yang): should we allow this?
-                debug_assert!(
-                    size.get() % mem::size_of::<T>() == 0,
-                    "Size of the range of the mapped buffer must be multiple of T!"
-                );
-                let len = size.get() / mem::size_of::<T>();
-                let mapped =
-                    unsafe { BufferMappedRange::from_raw_parts(ptr.add(*offset) as *mut T, len) };
-                Ok(BufferView {
-                    mapped,
-                    marker: PhantomData,
-                })
+            BufferSlice::User { .. } => {
+                eprintln!("Creating a view from a user owned/borrowed memory is not allowed!");
+                Err(Error::INVALID_OPERATION)
             }
         }
     }
@@ -246,7 +235,7 @@ impl<'src> BufferSlice<'src> {
                 mapped: BufferMappedRange::from_buffer(buffer, *offset, size.get())?,
                 marker: PhantomData,
             }),
-            BufferSlice::Internal { ptr, size, .. } => {
+            BufferSlice::GeometryLocal { ptr, size, .. } => {
                 debug_assert!(
                     size.get() % mem::size_of::<T>() == 0,
                     "Size of the range of the mapped buffer must be multiple of T!"
@@ -258,21 +247,9 @@ impl<'src> BufferSlice<'src> {
                     marker: PhantomData,
                 })
             }
-            BufferSlice::User {
-                ptr, offset, size, ..
-            } => {
-                // TODO(yang): should we allow this?
-                debug_assert!(
-                    size.get() % mem::size_of::<T>() == 0,
-                    "Size of the range of the mapped buffer must be multiple of T!"
-                );
-                let len = size.get() / mem::size_of::<T>();
-                let mapped =
-                    unsafe { BufferMappedRange::from_raw_parts(ptr.add(*offset) as *mut T, len) };
-                Ok(BufferViewMut {
-                    mapped,
-                    marker: PhantomData,
-                })
+            BufferSlice::User { .. } => {
+                eprintln!("Creating a view from a user owned/borrowed memory is not allowed!");
+                Err(Error::INVALID_OPERATION)
             }
         }
     }

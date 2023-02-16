@@ -91,7 +91,7 @@ impl Hit4 {
             instID: [[u32::MAX; 4]],
         }
     }
-    pub fn any_hit(&self) -> bool { self.hits().fold(false, |acc, g| acc || g) }
+    pub fn any_hit(&self) -> bool { self.hits().any(|h| h) }
     pub fn hits<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
         self.geomID.iter().map(|g| *g != u32::MAX)
     }

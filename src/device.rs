@@ -1,4 +1,4 @@
-use crate::{sys::*, Buffer, BufferSize, Error, Geometry, Scene};
+use crate::{sys::*, Buffer, BufferSize, Error, Geometry, GeometryType, Scene};
 use std::{
     ffi::CString,
     fmt::{self, Display, Formatter},
@@ -216,7 +216,9 @@ impl Device {
 
     /// Creates a [`Geometry`] object bound to the device without any
     /// buffers attached.
-    pub fn create_geometry<G: Geometry>(&self) -> Result<G, Error> { G::new(self) }
+    pub fn create_geometry(&self, kind: GeometryType) -> Result<Geometry<'static>, Error> {
+        Geometry::new(self, kind)
+    }
 }
 
 impl Drop for Device {

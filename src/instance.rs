@@ -1,6 +1,6 @@
 use std::{os::raw, sync::Arc};
 
-use crate::{geometry::Geometry, scene::Scene, sys::*, Device, Format, GeometryType};
+use crate::{scene::Scene, sys::*, Format, GeometryType};
 
 pub struct Instance {
     /// The scene being instanced
@@ -29,19 +29,6 @@ impl Instance {
             );
         }
     }
-}
-
-impl Geometry for Instance {
-    fn new(device: &Device) -> Result<Self, RTCError>
-    where
-        Self: Sized,
-    {
-        unimplemented!()
-    }
-
-    fn handle(&self) -> RTCGeometry { self.handle }
-
-    fn kind(&self) -> GeometryType { GeometryType::INSTANCE }
 }
 
 impl Drop for Instance {

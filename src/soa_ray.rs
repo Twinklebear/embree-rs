@@ -138,13 +138,7 @@ pub struct SoARayIter<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> SoARayIter<'a, T> {
-    pub fn new(ray: &'a T, len: usize) -> SoARayIter<'a, T> {
-        SoARayIter {
-            ray,
-            cur: 0,
-            len,
-        }
-    }
+    pub fn new(ray: &'a T, len: usize) -> SoARayIter<'a, T> { SoARayIter { ray, cur: 0, len } }
 }
 
 impl<'a, T: SoARay + 'a> Iterator for SoARayIter<'a, T> {
@@ -176,11 +170,7 @@ pub struct SoARayIterMut<'a, T> {
 
 impl<'a, T: SoARay + 'a> SoARayIterMut<'a, T> {
     pub fn new(ray: &'a mut T, len: usize) -> SoARayIterMut<'a, T> {
-        SoARayIterMut {
-            ray,
-            cur: 0,
-            len,
-        }
+        SoARayIterMut { ray, cur: 0, len }
     }
 }
 
@@ -227,13 +217,7 @@ pub struct SoAHitIter<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> SoAHitIter<'a, T> {
-    pub fn new(hit: &'a T, len: usize) -> SoAHitIter<'a, T> {
-        SoAHitIter {
-            hit,
-            cur: 0,
-            len,
-        }
-    }
+    pub fn new(hit: &'a T, len: usize) -> SoAHitIter<'a, T> { SoAHitIter { hit, cur: 0, len } }
 }
 
 impl<'a, T: SoAHit + 'a> Iterator for SoAHitIter<'a, T> {
@@ -322,11 +306,7 @@ pub struct SoAHitIterMut<'a, T> {
 
 impl<'a, T: SoAHit + 'a> SoAHitIterMut<'a, T> {
     pub fn new(hit: &'a mut T, len: usize) -> SoAHitIterMut<'a, T> {
-        SoAHitIterMut {
-            hit,
-            cur: 0,
-            len,
-        }
+        SoAHitIterMut { hit, cur: 0, len }
     }
 }
 

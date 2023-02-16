@@ -4,10 +4,8 @@ extern crate embree;
 extern crate support;
 
 use embree::{
-    BufferSlice, BufferUsage, Device, Format, Geometry, IntersectContext, QuadMesh, Ray,
-    TriangleMesh,
+    BufferSlice, BufferUsage, Device, Format, IntersectContext, QuadMesh, Ray, TriangleMesh,
 };
-use std::sync::Arc;
 use support::Camera;
 
 fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh {
@@ -68,9 +66,9 @@ fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh {
 }
 
 fn make_ground_plane(device: &Device) -> QuadMesh {
-    let mut mesh = QuadMesh::unanimated(device, 1, 4);
+    let mut mesh = QuadMesh::new(device).unwrap();
     {
-        mesh.get_buffer(BufferUsage::VERTEX, 0)
+        mesh.set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 4)
             .unwrap()
             .view_mut::<[f32; 4]>()
             .unwrap()
@@ -80,7 +78,7 @@ fn make_ground_plane(device: &Device) -> QuadMesh {
                 [10.0, -2.0, 10.0, 0.0],
                 [10.0, -2.0, -10.0, 0.0],
             ]);
-        mesh.get_buffer(BufferUsage::INDEX, 0)
+        mesh.set_new_buffer(BufferUsage::INDEX, 0, Format::UINT4, 16, 1)
             .unwrap()
             .view_mut::<[u32; 4]>()
             .unwrap()
@@ -93,7 +91,9 @@ fn make_ground_plane(device: &Device) -> QuadMesh {
 fn main() {
     let display = support::Display::new(512, 512, "triangle geometry");
     let device = Device::new().unwrap();
-
+    device.set_error_function(|err, msg| {
+        println!("{}: {}", err, msg);
+    });
     let vertex_colors = vec![
         [0.0, 0.0, 0.0],
         [0.0, 0.0, 1.0],
@@ -120,12 +120,12 @@ fn main() {
         [1.0, 1.0, 0.0],
     ];
 
-    let cube = Arc::new(make_cube(&device, &vertex_colors));
-    let ground = Arc::new(make_ground_plane(&device));
+    let cube = make_cube(&device, &vertex_colors);
+    let ground = make_ground_plane(&device);
 
     let mut scene = device.create_scene().unwrap();
-    let _ = scene.attach_geometry(cube);
-    let ground_id = scene.attach_geometry(ground);
+    let _ = scene.attach_geometry(&cube);
+    let ground_id = scene.attach_geometry(&ground);
     scene.commit();
 
     let mut intersection_ctx = IntersectContext::coherent();

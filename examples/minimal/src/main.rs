@@ -1,7 +1,6 @@
 //! This example shows how to intersect a ray with a single triangle.
 
-use embree::{BufferUsage, Device, Format, IntersectContext, Ray, Scene, TriangleMesh};
-use std::sync::Arc;
+use embree::{BufferUsage, Device, Format, GeometryType, IntersectContext, Ray, Scene};
 
 /// Casts a single ray with the given origin and direction.
 fn cast_ray(scene: &Scene, origin: [f32; 3], direction: [f32; 3]) {
@@ -36,7 +35,7 @@ fn main() {
     let mut scene = device.create_scene().unwrap();
     {
         // Create a triangle mesh geometry, and initialise a single triangle.
-        let mut triangle = device.create_geometry::<TriangleMesh>().unwrap();
+        let mut triangle = device.create_geometry(GeometryType::TRIANGLE).unwrap();
         triangle
             .set_new_buffer(
                 BufferUsage::VERTEX,
@@ -72,7 +71,7 @@ fn main() {
         // otherwise you will not get any intersection results.
         triangle.commit();
 
-        scene.attach_geometry(Arc::new(triangle));
+        scene.attach_geometry(&triangle);
 
         // The scene must also be committed when you are done setting it up.
         scene.commit();

@@ -1,5 +1,9 @@
 use crate::{Error, SceneFlags};
-use std::{collections::HashMap, mem, sync::Arc};
+use std::{
+    collections::HashMap,
+    mem,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     callback,
@@ -12,14 +16,12 @@ use crate::{
     sys::*,
 };
 
-/// A scene containing various geometry for rendering. Geometry
-/// can be added and removed by attaching and detaching it, after
-/// which the scene BVH can be built via `commit` which will
-/// return a `CommittedScene` which can be used for ray queries.
+/// A scene containing various geometries.
+#[derive(Debug)]
 pub struct Scene {
     pub(crate) handle: RTCScene,
     pub(crate) device: Device,
-    geometry: HashMap<u32, Arc<dyn Geometry>>,
+    geometries: Arc<Mutex<HashMap<u32, Geometry<'static>>>>,
 }
 
 impl Clone for Scene {
@@ -28,7 +30,7 @@ impl Clone for Scene {
         Self {
             handle: self.handle,
             device: self.device.clone(),
-            geometry: self.geometry.clone(),
+            geometries: self.geometries.clone(),
         }
     }
 }
@@ -43,7 +45,7 @@ impl Scene {
             Ok(Scene {
                 handle,
                 device,
-                geometry: HashMap::new(),
+                geometries: Default::default(),
             })
         }
     }
@@ -55,31 +57,63 @@ impl Scene {
         Ok(scene)
     }
 
-    /// Attach a new geometry to the scene. Returns the scene local ID which
-    /// can than be used to find the hit geometry from the ray ID member.
-    /// A geometry can only be attached to one Scene at a time, per the Embree
-    /// documentation. The geometry can be detached from the scene to move
-    /// it to another one.
-    pub fn attach_geometry(&mut self, mesh: Arc<dyn Geometry>) -> u32 {
-        let id = unsafe { rtcAttachGeometry(self.handle, mesh.handle()) };
-        self.geometry.insert(id, mesh);
+    /// Attaches a new geometry to the scene.
+    ///
+    /// A geometry can get attached to multiple scenes. The geometry ID is
+    /// unique per scene, and is used to identify the geometry when hitting
+    /// by a ray or ray packet during ray queries.
+    ///
+    /// This function is thread-safe, thus multiple threads can attach
+    /// geometries to a scene at the same time.
+    ///
+    /// The geometry IDs are assigned sequentially, starting at 0, as long as
+    /// no geometries are detached from the scene. If geometries are detached
+    /// from the scene, the implementation will reuse IDs in an implementation
+    /// dependent way.
+    pub fn attach_geometry<'a>(&'a mut self, geometry: &'a Geometry<'static>) -> u32 {
+        let id = unsafe { rtcAttachGeometry(self.handle, geometry.handle) };
+        self.geometries.lock().unwrap().insert(id, geometry.clone());
         id
     }
 
-    /// Detach the geometry from the scene
-    pub fn detach(&mut self, id: u32) {
+    /// Attaches a geometry to the scene using a specified geometry ID.
+    ///
+    /// A geometry can get attached to multiple scenes. The user-provided
+    /// geometry ID must be unused in the scene, otherwise the creation of the
+    /// geometry will fail. Further, the user-provided geometry IDs
+    /// should be compact, as Embree internally creates a vector which size is
+    /// equal to the largest geometry ID used. Creating very large geometry
+    /// IDs for small scenes would thus cause a memory consumption and
+    /// performance overhead.
+    ///
+    /// This function is thread-safe, thus multiple threads can attach
+    /// geometries to a scene at the same time.
+    pub fn attach_geometry_by_id<'a>(&'a mut self, geometry: &'a Geometry<'static>, id: u32) {
+        unsafe { rtcAttachGeometryByID(self.handle, geometry.handle, id) };
+        self.geometries.lock().unwrap().insert(id, geometry.clone());
+    }
+
+    /// Detaches the geometry from the scene.
+    ///
+    /// This function is thread-safe, thus multiple threads can detach
+    /// geometries from a scene at the same time.
+    pub fn detach_geometry(&mut self, id: u32) {
         unsafe {
             rtcDetachGeometry(self.handle, id);
         }
-        self.geometry.remove(&id);
+        self.geometries.lock().unwrap().remove(&id);
     }
 
-    /// Get the underlying handle to the scene, e.g. for passing it to
+    /// Returns the raw underlying handle to the scene, e.g. for passing it to
     /// native code or ISPC kernels.
     ///
     /// # Safety
     ///
-    /// The handle is only valid as long as the scene is alive.
+    /// Use this function only if you know what you are doing. The returned
+    /// handle is a raw pointer to an Embree reference-counted object. The
+    /// reference count is not increased by this function, so the caller must
+    /// ensure that the handle is not used after the scene object is
+    /// destroyed.
     pub unsafe fn handle(&self) -> RTCScene { self.handle }
 
     /// Commit the scene to build the BVH on top of the geometry to allow

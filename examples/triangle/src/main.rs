@@ -3,7 +3,7 @@
 extern crate embree;
 extern crate support;
 
-use embree::{BufferUsage, Device, Geometry, IntersectContext, RayHitN, RayN, TriangleMesh};
+use embree::{BufferUsage, Device, Format, IntersectContext, RayHitN, RayN, TriangleMesh};
 use std::sync::Arc;
 
 fn main() {
@@ -16,9 +16,9 @@ fn main() {
     });
 
     // Make a triangle
-    let mut triangle = TriangleMesh::unanimated(&device, 1, 3);
+    let mut triangle = TriangleMesh::new(&device).unwrap();
     triangle
-        .get_buffer(BufferUsage::VERTEX, 0)
+        .set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 3)
         .unwrap()
         .view_mut::<[f32; 4]>()
         .unwrap()
@@ -28,7 +28,7 @@ fn main() {
             [1.0, 0.0, 0.0, 0.0],
         ]);
     triangle
-        .get_buffer(BufferUsage::INDEX, 0)
+        .set_new_buffer(BufferUsage::INDEX, 0, Format::UINT3, 12, 1)
         .unwrap()
         .view_mut::<[u32; 3]>()
         .unwrap()
@@ -37,7 +37,7 @@ fn main() {
 
     let triangle = Arc::new(triangle);
     let mut scene = device.create_scene().unwrap();
-    scene.attach_geometry(triangle);
+    scene.attach_geometry(&triangle);
     scene.commit();
 
     support::display::run(display, move |image, _, _| {
