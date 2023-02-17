@@ -28,6 +28,43 @@ struct GeometryState<'buf> {
 
 /// Wrapper around an Embree geometry object.
 ///
+/// Depending on the geometry type, different buffers must be bound (e.g. using
+/// [`Geometry::set_buffer`]) to set up the geometry data. In most cases,
+/// binding of a vertex and index buffer is required. The number of primitives
+/// and vertices of that geometry is typically inferred from the size of these
+/// bound buffers.
+///
+/// Changes to the geometry always must be committed using the
+/// [`Geometry::commit`] call before using the geometry. After committing, a
+/// geometry is not yet included in any scene. A geometry can be added to a
+/// scene by using the [`Scene::attach_geometry`] function (to automatically
+/// assign a geometry ID) or using the [`Scene::attach_geometry_by_id`] function
+/// (to specify the geometry ID manually). A geometry can get attached to
+/// multiple scenes.
+///
+/// All geometry types support multi-segment motion blur with an arbitrary
+/// number of equidistant time steps (in the range of 2 to 129) inside a user
+/// specified time range. Each geometry can have a different number of time
+/// steps and a different time range. The motion blur geometry is defined by
+/// linearly interpolating the geometries of neighboring time steps. To
+/// construct a motion blur geometry, first the number of time steps of the
+/// geometry must be specified using [`Geometry::set_time_step_count`], and then
+/// a vertex buffer for each time step must be bound, e.g. using the
+/// [`Geometry::set_buffer`] function. Optionally, a time range defining the
+/// start (and end time) of the first (and last) time step can be set using the
+/// rtcSetGeometryTimeRange function. This feature will also allow geometries to
+/// appear and disappear during the camera shutter time if the time range is a
+/// sub range of [0,1].
+///
+/// The API supports per-geometry filter callback functions (see
+/// [`Geometry::set_intersect_filter_function`]
+/// and set_occluded_filter_function) that are invoked for each intersection
+/// found during the Scene::intersect or Scene::occluded calls. The former ones
+/// are called geometry intersection filter functions, the latter ones geometry
+/// occlusion filter functions. These filter functions are designed to be used
+/// to ignore intersections outside of a user- defined silhouette of a
+/// primitive, e.g. to model tree leaves using transparency textures
+///
 /// It does not own the buffers that are bound to it, but it does own the
 /// geometry object itself.
 #[derive(Debug)]
@@ -62,6 +99,24 @@ impl<'buf> Drop for Geometry<'buf> {
 
 impl<'dev, 'buf> Geometry<'buf> {
     /// Creates a new geometry object.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use embree::{Device, Geometry, GeometryType};
+    ///
+    /// let device = Device::new().unwrap();
+    /// let geometry = Geometry::new(&device, GeometryType::TRIANGLE).unwrap();
+    /// ```
+    ///
+    /// or use the [`Device::create_geometry`] method:
+    ///
+    /// ```no_run
+    /// use embree::{Device, GeometryType};
+    ///
+    /// let device = Device::new().unwrap();
+    /// let geometry = device.create_geometry(GeometryType::TRIANGLE).unwrap();
+    /// ```
     pub fn new(device: &'dev Device, kind: GeometryType) -> Result<Geometry<'buf>, Error> {
         let handle = unsafe { rtcNewGeometry(device.handle, kind) };
         let vertex_attribute_count = match kind {
@@ -413,6 +468,56 @@ impl<'dev, 'buf> Geometry<'buf> {
     pub fn set_build_quality(&mut self, quality: BuildQuality) {
         unsafe {
             rtcSetGeometryBuildQuality(self.handle, quality);
+        }
+    }
+
+    /// Sets the number of time steps for multi-segment motion blur for the
+    /// geometry.
+    ///
+    /// For triangle meshes, quad meshes, curves, points, and subdivision
+    /// geometries, the number of time steps directly corresponds to the
+    /// number of vertex buffer slots available [`BufferUsage::VERTEX`].
+    ///
+    /// For instance geometries, a transformation must be specified for each
+    /// time step (see [`Geometry::set_transform`]).
+    ///
+    /// For user geometries, the registered bounding callback function must
+    /// provide a bounding box per primitive and time step, and the
+    /// intersection and occlusion callback functions should properly
+    /// intersect the motion-blurred geometry at the ray time.
+    pub fn set_time_step_count(&mut self, count: u32) {
+        unsafe {
+            rtcSetGeometryTimeStepCount(self.handle, count);
+        }
+    }
+
+    /// Sets the time range for a motion blur geometry.
+    ///
+    /// The time range is defined relative to the camera shutter interval [0,1]
+    /// but it can be arbitrary. Thus the `start` time can be smaller,
+    /// equal, or larger 0, indicating a geometry whose animation definition
+    /// start before, at, or after the camera shutter opens.
+    /// Similar the `end` time can be smaller, equal, or larger than 1,
+    /// indicating a geometry whose animation definition ends after, at, or
+    /// before the camera shutter closes. The `start` time has to be smaller
+    /// or equal to the `end` time.
+    ///
+    /// The default time range when this function is not called is the entire
+    /// camera shutter [0,1]. For best performance at most one time segment
+    /// of the piece wise linear definition of the motion should fall
+    /// outside the shutter window to the left and to the right. Thus do not
+    /// set the `start` time or `end` time too far outside the
+    /// [0,1] interval for best performance.
+    ///
+    /// This time range feature will also allow geometries to appear and
+    /// disappear during the camera shutter time if the specified time range
+    /// is a sub range of [0,1].
+    ///
+    /// Please also have a look at the [`Geometry::set_time_step_count`] to
+    /// see how to define the time steps for the specified time range.
+    pub fn set_time_range(&mut self, start: f32, end: f32) {
+        unsafe {
+            rtcSetGeometryTimeRange(self.handle, start, end);
         }
     }
 

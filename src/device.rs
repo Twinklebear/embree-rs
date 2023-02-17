@@ -27,7 +27,9 @@ impl Device {
         if handle.is_null() {
             Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
         } else {
-            Ok(Device { handle })
+            let device = Device { handle };
+            device.set_error_function(default_error_function);
+            Ok(device)
         }
     }
 
@@ -38,7 +40,9 @@ impl Device {
         if handle.is_null() {
             Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
         } else {
-            Ok(Device { handle })
+            let device = Device { handle };
+            device.set_error_function(default_error_function);
+            Ok(device)
         }
     }
 
@@ -49,7 +53,9 @@ impl Device {
         if handle.is_null() {
             Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
         } else {
-            Ok(Device { handle })
+            let device = Device { handle };
+            device.set_error_function(default_error_function);
+            Ok(device)
         }
     }
 
@@ -386,4 +392,8 @@ pub fn enable_ftz_and_daz() {
             _mm_setcsr(csr);
         }
     }
+}
+
+fn default_error_function(error: Error, msg: &str) {
+    eprintln!("Embree error {:?} - {}", error, msg);
 }

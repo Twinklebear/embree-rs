@@ -1,32 +1,49 @@
 //! This example show how to create a dynamic scene.
 
-use embree::{BufferUsage, BuildQuality, Device, Format, Geometry, IntersectContext, Ray, Scene, SceneFlags};
+use embree::{
+    BufferUsage, BuildQuality, Device, Format, Geometry, IntersectContext, Ray, Scene, SceneFlags,
+};
 use support::Camera;
 
 const NUM_SPHERES: usize = 20;
 const NUM_PHI: usize = 120;
 const NUM_THETA: usize = 2 * NUM_PHI;
 
-fn create_sphere(device: &Device, quality: BuildQuality, pos: glam::Vec3, radius: f32) -> Geometry<'static> {
+fn create_sphere(
+    device: &Device,
+    quality: BuildQuality,
+    pos: glam::Vec3,
+    radius: f32,
+) -> Geometry<'static> {
     // Create a triangulated sphere
-    let mut geometry = device.create_geometry(embree::GeometryType::TRIANGLE).unwrap();
+    let mut geometry = device
+        .create_geometry(embree::GeometryType::TRIANGLE)
+        .unwrap();
     geometry.set_build_quality(quality);
 
-    let mut vertices = geometry.set_new_buffer(
-        BufferUsage::VERTEX,
-        0,
-        Format::FLOAT3,
-        16,
-        NUM_THETA * (NUM_PHI + 1),
-    ).unwrap().view_mut::<[f32; 4]>().unwrap();
+    let mut vertices = geometry
+        .set_new_buffer(
+            BufferUsage::VERTEX,
+            0,
+            Format::FLOAT3,
+            16,
+            NUM_THETA * (NUM_PHI + 1),
+        )
+        .unwrap()
+        .view_mut::<[f32; 4]>()
+        .unwrap();
 
-    let mut indices = geometry.set_new_buffer(
-        BufferUsage::INDEX,
-        0,
-        Format::UINT3,
-        12,
-        2 * NUM_THETA * (NUM_PHI - 1),
-    ).unwrap().view_mut::<[u32; 3]>().unwrap();
+    let mut indices = geometry
+        .set_new_buffer(
+            BufferUsage::INDEX,
+            0,
+            Format::UINT3,
+            12,
+            2 * NUM_THETA * (NUM_PHI - 1),
+        )
+        .unwrap()
+        .view_mut::<[u32; 3]>()
+        .unwrap();
 
     let mut tri = 0;
     let rcp_num_theta = 1.0 / NUM_THETA as f32;
@@ -70,7 +87,8 @@ fn create_sphere(device: &Device, quality: BuildQuality, pos: glam::Vec3, radius
 fn create_ground_plane(device: &Device) -> Geometry<'static> {
     let mut geometry = Geometry::new(device, embree::GeometryType::TRIANGLE).unwrap();
     {
-        geometry.set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 4)
+        geometry
+            .set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 4)
             .unwrap()
             .view_mut::<[f32; 4]>()
             .unwrap()
@@ -80,7 +98,8 @@ fn create_ground_plane(device: &Device) -> Geometry<'static> {
                 [10.0, -2.0, -10.0, 0.0],
                 [10.0, -2.0, 10.0, 0.0],
             ]);
-        geometry.set_new_buffer(BufferUsage::INDEX, 0, Format::UINT3, 12, 2)
+        geometry
+            .set_new_buffer(BufferUsage::INDEX, 0, Format::UINT3, 12, 2)
             .unwrap()
             .view_mut::<[u32; 3]>()
             .unwrap()
@@ -90,8 +109,7 @@ fn create_ground_plane(device: &Device) -> Geometry<'static> {
     geometry
 }
 
-fn animate_sphere(scene: &Scene, id: u32, time: f32) {
-}
+fn animate_sphere(scene: &Scene, id: u32, time: f32) {}
 
 fn main() {
     let device = Device::new().unwrap();
@@ -120,7 +138,11 @@ fn main() {
         let id = scene.attach_geometry(&sphere);
         positions[id as usize] = pos;
         radii[id as usize] = radius;
-        colors[id as usize] = glam::Vec3::new((i % 16 + 1) as f32 / 17.0, (i % 8 + 1) as f32 / 9.0, (i % 4 + 1) as f32 / 5.0);
+        colors[id as usize] = glam::Vec3::new(
+            (i % 16 + 1) as f32 / 17.0,
+            (i % 8 + 1) as f32 / 9.0,
+            (i % 4 + 1) as f32 / 5.0,
+        );
     }
     let id = scene.attach_geometry(&create_ground_plane(&device));
     colors[id as usize] = glam::Vec3::new(1.0, 1.0, 1.0);

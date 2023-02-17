@@ -106,13 +106,11 @@ impl Scene {
 
     /// Returns the geometry bound to the specified geometry ID.
     pub fn get_geometry(&self, id: u32) -> Option<Geometry> {
-        let geometry = unsafe {
-            rtcGetGeometry(self.handle, id)
-        };
+        let geometry = unsafe { rtcGetGeometry(self.handle, id) };
         if geometry.is_null() {
             None
         } else {
-            Some(Geometry::new(geometry))
+            Some(Geometry::new(self.device))
         }
     }
 
