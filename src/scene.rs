@@ -1,4 +1,4 @@
-use crate::{Error, SceneFlags};
+use crate::{Bounds, Error, SceneFlags};
 use std::{
     collections::HashMap,
     mem,
@@ -57,6 +57,9 @@ impl Scene {
         Ok(scene)
     }
 
+    /// Returns the device the scene got created in.
+    pub fn device(&self) -> &Device { &self.device }
+
     /// Attaches a new geometry to the scene.
     ///
     /// A geometry can get attached to multiple scenes. The geometry ID is
@@ -105,7 +108,14 @@ impl Scene {
     }
 
     /// Returns the geometry bound to the specified geometry ID.
-    pub fn get_geometry(&self, id: u32) -> Option<Geometry<'static>> {
+    ///
+    /// This function is NOT thread-safe, and thus CAN be used during rendering.
+    /// However, it is recommended to store the geometry handle inside the
+    /// application's geometry representation and look up the geometry
+    /// handle from that representation directly.
+    ///
+    /// For a thread-safe version of this function, see [`Scene::get_geometry`].
+    pub fn get_geometry_unchecked(&self, id: u32) -> Option<Geometry<'static>> {
         let raw = unsafe { rtcGetGeometry(self.handle, id) };
         if raw.is_null() {
             None
@@ -114,6 +124,8 @@ impl Scene {
             geometries.get(&id).cloned()
         }
     }
+
+    // TODO: add get_geometry with rtcGetGeometryThreadSafe
 
     /// Returns the raw underlying handle to the scene, e.g. for passing it to
     /// native code or ISPC kernels.
@@ -127,11 +139,50 @@ impl Scene {
     /// destroyed.
     pub unsafe fn handle(&self) -> RTCScene { self.handle }
 
-    /// Commit the scene to build the BVH on top of the geometry to allow
-    /// for ray tracing the scene using the intersect/occluded methods
+    /// Commits all changes for the specified scene.
+    ///
+    /// This internally triggers building of a spatial acceleration structure
+    /// for the scene using all available worker threads. After the commit,
+    /// ray queries can be executed on the scene.
+    ///
+    /// If scene geometries get modified or attached or detached, the
+    /// [`Scene::commit`] call must be invoked before performing any further
+    /// ray queries for the scene; otherwise the effect of the ray query is
+    /// undefined.
+    ///
+    /// The modification of a geometry, committing the scene, and
+    /// tracing of rays must always happen sequentially, and never at the
+    /// same time.
+    ///
+    /// Any API call that sets a property of the scene or geometries
+    /// contained in the scene count as scene modification, e.g. including
+    /// setting of intersection filter functions.
     pub fn commit(&self) {
         unsafe {
             rtcCommitScene(self.handle);
+        }
+    }
+
+    /// Commits the scene from multiple threads.
+    ///
+    /// This function is similar to [`Scene::commit`], but allows multiple
+    /// threads to commit the scene at the same time. All threads must
+    /// consistently call [`Scene::join_commit`].
+    ///
+    /// This method allows a flexible way to lazily create hierarchies
+    /// during rendering. A thread reaching a not-yet-constructed sub-scene of a
+    /// two-level scene can generate the sub-scene geometry and call this method
+    /// on that just generated scene. During construction, further threads
+    /// reaching the not-yet-built scene can join the build operation by
+    /// also invoking this method. A thread that calls `join_commit` after
+    /// the build finishes will directly return from the `join_commit` call.
+    ///
+    /// Multiple scene commit operations on different scenes can be running at
+    /// the same time, hence it is possible to commit many small scenes in
+    /// parallel, distributing the commits to many threads.
+    pub fn join_commit(&self) {
+        unsafe {
+            rtcJoinCommitScene(self.handle);
         }
     }
 
@@ -139,6 +190,19 @@ impl Scene {
     /// operation. See [`RTCSceneFlags`] for all possible flags.
     /// On failure an error code is set that can be queried using
     /// [`rtcGetDeviceError`].
+    ///
+    /// Possible scene flags are:
+    /// - NONE: No flags set.
+    /// - DYNAMIC: Provides better build performance for dynamic scenes (but
+    ///   also higher memory consumption).
+    /// - COMPACT: Uses compact acceleration structures and avoids algorithms
+    ///   that consume much memory.
+    /// - ROBUST: Uses acceleration structures that allow for robust traversal,
+    ///   and avoids optimizations that reduce arithmetic accuracy. This mode is
+    ///   typically used for avoiding artifacts caused by rays shooting through
+    ///   edges of neighboring primitives.
+    /// - CONTEXT_FILTER_FUNCTION: Enables support for a filter function inside
+    ///   the intersection context for this scene.
     pub fn set_flags(&self, flags: RTCSceneFlags) {
         unsafe {
             rtcSetSceneFlags(self.handle, flags);
@@ -153,10 +217,10 @@ impl Scene {
     /// use embree::{Device, Scene, SceneFlags};
     /// let device = Device::new().unwrap();
     /// let scene = device.create_scene().unwrap();
-    /// let flags = scene.flags();
+    /// let flags = scene.get_flags();
     /// scene.set_flags(flags | SceneFlags::ROBUST);
     /// ```
-    pub fn flags(&self) -> RTCSceneFlags { unsafe { rtcGetSceneFlags(self.handle) } }
+    pub fn get_flags(&self) -> RTCSceneFlags { unsafe { rtcGetSceneFlags(self.handle) } }
 
     /// Set the build quality of the scene. See [`RTCBuildQuality`] for all
     /// possible values.
@@ -331,8 +395,9 @@ impl Scene {
         }
     }
 
-    pub fn bounds(&self) -> RTCBounds {
-        let mut bounds = RTCBounds {
+    /// Returns the axis-aligned bounding box of the scene.
+    pub fn get_bounds(&self) -> Bounds {
+        let mut bounds = Bounds {
             lower_x: 0.0,
             upper_x: 0.0,
             lower_y: 0.0,
@@ -343,7 +408,7 @@ impl Scene {
             align1: 0.0,
         };
         unsafe {
-            rtcGetSceneBounds(self.handle(), &mut bounds as *mut RTCBounds);
+            rtcGetSceneBounds(self.handle(), &mut bounds as *mut Bounds);
         }
         bounds
     }

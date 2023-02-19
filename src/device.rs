@@ -185,22 +185,27 @@ impl Device {
     /// # Returns
     ///
     /// An integer of type `isize`.
-    pub fn query_property(&self, prop: RTCDeviceProperty) -> isize {
-        unsafe { rtcGetDeviceProperty(self.handle, prop) }
+    pub fn get_property(&self, prop: RTCDeviceProperty) -> Result<isize, Error> {
+        let ret = unsafe { rtcGetDeviceProperty(self.handle, prop) };
+        if ret == 0 {
+            Err(self.get_error())
+        } else {
+            Ok(ret)
+        }
     }
 
     /// Query the error code of the device.
     ///
     /// Each thread has its own error code per device. If an error occurs when
     /// calling an API function, this error code is set to the occurred
-    /// error if it stores no previous error. The `error_code` function
+    /// error if it stores no previous error. The [`Device::get_error`] function
     /// reads and returns the currently stored error and clears the error
     /// code. This assures that the returned error code is always the first
-    /// error occurred since the last invocation of `error_code`.
+    /// error occurred since the last invocation of [`Device::get_error`].
     ///
     /// # Returns
     ///
-    /// Error code encoded as `RTCError`.
+    /// Error code encoded as [`Error`].
     pub fn get_error(&self) -> RTCError { unsafe { rtcGetDeviceError(self.handle) } }
 
     /// Creates a new scene bound to the device.

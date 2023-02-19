@@ -3,8 +3,8 @@
 use embree::{
     BufferUsage, BuildQuality, Device, Format, Geometry, IntersectContext, Ray, Scene, SceneFlags,
 };
+use glam::{vec3, Vec3};
 use support::Camera;
-use glam::{Vec3, vec3};
 
 const NUM_SPHERES: usize = 20;
 const NUM_PHI: usize = 120;
@@ -111,7 +111,7 @@ fn create_ground_plane(device: &Device) -> Geometry<'static> {
 }
 
 fn animate_sphere(scene: &Scene, id: u32, pos: Vec3, radius: f32, time: f32) {
-    let mut geometry = scene.get_geometry(id).unwrap();
+    let mut geometry = scene.get_geometry_unchecked(id).unwrap();
     let mut vertices = geometry
         .get_buffer(BufferUsage::VERTEX, 0)
         .unwrap()
@@ -193,7 +193,7 @@ fn main() {
 
     let display = support::Display::new(512, 512, "Dynamic Scene");
     let light_dir = vec3(1.0, 1.0, 1.0).normalize();
-    let mut time = 0;
+    let mut time = 0.0;
     support::display::run(display, move |image, camera_pose, _| {
         for p in image.iter_mut() {
             *p = 0;
@@ -208,7 +208,7 @@ fn main() {
         );
 
         for i in 0..NUM_SPHERES {
-            animate_sphere(&scene, i as u32, positions[i], radii[i], time as f32);
+            animate_sphere(&scene, i as u32, positions[i], radii[i], time);
         }
         scene.commit();
 
@@ -243,6 +243,6 @@ fn main() {
                 }
             }
         }
-        time += 1;
+        time += 1.0;
     });
 }

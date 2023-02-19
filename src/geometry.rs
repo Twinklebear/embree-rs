@@ -622,7 +622,7 @@ impl<'dev, 'buf> Geometry<'buf> {
 }
 
 macro_rules! impl_geometry_type {
-    ($name:ident, $kind:path, #[$doc:meta]) => {
+    ($name:ident, $kind:path, $(#[$meta:meta])*) => {
         #[derive(Debug)]
         pub struct $name(Geometry<'static>);
 
@@ -636,8 +636,8 @@ macro_rules! impl_geometry_type {
             fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
         }
 
+        $(#[$meta])*
         impl $name {
-            #[$doc]
             pub fn new(device: &Device) -> Result<Self, Error> {
                 Ok(Self(Geometry::new(device, $kind)?))
             }
@@ -647,5 +647,70 @@ macro_rules! impl_geometry_type {
 
 use std::ops::{Deref, DerefMut};
 
-impl_geometry_type!(TriangleMesh, GeometryType::TRIANGLE, #[doc = "A triangle mesh geometry."]);
-impl_geometry_type!(QuadMesh, GeometryType::QUAD, #[doc = "A quad mesh geometry."]);
+impl_geometry_type!(TriangleMesh, GeometryType::TRIANGLE,
+    /// A triangle mesh geometry.
+    ///
+    /// The index buffer must contain an array of three 32-bit indices per triangle
+    /// ([`Format::UINT3`]), and the number of primitives is inferred from the size
+    /// of the index buffer.
+    ///
+    /// The vertex buffer must contain an array of single precision x, y,
+    /// and z floating point coordinates per vertex ([`Format::FLOAT3`]), and the
+    /// number of vertices is inferred from the size of the vertex buffer.
+    /// The vertex buffer can be at most 16 GB in size.
+    ///
+    /// The parameterization of a triangle uses the first vertex `p0` as the
+    /// base point, the vector `p1 - p0` as the u-direction, and the vector
+    /// `p2 - p0` as the v-direction. Thus vertex attributes t0, t1, and t2
+    /// can be linearly interpolated over the triangle using the barycentric
+    /// coordinates `(u,v)` of the hit point:
+    ///
+    /// t_uv = (1-u-v) * t0 + u * t1 + v * t2
+    ///      = t0 + u * (t1 - t0) + v * (t2 - t0)
+    ///
+    /// A triangle whose vertices are laid out counter-clockwise has its geometry
+    /// normal pointing upwards outside the front face.
+    ///
+    /// For multi-segment motion blur, the number of time steps must be first
+    /// specified using the [`Geometry::set_time_step_count`] call. Then a vertex
+    /// buffer for each time step can be set using different buffer slots, and all
+    /// these buffers have to have the same stride and size.
+);
+
+impl_geometry_type!(QuadMesh, GeometryType::QUAD,
+    /// A quad mesh geometry.
+    ///
+    /// The index buffer must contain an array of four 32-bit indices per triangle
+    /// ([`Format::UINT4`]), and the number of primitives is inferred from the size
+    /// of the index buffer.
+    ///
+    /// The vertex buffer must contain an array of single precision x, y,
+    /// and z floating point coordinates per vertex ([`Format::FLOAT3`]), and the
+    /// number of vertices is inferred from the size of the vertex buffer.
+    /// The vertex buffer can be at most 16 GB in size.
+    ///
+    /// A quad is internally handled as a pair of two triangles `v0`, `v1`, `v3`
+    /// and `v2`, `v3`, `v1`, with the `u'/v'` coordinates of the second triangle
+    /// corrected by `u = 1-u'` and `v = 1-v'` to produce a quad parametrization
+    /// where `u` and `v` are in the range 0 to 1. Thus the parametrization of a quad
+    /// uses the first vertex `p0` as base point, and the vector `p1 - p0` as
+    /// u-direction, and `p3 - p0` as v-direction. Thus vertex attributes t0, t1, t2, t3
+    /// can be bilinearly interpolated over the quadrilateral the following way:
+    ///
+    /// t_uv = (1-v)((1-u) * t0 + u * t1) + v * ((1-u) * t3 + u * t2)
+    ///
+    /// Mixed triangle/quad meshes are supported by encoding a triangle as a quad,
+    /// which can be achieved by replicating the last triangle vertex (v0,v1,v2 ->
+    /// v0,v1,v2,v2). This way the second triangle is a line (which can never get
+    /// hit), and the parametrization of the first triangle is compatible with the
+    /// standard triangle parametrization.
+    /// A quad whose vertices are laid out counter-clockwise has its geometry
+    /// normal pointing upwards outside the front face.
+    ///
+    ///    p3 ------- p2
+    ///    ^          |
+    ///  v |          |
+    ///    |          |
+    ///    p0 ------> p1
+    ///        u
+);

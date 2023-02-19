@@ -53,13 +53,36 @@ pub use sys::{
 };
 
 pub use sys::{
-    RTCBuildFlags as BuildFlags, RTCCurveFlags as CurveFlags,
+    RTCBounds as Bounds, RTCBuildFlags as BuildFlags, RTCCurveFlags as CurveFlags,
     RTCIntersectContextFlags as IntersectContextFlags, RTCSceneFlags as SceneFlags,
 };
 
 /// The invalid ID for Embree intersection results (e.g. `Hit::geomID`,
 /// `Hit::primID`, etc.)
 pub const INVALID_ID: u32 = u32::MAX;
+
+impl Default for Bounds {
+    fn default() -> Self {
+        Bounds {
+            lower_x: f32::INFINITY,
+            lower_y: f32::INFINITY,
+            lower_z: f32::INFINITY,
+            align0: 0.0,
+            upper_x: f32::INFINITY,
+            upper_y: f32::INFINITY,
+            upper_z: f32::INFINITY,
+            align1: 0.0,
+        }
+    }
+}
+
+impl Bounds {
+    /// Returns the lower bounds of the bounding box.
+    pub fn lower(&self) -> [f32; 3] { [self.lower_x, self.lower_y, self.lower_z] }
+
+    /// Returns the upper bounds of the bounding box.
+    pub fn upper(&self) -> [f32; 3] { [self.upper_x, self.upper_y, self.upper_z] }
+}
 
 /// Utility for making specifically aligned vectors
 pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
