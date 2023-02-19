@@ -21,13 +21,6 @@ pub(crate) struct AttachedBuffer<'src> {
     source: BufferSlice<'src>,
 }
 
-/// State of a geometry object.
-#[derive(Default, Debug, Clone)]
-struct GeometryState<'buf> {
-    vertex_attribute_count: Option<u32>,
-    attachments: HashMap<BufferUsage, Vec<AttachedBuffer<'buf>>>,
-}
-
 /// Wrapper around an Embree geometry object.
 ///
 /// A new geometry is created using [`Device::create_geometry`] or
@@ -75,7 +68,7 @@ pub struct Geometry<'buf> {
     pub(crate) device: Device,
     pub(crate) handle: RTCGeometry,
     kind: GeometryType,
-    state: Arc<Mutex<GeometryState<'buf>>>,
+    attachments: Arc<Mutex<HashMap<BufferUsage, Vec<AttachedBuffer<'buf>>>>>,
 }
 
 impl<'buf> Clone for Geometry<'buf> {
@@ -87,7 +80,7 @@ impl<'buf> Clone for Geometry<'buf> {
             device: self.device.clone(),
             handle: self.handle,
             kind: self.kind,
-            state: self.state.clone(),
+            attachments: self.attachments.clone(),
         }
     }
 }
@@ -122,10 +115,6 @@ impl<'dev, 'buf> Geometry<'buf> {
     /// ```
     pub fn new(device: &'dev Device, kind: GeometryType) -> Result<Geometry<'buf>, Error> {
         let handle = unsafe { rtcNewGeometry(device.handle, kind) };
-        let vertex_attribute_count = match kind {
-            GeometryType::GRID | GeometryType::USER | GeometryType::INSTANCE => None,
-            _ => Some(0),
-        };
         if handle.is_null() {
             Err(device.get_error())
         } else {
@@ -133,11 +122,33 @@ impl<'dev, 'buf> Geometry<'buf> {
                 device: device.clone(),
                 handle,
                 kind,
-                state: Arc::new(Mutex::new(GeometryState {
-                    vertex_attribute_count,
-                    attachments: HashMap::new(),
-                })),
+                attachments: Arc::new(Mutex::new(HashMap::new())),
             })
+        }
+    }
+
+    /// Disables the geometry.
+    ///
+    /// A disabled geometry is not rendered. Each geometry is enabled by
+    /// default at construction time.
+    /// After disabling a geometry, the scene containing that geometry must
+    /// be committed using rtcCommitScene for the change to have effect.
+    pub fn disable(&self) {
+        unsafe {
+            rtcDisableGeometry(self.handle);
+        }
+    }
+
+    /// Enables the geometry.
+    ///
+    /// Only enabled geometries are rendered. Each geometry is enabled by
+    /// default at construction time.
+    ///
+    /// After enabling a geometry, the scene containing that geometry must be
+    /// committed using [`Geometry::commit`] for the change to have effect.
+    pub fn enable(&self) {
+        unsafe {
+            rtcEnableGeometry(self.handle);
         }
     }
 
@@ -154,25 +165,15 @@ impl<'dev, 'buf> Geometry<'buf> {
 
     /// Checks if the given vertex attribute slot is valid for this geometry.
     fn check_vertex_attribute(&self, slot: u32) -> Result<(), Error> {
-        match self.state.lock().unwrap().vertex_attribute_count {
-            None => {
+        match self.kind {
+            GeometryType::GRID | GeometryType::USER | GeometryType::INSTANCE => {
                 eprint!(
                     "Vertex attribute not allowed for geometries of type {:?}!",
                     self.kind
                 );
                 Err(Error::INVALID_OPERATION)
             }
-            Some(c) => {
-                if slot >= c {
-                    eprint!(
-                        "Vertex attribute slot {} is out of bounds for geometry of type {:?}!",
-                        slot, self.kind
-                    );
-                    Err(Error::INVALID_ARGUMENT)
-                } else {
-                    Ok(())
-                }
-            }
+            _ => Ok(())
         }
     }
 
@@ -229,8 +230,8 @@ impl<'dev, 'buf> Geometry<'buf> {
                     stride,
                     count
                 );
-                let mut state = self.state.lock().unwrap();
-                let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
+                let mut attachments = self.attachments.lock().unwrap();
+                let bindings = attachments.entry(usage).or_insert_with(Vec::new);
                 match bindings.iter().position(|a| a.slot == slot) {
                     // If the slot is already bound, remove the old binding and
                     // replace it with the new one.
@@ -295,8 +296,8 @@ impl<'dev, 'buf> Geometry<'buf> {
             BufferSlice::User {
                 ptr, offset, size, ..
             } => {
-                let mut state = self.state.lock().unwrap();
-                let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
+                let mut attachments = self.attachments.lock().unwrap();
+                let bindings = attachments.entry(usage).or_insert_with(Vec::new);
                 match bindings.iter().position(|a| a.slot == slot) {
                     // If the slot is already bound, remove the old binding and
                     // replace it with the new one.
@@ -398,8 +399,8 @@ impl<'dev, 'buf> Geometry<'buf> {
             self.check_vertex_attribute(slot)?;
         }
         {
-            let mut state = self.state.lock().unwrap();
-            let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
+            let mut attachments = self.attachments.lock().unwrap();
+            let bindings = attachments.entry(usage).or_insert_with(Vec::new);
             if !bindings.iter().any(|a| a.slot == slot) {
                 let raw_ptr = unsafe {
                     rtcSetNewGeometryBuffer(self.handle, usage, slot, format, stride, count)
@@ -429,9 +430,8 @@ impl<'dev, 'buf> Geometry<'buf> {
 
     /// Returns the buffer bound to the given slot and usage.
     pub fn get_buffer(&self, usage: BufferUsage, slot: u32) -> Option<BufferSlice> {
-        let state = self.state.lock().unwrap();
-        state
-            .attachments
+        let attachments = self.attachments.lock().unwrap();
+        attachments
             .get(&usage)
             .and_then(|v| v.iter().find(|a| a.slot == slot))
             .map(|a| a.source)
@@ -550,20 +550,18 @@ impl<'dev, 'buf> Geometry<'buf> {
     ///
     /// * `count` - The number of vertex attribute slots.
     pub fn set_vertex_attribute_count(&mut self, count: u32) {
-        let mut state = self.state.lock().unwrap();
-        match state.vertex_attribute_count {
-            None => {
-                panic!(
-                    "set_vertex_attribute_count is not supported by geometry of type {:?}.",
+        match self.kind {
+            GeometryType::GRID | GeometryType::USER | GeometryType::INSTANCE => {
+                eprint!(
+                    "Vertex attribute not allowed for geometries of type {:?}!",
                     self.kind
                 );
             }
-            Some(_) => {
+            _ => {
                 // Update the vertex attribute count.
                 unsafe {
                     rtcSetGeometryVertexAttributeCount(self.handle, count);
                 }
-                state.vertex_attribute_count = Some(count);
             }
         }
     }
