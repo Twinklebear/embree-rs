@@ -8,4 +8,9 @@ edition = "2021"
 glam = "0.22.0"
 embree = { path = "../.." }
 support = { path = "../support" }
+rayon = { version = "1.6.1", optional = true }
+
+[features]
+default = ["rayon"]
+rayon = ["dep:rayon"]
 

@@ -1,3 +1,5 @@
+//!
+
 use std::{
     collections::HashMap,
     marker::PhantomData,
@@ -28,11 +30,12 @@ struct GeometryState<'buf> {
 
 /// Wrapper around an Embree geometry object.
 ///
-/// Depending on the geometry type, different buffers must be bound (e.g. using
-/// [`Geometry::set_buffer`]) to set up the geometry data. In most cases,
-/// binding of a vertex and index buffer is required. The number of primitives
-/// and vertices of that geometry is typically inferred from the size of these
-/// bound buffers.
+/// A new geometry is created using [`Device::create_geometry`] or
+/// new methods of different geometry types. Depending on the geometry type,
+/// different buffers must be bound (e.g. using [`Geometry::set_buffer`]) to set
+/// up the geometry data. In most cases, binding of a vertex and index buffer is
+/// required. The number of primitives and vertices of that geometry is
+/// typically inferred from the size of these bound buffers.
 ///
 /// Changes to the geometry always must be committed using the
 /// [`Geometry::commit`] call before using the geometry. After committing, a
@@ -432,6 +435,19 @@ impl<'dev, 'buf> Geometry<'buf> {
             .get(&usage)
             .and_then(|v| v.iter().find(|a| a.slot == slot))
             .map(|a| a.source)
+    }
+
+    /// Marks a buffer slice bound to this geometry as modified.
+    ///
+    /// If a data buffer is changed by the application, this function must be
+    /// called for the buffer to be updated in the geometry. Each buffer slice
+    /// assigned to a buffer slot is initially marked as modified, thus this
+    /// method needs to be called only when doing buffer modifications after the
+    /// first [`Scene::commit`] call.
+    pub fn update_buffer(&self, usage: BufferUsage, slot: u32) {
+        unsafe {
+            rtcUpdateGeometryBuffer(self.handle, usage, slot);
+        }
     }
 
     /// Returns the type of geometry of this geometry.

@@ -105,12 +105,13 @@ impl Scene {
     }
 
     /// Returns the geometry bound to the specified geometry ID.
-    pub fn get_geometry(&self, id: u32) -> Option<Geometry> {
-        let geometry = unsafe { rtcGetGeometry(self.handle, id) };
-        if geometry.is_null() {
+    pub fn get_geometry(&self, id: u32) -> Option<Geometry<'static>> {
+        let raw = unsafe { rtcGetGeometry(self.handle, id) };
+        if raw.is_null() {
             None
         } else {
-            Some(Geometry::new(self.device))
+            let geometries = self.geometries.lock().unwrap();
+            geometries.get(&id).cloned()
         }
     }
 
