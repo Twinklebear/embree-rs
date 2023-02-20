@@ -2,7 +2,7 @@ use std::{f32, iter::Iterator, u32};
 
 use crate::{
     aligned_vector, aligned_vector_init,
-    soa_ray::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut},
+    soa::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut},
     sys,
 };
 

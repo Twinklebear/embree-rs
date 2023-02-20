@@ -10,9 +10,11 @@ use crate::{
     device::Device,
     geometry::Geometry,
     intersect_context::IntersectContext,
-    ray::{Ray, RayHit},
-    ray_packet::{Ray4, RayHit4},
-    ray_stream::{RayHitN, RayN},
+    ray::{
+        packet::{Ray4, RayHit4},
+        stream::{RayHitN, RayN},
+        Ray, RayHit,
+    },
     sys::*,
 };
 
@@ -291,7 +293,30 @@ impl Scene {
 
     /// Finds the closest hit of a single ray with the scene.
     ///
-    /// Analogous to [`rtcIntersect1`].
+    /// Analogous to [`sys::rtcIntersect1`].
+    ///
+    /// The user has to initialize the ray origin, ray direction, ray segment
+    /// (`tnear`, `tfar` ray members), and set the ray flags to 0 (`flags` ray
+    /// member). If the scene contains motion blur geometries, also the ray
+    /// time (`time` ray member) must be initialized to a value in the range
+    /// [0, 1]. If ray masks are enabled at compile time, the ray mask
+    /// (`mask` ray member) must be initialized as well. The geometry ID
+    /// (`geomID` ray hit member) must be initialized to `INVALID_ID`.
+    ///
+    /// When no intersection is found, the ray/hit data is not updated. When an
+    /// intersection is found, the hit distance is written into the `tfar`
+    /// member of the ray and all hit data is set, such as unnormalized
+    /// geometry normal in object space (`Ng` hit member), local hit
+    /// coordinates (`u, v` hit member), instance ID stack (`instID`
+    /// hit member), geometry ID (`geomID` hit member), and primitive ID
+    /// (`primID` hit member). See [`RayHit`] for more information.
+    ///
+    /// The intersection context (`ctx` argument) can specify flags to optimize
+    /// traversal and a filter callback function to be invoked for every
+    /// intersection. Further, the pointer to the intersection context is
+    /// propagated to callback functions invoked during traversal and can
+    /// thus be used to extend the ray with additional data. See
+    /// [`IntersectContext`] for more information.
     ///
     /// # Arguments
     ///
@@ -315,7 +340,7 @@ impl Scene {
             rtcOccluded1(
                 self.handle,
                 ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRay,
+                <&mut Ray as Into<&mut RTCRay>>::into(ray) as *mut RTCRay,
             );
         }
         ray.tfar == -f32::INFINITY
@@ -362,7 +387,7 @@ impl Scene {
             rtcOccluded1M(
                 self.handle,
                 ctx as *mut RTCIntersectContext,
-                rays.as_mut_ptr(),
+                rays.as_mut_ptr() as *mut RTCRay,
                 m as u32,
                 mem::size_of::<Ray>(),
             );

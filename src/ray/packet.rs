@@ -1,5 +1,5 @@
 use crate::{
-    soa_ray::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut},
+    soa::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut},
     sys,
 };
 
@@ -133,4 +133,35 @@ impl RayHit4 {
     pub fn iter(&self) -> std::iter::Zip<SoARayIter<Ray4>, SoAHitIter<Hit4>> {
         self.ray.iter().zip(self.hit.iter())
     }
+}
+
+pub struct RayPacket<const N: usize> {
+    pub org_x: [f32; N],
+    pub org_y: [f32; N],
+    pub org_z: [f32; N],
+    pub tnear: [f32; N],
+    pub dir_x: [f32; N],
+    pub dir_y: [f32; N],
+    pub dir_z: [f32; N],
+    pub time: [f32; N],
+    pub tfar: [f32; N],
+    pub mask: [u32; N],
+    pub id: [u32; N],
+    pub flags: [u32; N],
+}
+
+pub struct HitPacket<const N: usize> {
+    pub Ng_x: [f32; N],
+    pub Ng_y: [f32; N],
+    pub Ng_z: [f32; N],
+    pub u: [f32; N],
+    pub v: [f32; N],
+    pub primID: [u32; N],
+    pub geomID: [u32; N],
+    pub instID: [[u32; 1]; N],
+}
+
+pub struct RayHitPacket<const N: usize> {
+    pub ray: RayPacket<N>,
+    pub hit: HitPacket<N>,
 }

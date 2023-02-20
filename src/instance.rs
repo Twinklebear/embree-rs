@@ -1,6 +1,6 @@
 use std::{os::raw, sync::Arc};
 
-use crate::{scene::Scene, sys::*, Format, GeometryType};
+use crate::{scene::Scene, sys::*, Format, GeometryKind};
 
 pub struct Instance {
     /// The scene being instanced
@@ -10,7 +10,7 @@ pub struct Instance {
 
 impl Instance {
     pub fn unanimated(scene: Arc<Scene>) -> Arc<Instance> {
-        let h = unsafe { rtcNewGeometry(scene.device.handle, GeometryType::INSTANCE) };
+        let h = unsafe { rtcNewGeometry(scene.device.handle, GeometryKind::INSTANCE) };
         unsafe {
             rtcSetGeometryInstancedScene(h, scene.handle);
         }

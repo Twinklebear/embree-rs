@@ -18,7 +18,7 @@ fn create_sphere(
 ) -> Geometry<'static> {
     // Create a triangulated sphere
     let mut geometry = device
-        .create_geometry(embree::GeometryType::TRIANGLE)
+        .create_geometry(embree::GeometryKind::TRIANGLE)
         .unwrap();
     geometry.set_build_quality(quality);
 
@@ -86,7 +86,7 @@ fn create_sphere(
 }
 
 fn create_ground_plane(device: &Device) -> Geometry<'static> {
-    let mut geometry = Geometry::new(device, embree::GeometryType::TRIANGLE).unwrap();
+    let mut geometry = Geometry::new(device, embree::GeometryKind::TRIANGLE).unwrap();
     {
         geometry
             .set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 4)

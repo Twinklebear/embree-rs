@@ -1,13 +1,17 @@
-//!
-
 use std::{
     collections::HashMap,
     marker::PhantomData,
     num::NonZeroUsize,
+    ptr,
     sync::{Arc, Mutex},
 };
 
-use crate::{sys::*, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryType};
+use crate::{
+    sys::*, Bounds, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryKind,
+    IntersectContext, QuaternionDecomposition, Scene,
+};
+
+use std::ops::{Deref, DerefMut};
 
 // TODO(yang): maybe enforce format and stride when get the view?
 /// Information about how a (part of) buffer is bound to a geometry.
@@ -19,6 +23,51 @@ pub(crate) struct AttachedBuffer<'src> {
     #[allow(dead_code)]
     stride: usize,
     source: BufferSlice<'src>,
+}
+
+/// Trait for user-defined data that can be attached to a geometry.
+pub trait UserData: Sized + Send + Sync + 'static {}
+
+impl<T> UserData for T where T: Sized + Send + Sync + 'static {}
+
+/// User-defined data for a geometry.
+///
+/// This contains also the payloads for different callbacks, which makes it
+/// possible to pass Rust closures to Embree.
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct GeometryUserData {
+    /// Pointer to the user-defined data.
+    pub data: *mut std::os::raw::c_void,
+    /// Payload for the [`Geometry::set_intersect_filter_function`] call.
+    pub intersect_filter_payload: *mut std::os::raw::c_void,
+    /// Payload for the [`Geometry::set_occluded_filter_function`] call.
+    pub occluded_filter_payload: *mut std::os::raw::c_void,
+    /// Payload for the [`Geometry::set_user_intersect_function`] call.
+    pub user_intersect_payload: *mut std::os::raw::c_void,
+    /// Payload for the [`Geometry::set_user_occluded_function`] call.
+    pub user_occluded_payload: *mut std::os::raw::c_void,
+    /// Payload for the [`Geometry::set_user_bounds_function`] call.
+    pub user_bounds_payload: *mut std::os::raw::c_void,
+}
+
+impl Default for GeometryUserData {
+    fn default() -> Self {
+        Self {
+            data: ptr::null_mut(),
+            user_intersect_payload: ptr::null_mut(),
+            user_occluded_payload: ptr::null_mut(),
+            intersect_filter_payload: ptr::null_mut(),
+            occluded_filter_payload: ptr::null_mut(),
+            user_bounds_payload: ptr::null_mut(),
+        }
+    }
+}
+
+/// Extra data for a geometry.
+#[derive(Debug, Clone, Default)]
+struct GeometryState<'buf> {
+    attachments: HashMap<BufferUsage, Vec<AttachedBuffer<'buf>>>,
+    user_data: GeometryUserData,
 }
 
 /// Wrapper around an Embree geometry object.
@@ -33,10 +82,11 @@ pub(crate) struct AttachedBuffer<'src> {
 /// Changes to the geometry always must be committed using the
 /// [`Geometry::commit`] call before using the geometry. After committing, a
 /// geometry is not yet included in any scene. A geometry can be added to a
-/// scene by using the [`Scene::attach_geometry`] function (to automatically
-/// assign a geometry ID) or using the [`Scene::attach_geometry_by_id`] function
-/// (to specify the geometry ID manually). A geometry can get attached to
-/// multiple scenes.
+/// scene by using the [`Scene::attach_geometry`](crate::Scene::attach_geometry)
+/// function (to automatically assign a geometry ID) or using the
+/// [`Scene::attach_geometry_by_id`](crate::Scene::attach_geometry_by_id)
+/// function (to specify the geometry ID manually). A geometry can get attached
+/// to multiple scenes.
 ///
 /// All geometry types support multi-segment motion blur with an arbitrary
 /// number of equidistant time steps (in the range of 2 to 129) inside a user
@@ -67,8 +117,8 @@ pub(crate) struct AttachedBuffer<'src> {
 pub struct Geometry<'buf> {
     pub(crate) device: Device,
     pub(crate) handle: RTCGeometry,
-    kind: GeometryType,
-    attachments: Arc<Mutex<HashMap<BufferUsage, Vec<AttachedBuffer<'buf>>>>>,
+    kind: GeometryKind,
+    state: Arc<Mutex<GeometryState<'buf>>>,
 }
 
 impl<'buf> Clone for Geometry<'buf> {
@@ -80,7 +130,7 @@ impl<'buf> Clone for Geometry<'buf> {
             device: self.device.clone(),
             handle: self.handle,
             kind: self.kind,
-            attachments: self.attachments.clone(),
+            state: Arc::new(Mutex::new(GeometryState::default())),
         }
     }
 }
@@ -93,27 +143,27 @@ impl<'buf> Drop for Geometry<'buf> {
     }
 }
 
-impl<'dev, 'buf> Geometry<'buf> {
+impl<'buf> Geometry<'buf> {
     /// Creates a new geometry object.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use embree::{Device, Geometry, GeometryType};
+    /// use embree::{Device, Geometry, GeometryKind};
     ///
     /// let device = Device::new().unwrap();
-    /// let geometry = Geometry::new(&device, GeometryType::TRIANGLE).unwrap();
+    /// let geometry = Geometry::new(&device, GeometryKind::TRIANGLE).unwrap();
     /// ```
     ///
     /// or use the [`Device::create_geometry`] method:
     ///
     /// ```no_run
-    /// use embree::{Device, GeometryType};
+    /// use embree::{Device, GeometryKind};
     ///
     /// let device = Device::new().unwrap();
-    /// let geometry = device.create_geometry(GeometryType::TRIANGLE).unwrap();
+    /// let geometry = device.create_geometry(GeometryKind::TRIANGLE).unwrap();
     /// ```
-    pub fn new(device: &'dev Device, kind: GeometryType) -> Result<Geometry<'buf>, Error> {
+    pub fn new<'dev>(device: &'dev Device, kind: GeometryKind) -> Result<Geometry<'buf>, Error> {
         let handle = unsafe { rtcNewGeometry(device.handle, kind) };
         if handle.is_null() {
             Err(device.get_error())
@@ -122,7 +172,7 @@ impl<'dev, 'buf> Geometry<'buf> {
                 device: device.clone(),
                 handle,
                 kind,
-                attachments: Arc::new(Mutex::new(HashMap::new())),
+                state: Arc::new(Mutex::new(Default::default())),
             })
         }
     }
@@ -163,17 +213,19 @@ impl<'dev, 'buf> Geometry<'buf> {
     /// destroyed.
     pub unsafe fn handle(&self) -> RTCGeometry { self.handle }
 
-    /// Checks if the given vertex attribute slot is valid for this geometry.
-    fn check_vertex_attribute(&self, slot: u32) -> Result<(), Error> {
+    /// Checks if the vertex attribute is allowed for the geometry.
+    ///
+    /// This function do not check if the slot of the vertex attribute.
+    fn check_vertex_attribute(&self) -> Result<(), Error> {
         match self.kind {
-            GeometryType::GRID | GeometryType::USER | GeometryType::INSTANCE => {
+            GeometryKind::GRID | GeometryKind::USER | GeometryKind::INSTANCE => {
                 eprint!(
                     "Vertex attribute not allowed for geometries of type {:?}!",
                     self.kind
                 );
                 Err(Error::INVALID_OPERATION)
             }
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
 
@@ -215,7 +267,7 @@ impl<'dev, 'buf> Geometry<'buf> {
     ) -> Result<(), Error> {
         debug_assert!(stride % 4 == 0, "Stride must be a multiple of 4!");
         if usage == BufferUsage::VERTEX {
-            self.check_vertex_attribute(slot)?;
+            self.check_vertex_attribute()?;
         }
         match slice {
             BufferSlice::Buffer {
@@ -230,8 +282,8 @@ impl<'dev, 'buf> Geometry<'buf> {
                     stride,
                     count
                 );
-                let mut attachments = self.attachments.lock().unwrap();
-                let bindings = attachments.entry(usage).or_insert_with(Vec::new);
+                let mut state = self.state.lock().unwrap();
+                let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
                 match bindings.iter().position(|a| a.slot == slot) {
                     // If the slot is already bound, remove the old binding and
                     // replace it with the new one.
@@ -296,8 +348,8 @@ impl<'dev, 'buf> Geometry<'buf> {
             BufferSlice::User {
                 ptr, offset, size, ..
             } => {
-                let mut attachments = self.attachments.lock().unwrap();
-                let bindings = attachments.entry(usage).or_insert_with(Vec::new);
+                let mut state = self.state.lock().unwrap();
+                let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
                 match bindings.iter().position(|a| a.slot == slot) {
                     // If the slot is already bound, remove the old binding and
                     // replace it with the new one.
@@ -396,11 +448,11 @@ impl<'dev, 'buf> Geometry<'buf> {
     ) -> Result<BufferSlice<'static>, Error> {
         debug_assert!(stride % 4 == 0, "Stride must be a multiple of 4!");
         if usage == BufferUsage::VERTEX_ATTRIBUTE {
-            self.check_vertex_attribute(slot)?;
+            self.check_vertex_attribute()?;
         }
         {
-            let mut attachments = self.attachments.lock().unwrap();
-            let bindings = attachments.entry(usage).or_insert_with(Vec::new);
+            let mut state = self.state.lock().unwrap();
+            let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
             if !bindings.iter().any(|a| a.slot == slot) {
                 let raw_ptr = unsafe {
                     rtcSetNewGeometryBuffer(self.handle, usage, slot, format, stride, count)
@@ -411,7 +463,7 @@ impl<'dev, 'buf> Geometry<'buf> {
                     let slice = BufferSlice::GeometryLocal {
                         ptr: raw_ptr,
                         size: NonZeroUsize::new(count * stride).unwrap(),
-                        marker: std::marker::PhantomData,
+                        marker: PhantomData,
                     };
                     bindings.push(AttachedBuffer {
                         slot,
@@ -430,8 +482,9 @@ impl<'dev, 'buf> Geometry<'buf> {
 
     /// Returns the buffer bound to the given slot and usage.
     pub fn get_buffer(&self, usage: BufferUsage, slot: u32) -> Option<BufferSlice> {
-        let attachments = self.attachments.lock().unwrap();
-        attachments
+        let state = self.state.lock().unwrap();
+        state
+            .attachments
             .get(&usage)
             .and_then(|v| v.iter().find(|a| a.slot == slot))
             .map(|a| a.source)
@@ -451,7 +504,7 @@ impl<'dev, 'buf> Geometry<'buf> {
     }
 
     /// Returns the type of geometry of this geometry.
-    pub fn kind(&self) -> GeometryType { self.kind }
+    pub fn kind(&self) -> GeometryKind { self.kind }
 
     pub fn commit(&mut self) {
         unsafe {
@@ -484,6 +537,473 @@ impl<'dev, 'buf> Geometry<'buf> {
     pub fn set_build_quality(&mut self, quality: BuildQuality) {
         unsafe {
             rtcSetGeometryBuildQuality(self.handle, quality);
+        }
+    }
+
+    /// Registers an intersection filter callback function for the geometry.
+    ///
+    /// Only a single callback function can be registered per geometry, and
+    /// further invocations overwrite the previously set callback function.
+    /// Passing `None` as the filter function removes the filter function.
+    ///
+    /// The registered filter function is invoked for every hit encountered
+    /// during the intersect-type ray queries and can accept or reject that
+    /// hit. The feature can be used to define a silhouette for a primitive
+    /// and reject hits that are outside the silhouette. E.g. a tree leaf
+    /// could be modeled with an alpha texture that decides whether hit
+    /// points lie inside or outside the leaf.
+    ///
+    /// If [`BuildQuality::HIGH`] is set, the filter functions may be called
+    /// multiple times for the same primitive hit. Further, rays hitting
+    /// exactly the edge might also report two hits for the same surface. For
+    /// certain use cases, the application may have to work around this
+    /// limitation by collecting already reported hits (geomID/primID pairs)
+    /// and ignoring duplicates.
+    ///
+    /// The filter function callback of type [`RTCFilterFunctionN`] gets passed
+    /// a number of arguments through the [`RTCFilterFunctionNArguments`]
+    /// structure. The valid parameter of that structure points to an
+    /// integer valid mask (0 means invalid and -1 means valid). The
+    /// `geometryUserPtr` member is a user pointer optionally set per
+    /// geometry through the [`Geometry::set_user_data`] function. The
+    /// context member points to the intersection context passed to
+    /// the ray query function. The ray parameter points to N rays in SOA layout
+    /// (see `RayN`, `HitN`).
+    /// The hit parameter points to N hits in SOA layout to test. The N
+    /// parameter is the number of rays and hits in ray and hit. The hit
+    /// distance is provided as the tfar value of the ray. If the hit
+    /// geometry is instanced, the `instID` member of the ray is valid, and
+    /// the ray and the potential hit are in object space.
+    ///
+    /// The filter callback function has the task to check for each valid ray
+    /// whether it wants to accept or reject the corresponding hit. To
+    /// reject a hit, the filter callback function just has to *write 0* to
+    /// the integer valid mask of the corresponding ray. To accept the hit,
+    /// it just has to *leave the valid mask set to -1*. The filter function
+    /// is further allowed to change the hit and decrease the tfar value of the
+    /// ray but it should not modify other ray data nor any inactive
+    /// components of the ray or hit.
+    ///
+    /// When performing ray queries using [`Scene::intersect`], it is
+    /// *guaranteed* that the packet size is 1 when the callback is invoked.
+    /// When performing ray queries using the [`Scene::intersect4/8/16`]
+    /// functions, it is not generally guaranteed that the ray packet size
+    /// (and order of rays inside the packet) passed to the callback matches
+    /// the initial ray packet. However, under some circumstances these
+    /// properties are guaranteed, and whether this is the case can be
+    /// queried using [`Device::get_property`]. When performing ray queries
+    /// using the stream API such as [`Scene::intersect1M`],
+    /// [`Scene::intersect1Mp`], [`Scene::intersectNM`], or
+    /// [`Scene::intersectNp`] the order of rays and ray packet size of the
+    /// callback function might change to either 1, 4, 8, or 16.
+    ///
+    /// For many usage scenarios, repacking and re-ordering of rays does not
+    /// cause difficulties in implementing the callback function. However,
+    /// algorithms that need to extend the ray with additional data must use
+    /// the rayID component of the ray to identify the original ray to
+    /// access the per-ray data.
+    ///
+    /// The implementation of the filter function can choose to implement a
+    /// single code path that uses the ray access helper functions
+    /// `RTCRay_XXX` and hit access helper functions `RTCHit_XXX` to access
+    /// ray and hit data. Alternatively the code can branch to optimized
+    /// implementations for specific sizes of N and cast the ray
+    /// and hit inputs to the proper packet types.
+    ///
+    /// # Safety
+    ///
+    /// Because the Embree filter function does not provide the user
+    /// data pointer, we cannot use a closure but instead a static function
+    /// pointer.
+    pub unsafe fn set_intersect_filter_function<F, D>(&mut self, filter: F)
+    where
+        D: UserData,
+        F: FnMut(
+            &mut [i32],
+            Option<&mut D>,
+            &mut IntersectContext,
+            &mut RTCRayN,
+            &mut RTCHitN,
+            u32,
+        ),
+    {
+        let mut state = self.state.lock().unwrap();
+        unsafe {
+            let mut closure = filter;
+            state.user_data.intersect_filter_payload =
+                &mut closure as *mut _ as *mut std::os::raw::c_void;
+            rtcSetGeometryIntersectFilterFunction(
+                self.handle,
+                crate::callback::intersect_filter_function_helper(&mut closure),
+            );
+        }
+    }
+
+    /// Sets the occlusion filter for the geometry.
+    ///
+    /// Only a single callback function can be registered per geometry, and
+    /// further invocations overwrite the previously set callback function.
+    /// Passing `None` as the filter function removes the filter function.
+    ///
+    /// The registered intersection filter function is invoked for every hit
+    /// encountered during the occluded-type ray queries and can accept or
+    /// reject that hit.
+    ///
+    /// The feature can be used to define a silhouette for a primitive and
+    /// reject hits that are outside the silhouette. E.g. a tree leaf could
+    /// be modeled with an alpha texture that decides whether hit points lie
+    /// inside or outside the leaf. Please see the description of the
+    /// [`Geometry::set_intersect_filter_function`] for a description of the
+    /// filter callback function.
+    ///
+    /// # Safety
+    ///
+    /// Because the Embree filter function does not provide the user
+    /// data pointer, we cannot use a closure but instead a static function
+    /// pointer.
+    pub unsafe fn set_occluded_filter_function<F, D>(&mut self, filter: F)
+    where
+        D: UserData,
+        F: FnMut(
+            &mut [i32],
+            Option<&mut D>,
+            &mut IntersectContext,
+            &mut RTCRayN,
+            &mut RTCHitN,
+            u32,
+        ),
+    {
+        let mut state = self.state.lock().unwrap();
+        unsafe {
+            let mut closure = filter;
+            state.user_data.occluded_filter_payload =
+                &mut closure as *mut _ as *mut std::os::raw::c_void;
+            rtcSetGeometryOccludedFilterFunction(
+                self.handle,
+                crate::callback::occluded_filter_function_helper(&mut closure),
+            );
+        }
+    }
+
+    /// Sets a callback to query the bounding box of user-defined primitives.
+    ///
+    /// Only a single callback function can be registered per geometry, and
+    /// further invocations overwrite the previously set callback function.
+    /// Passing `None` as function pointer disables the registered callback
+    /// function.
+    ///
+    /// The registered bounding box callback function is invoked to calculate
+    /// axis- aligned bounding boxes of the primitives of the user-defined
+    /// geometry during spatial acceleration structure construction.
+    ///
+    /// The arguments of the callback closure are:
+    ///
+    /// - a mutable reference to the user data of the geometry
+    ///
+    /// - the ID of the primitive to calculate the bounds for
+    ///
+    /// - the time step at which to calculate the bounds
+    ///
+    /// - a mutable reference to the bounding box where the result should be
+    ///   written to
+    ///
+    /// In a typical usage scenario one would store a pointer to the internal
+    /// representation of the user geometry object using
+    /// [`Geometry::set_user_data`]. The callback function can then read
+    /// that pointer from the `geometryUserPtr` field and calculate the
+    /// proper bounding box for the requested primitive and time, and store
+    /// that bounding box to the destination structure (`bounds_o` member).
+    pub fn set_user_bounds_function<F, D>(&mut self, bounds: F)
+    where
+        D: UserData,
+        F: FnMut(Option<&mut D>, u32, u32, &mut Bounds),
+    {
+        match self.kind {
+            GeometryKind::USER => unsafe {
+                let mut state = self.state.lock().unwrap();
+                let mut closure = bounds;
+                state.user_data.user_bounds_payload =
+                    &mut closure as *mut _ as *mut std::os::raw::c_void;
+                rtcSetGeometryBoundsFunction(
+                    self.handle,
+                    crate::callback::user_bounds_function_helper(&mut closure),
+                    ptr::null_mut(),
+                );
+            },
+            _ => panic!("Only user-defined geometries can have a bounds function"),
+        }
+    }
+
+    // TODO(yang): deal with RTCRayHitN, then we can make this function safe
+    /// Sets the callback function to intersect a user geometry.
+    ///
+    /// Only a single callback function can be registered per geometry and
+    /// further invocations overwrite the previously set callback function.
+    /// Passing `None` as function pointer disables the registered callback
+    /// function.
+    ///
+    /// The registered callback function is invoked by intersect-type ray
+    /// queries to calculate the intersection of a ray packet of variable
+    /// size with one user-defined primitive. The callback function of type
+    /// [`RTCIntersectFunctionN`] gets passed a number of arguments through
+    /// the [`RTCIntersectFunctionNArguments`] structure. The value N
+    /// specifies the ray packet size, valid points to an array of
+    /// integers that specify whether the corresponding ray is valid (-1) or
+    /// invalid (0), the `geometryUserPtr` member points to the geometry
+    /// user data previously set through [`Geometry::set_user_data`], the
+    /// context member points to the intersection context passed to the ray
+    /// query, the rayhit member points to a ray and hit packet of variable
+    /// size N, and the geomID and primID member identifies the geometry ID
+    /// and primitive ID of the primitive to intersect. The ray component of
+    /// the rayhit structure contains valid data, in particular
+    /// the tfar value is the current closest hit distance found. All data
+    /// inside the hit component of the rayhit structure are undefined and
+    /// should not be read by the function.
+    /// The task of the callback function is to intersect each active ray from
+    /// the ray packet with the specified user primitive. If the
+    /// user-defined primitive is missed by a ray of the ray packet, the
+    /// function should return without modifying the ray or hit. If an
+    /// intersection of the user-defined primitive with the ray was found in
+    /// the valid range (from tnear to tfar), it should update the hit distance
+    /// of the ray (tfar member) and the hit (u, v, Ng, instID, geomID,
+    /// primID members). In particular, the currently intersected instance
+    /// is stored in the instID field of the intersection context, which
+    /// must be deep copied into the instID member of the hit.
+    ///
+    /// As a primitive might have multiple intersections with a ray, the
+    /// intersection filter function needs to be invoked by the user
+    /// geometry intersection callback for each encountered intersection, if
+    /// filtering of intersections is desired. This can be achieved through
+    /// the rtcFilterIntersection call. Within the user geometry intersect
+    /// function, it is safe to trace new rays and create new scenes and
+    /// geometries. When performing ray queries using rtcIntersect1, it is
+    /// guaranteed that the packet size is 1 when the callback is invoked.
+    /// When performing ray queries using the rtcIntersect4/8/16 functions,
+    /// it is not generally guaranteed that the ray packet size (and order
+    /// of rays inside the packet) passed to the callback matches
+    /// the initial ray packet. However, under some circumstances these
+    /// properties are guaranteed, and whether this is the case can be
+    /// queried using rtcGetDevice- Property. When performing ray queries
+    /// using the stream API such as rtcIntersect1M, rtcIntersect1Mp,
+    /// rtcIntersectNM, or rtcIntersectNp the or- der of rays and ray packet
+    /// size of the callback function might change to either 1, 4, 8, or 16.
+    /// For many usage scenarios, repacking and re-ordering of rays does not
+    /// cause difficulties in implementing the callback function. However,
+    /// algorithms that need to extend the ray with additional data must use
+    /// the rayID component of the ray to identify the original ray to
+    /// access the per-ray data.
+    pub unsafe fn set_user_intersect_function<F, D>(&mut self, intersect: F)
+    where
+        D: UserData,
+        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayHitN, u32),
+    {
+        // TODO: deal with RTCRayHitN
+        match self.kind {
+            GeometryKind::USER => unsafe {
+                let mut state = self.state.lock().unwrap();
+                let mut closure = intersect;
+                state.user_data.user_intersect_payload =
+                    &mut closure as *mut _ as *mut std::os::raw::c_void;
+                rtcSetGeometryIntersectFunction(
+                    self.handle,
+                    crate::callback::user_intersect_function_helper(&mut closure),
+                );
+            },
+            _ => panic!("Only user-defined geometries can have an intersect function"),
+        }
+    }
+
+    // TODO(yang): deal with RTCRayN, then we can make this function safe
+    /// Sets the callback function to occlude a user geometry.
+    ///
+    /// Similar to [`Geometry::set_user_intersect_function`], but for occlusion
+    /// queries.
+    pub unsafe fn set_user_occluded_function<F, D>(&mut self, occluded: F)
+    where
+        D: UserData,
+        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayN, u32),
+    {
+        // TODO: deal with RTCRayN
+        match self.kind {
+            GeometryKind::USER => unsafe {
+                let mut state = self.state.lock().unwrap();
+                let mut closure = occluded;
+                state.user_data.user_occluded_payload =
+                    &mut closure as *mut _ as *mut std::os::raw::c_void;
+                rtcSetGeometryOccludedFunction(
+                    self.handle,
+                    crate::callback::user_occluded_function_helper(&mut closure),
+                );
+            },
+            _ => panic!("Only user-defined geometries can have an occluded function"),
+        }
+    }
+
+    /// Sets the point query callback function for a geometry.
+    ///
+    /// Only a single callback function can be registered per geometry and
+    /// further invocations overwrite the previously set callback function.
+    /// Passing `None` as function pointer disables the registered callback
+    /// function.
+    ///
+    /// The registered callback function is invoked by rtcPointQuery for every
+    /// primitive of the geometry that intersects the corresponding point query
+    /// domain. The callback function of type `RTCPointQueryFunction` gets
+    /// passed a number of arguments through the
+    /// `RTCPointQueryFunctionArguments` structure. The query object is the
+    /// original point query object passed into rtcPointQuery, us-
+    /// rPtr is an arbitrary pointer to pass input into and store results of the
+    /// callback function. The primID, geomID and context (see
+    /// rtcInitPointQueryContext for details) can be used to identify the
+    /// geometry data of the primitive. 122Embree API Reference
+    /// A RTCPointQueryFunction can also be passed directly as an argument to
+    /// rtcPointQuery. In this case the callback is invoked for all primitives
+    /// in the scene that intersect the query domain. If a callback function
+    /// is passed as an argument to rtcPointQuery and (a potentially
+    /// different) callback function is set for a ge- ometry with
+    /// rtcSetGeometryPointQueryFunction both callback functions are in-
+    /// voked and the callback function passed to rtcPointQuery will be called
+    /// before the geometry specific callback function.
+    /// If instancing is used, the parameter simliarityScale indicates whether
+    /// the current instance transform (top element of the stack in context)
+    /// is a similarity transformation or not. Similarity transformations
+    /// are composed of translation, rotation and uniform scaling and if a
+    /// matrix M defines a similarity transformation, there is a scaling
+    /// factor D such that for all x,y: dist(Mx, My) = D * dist(x,
+    /// y). In this case the parameter scalingFactor is this scaling factor D
+    /// and other- wise it is 0. A valid similarity scale (similarityScale >
+    /// 0) allows to compute distance information in instance space and
+    /// scale the distances into world space (for example, to update the
+    /// query radius, see below) by dividing the instance space distance
+    /// with the similarity scale. If the current instance transform is not
+    /// a similarity transform (similarityScale is 0), the distance computation
+    /// has to be performed in world space to ensure correctness. In this
+    /// case the instance to world transformations given with the context
+    /// should be used to transform the primitive data into world space.
+    /// Otherwise, the query location can be trans- formed into instance
+    /// space which can be more efficient. If there is no instance
+    /// transform, the similarity scale is 1.
+    /// The callback function will potentially be called for primitives outside
+    /// the query domain for two reasons: First, the callback is invoked for
+    /// all primitives inside a BVH leaf node since no geometry data of
+    /// primitives is determined internally and therefore individual
+    /// primitives are not culled (only their (aggregated) bounding boxes).
+    /// Second, in case non similarity transformations are used, the
+    /// resulting ellipsoidal query domain (in instance space) is approximated
+    /// by its axis aligned bounding box internally and therefore inner
+    /// nodes that do not intersect the original domain might intersect the
+    /// approximative bounding box which results in unnecessary callbacks.
+    /// In any case, the callbacks are conservative, i.e. if a primitive is
+    /// inside the query domain a callback will be invoked but the reverse
+    /// is not necessarily true.
+    /// For efficiency, the radius of the query object can be decreased (in
+    /// world space) inside the callback function to improve culling of
+    /// geometry during BVH traversal. If the query radius was updated, the
+    /// callback function should return true to issue an update of internal
+    /// traversal information. Increasing the radius or modifying
+    /// the time or position of the query results in undefined behaviour.
+    /// Within the callback function, it is safe to call rtcPointQuery again,
+    /// for ex- ample when implementing instancing manually. In this case
+    /// the instance trans- formation should be pushed onto the stack in
+    /// context. Embree will internally compute the point query information
+    /// in instance space using the top element of the stack in context when
+    /// rtcPointQuery is called. For a reference implementation of a closest
+    /// point traversal of triangle meshes using instancing and user defined
+    /// instancing see the tutorial [ClosestPoint].
+    pub unsafe fn set_point_query_function(&mut self, query_func: RTCPointQueryFunction) {
+        rtcSetGeometryPointQueryFunction(self.handle, query_func);
+    }
+
+    /// Sets the instanced scene of an instance geometry.
+    pub fn set_instanced_scene(&mut self, scene: &Scene) {
+        match self.kind {
+            GeometryKind::INSTANCE => unsafe {
+                rtcSetGeometryInstancedScene(self.handle, scene.handle);
+            },
+            _ => panic!("Only instance geometries can have an instanced scene"),
+        }
+    }
+
+    // TODO(yang): Better transform type
+    /// Returns the interpolated instance transformation for the specified time
+    /// step.
+    pub fn get_geometry_transform(&mut self, time: f32, format: Format) -> [f32; 16] {
+        match self.kind {
+            GeometryKind::INSTANCE => unsafe {
+                let mut transform = [0.0; 16];
+                rtcGetGeometryTransform(
+                    self.handle,
+                    time,
+                    format,
+                    transform.as_mut_ptr() as *mut _,
+                );
+                transform
+            },
+            _ => {
+                panic!("Geometry::get_geometry_transform is only supported for instance geometries")
+            }
+        }
+    }
+
+    // TODO(yang): Better transform type
+    /// Sets the transformation for a particular time step of an instance
+    /// geometry.
+    pub fn set_geometry_transform(&mut self, time_step: u32, format: Format, transform: &[f32]) {
+        match self.kind {
+            GeometryKind::INSTANCE => unsafe {
+                rtcSetGeometryTransform(
+                    self.handle,
+                    time_step,
+                    format,
+                    transform.as_ptr() as *const _,
+                );
+            },
+            _ => {
+                panic!("Geometry::set_geometry_transform is only supported for instance geometries")
+            }
+        }
+    }
+
+    /// Sets the transformation for a particular time step of an instance
+    /// geometry as a decomposition of the transformation matrix using
+    /// quaternions to represent the rotation.
+    pub fn set_transform_quaternion(
+        &mut self,
+        time_step: u32,
+        transform: &QuaternionDecomposition,
+    ) {
+        match self.kind {
+            GeometryKind::INSTANCE => unsafe {
+                rtcSetGeometryTransformQuaternion(
+                    self.handle,
+                    time_step,
+                    transform as &QuaternionDecomposition as *const _,
+                );
+            },
+            _ => {
+                panic!("Geometry::set_geometry_transform is only supported for instance geometries")
+            }
+        }
+    }
+
+    /// Sets the tessellation rate for a subdivision mesh or flat curves.
+    ///
+    /// For curves, the tessellation rate specifies the number of ray-facing
+    /// quads per curve segment. For subdivision surfaces, the tessellation
+    /// rate specifies the number of quads along each edge.
+    pub fn set_tessellation_rate(&mut self, rate: f32) {
+        match self.kind {
+            GeometryKind::SUBDIVISION
+            | GeometryKind::FLAT_LINEAR_CURVE
+            | GeometryKind::FLAT_BEZIER_CURVE
+            | GeometryKind::ROUND_LINEAR_CURVE
+            | GeometryKind::ROUND_BEZIER_CURVE => unsafe {
+                rtcSetGeometryTessellationRate(self.handle, rate);
+            },
+            _ => panic!(
+                "Geometry::set_tessellation_rate is only supported for subdivision meshes and \
+                 flat curves"
+            ),
         }
     }
 
@@ -557,6 +1077,61 @@ impl<'dev, 'buf> Geometry<'buf> {
         }
     }
 
+    /// Sets the number of topologies of a subdivision geometry.
+    ///
+    /// The number of topologies of a subdivision geometry must be greater
+    /// or equal to 1.
+    ///
+    /// To use multiple topologies, first the number of topologies must be
+    /// specified, then the individual topologies can be configured using
+    /// [`Geometry::set_subdivision_mode`] and by setting an index buffer
+    /// ([`BufferUsage::INDEX`]) using the topology ID as the buffer slot.
+    pub fn set_topology_count(&mut self, count: u32) {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcSetGeometryTopologyCount(self.handle, count);
+            },
+            _ => panic!("Geometry::set_topology_count is only supported for subdivision meshes"),
+        }
+    }
+
+    /// Sets the user-defined data pointer of the geometry.
+    ///
+    /// The user data pointer is intended to be pointing to the application's
+    /// representation of the geometry, and is passed to various callback
+    /// functions.
+    ///
+    /// The application can use this pointer inside the callback functions to
+    /// access its geometry representation.
+    pub fn set_user_data<D>(&mut self, user_data: &mut D)
+    where
+        D: UserData,
+    {
+        let mut state = self.state.lock().unwrap();
+        state.user_data.data = user_data as *mut D as *mut _;
+        unsafe {
+            rtcSetGeometryUserData(
+                self.handle,
+                &mut state.user_data as *mut GeometryUserData as *mut _,
+            );
+        }
+    }
+
+    /// Returns the user data pointer of the geometry.
+    pub unsafe fn get_user_data<D>(&self) -> Option<&mut D>
+    where
+        D: UserData,
+    {
+        unsafe {
+            let ptr = rtcGetGeometryUserData(self.handle);
+            if ptr.is_null() {
+                None
+            } else {
+                Some(&mut *std::mem::transmute::<*mut std::os::raw::c_void, *mut D>(ptr))
+            }
+        }
+    }
+
     /// Sets the number of vertex attributes of the geometry.
     ///
     /// This function sets the number of slots for vertex attributes buffers
@@ -571,7 +1146,7 @@ impl<'dev, 'buf> Geometry<'buf> {
     /// * `count` - The number of vertex attribute slots.
     pub fn set_vertex_attribute_count(&mut self, count: u32) {
         match self.kind {
-            GeometryType::GRID | GeometryType::USER | GeometryType::INSTANCE => {
+            GeometryKind::GRID | GeometryKind::USER | GeometryKind::INSTANCE => {
                 eprint!(
                     "Vertex attribute not allowed for geometries of type {:?}!",
                     self.kind
@@ -611,8 +1186,34 @@ impl<'dev, 'buf> Geometry<'buf> {
     /// to their location during subdivision. This way all patches are linearly
     /// interpolated.
     pub fn set_subdivision_mode(&self, topology_id: u32, mode: RTCSubdivisionMode) {
-        unsafe {
-            rtcSetGeometrySubdivisionMode(self.handle, topology_id, mode);
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcSetGeometrySubdivisionMode(self.handle, topology_id, mode);
+            },
+            _ => {
+                panic!(
+                    "Subdivision mode not allowed for geometries of type {:?}!",
+                    self.kind
+                );
+            }
+        }
+    }
+
+    /// Sets the number of primitives of a user-defined geometry.
+    pub fn set_user_primitive_count(&mut self, count: u32) {
+        match self.kind {
+            GeometryKind::USER => {
+                // Update the primitive count.
+                unsafe {
+                    rtcSetGeometryUserPrimitiveCount(self.handle, count);
+                }
+            }
+            _ => {
+                panic!(
+                    "User primitive count not allowed for geometries of type {:?}!",
+                    self.kind
+                );
+            }
         }
     }
 
@@ -637,7 +1238,107 @@ impl<'dev, 'buf> Geometry<'buf> {
             rtcSetGeometryVertexAttributeTopology(self.handle, vertex_attribute_id, topology_id);
         }
     }
+
+    // TODO(yang): Add documentation.
+    /// Sets the displacement function for a subdivision geometry.
+    pub unsafe fn set_displacement_function(&self, displacement: RTCDisplacementFunctionN) {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcSetGeometryDisplacementFunction(self.handle, displacement);
+            },
+            _ => {
+                panic!(
+                    "Displacement function not allowed for geometries of type {:?}!",
+                    self.kind
+                );
+            }
+        }
+    }
+
+    /// Returns the first half edge of a face.
+    ///
+    /// This function can only be used for subdivision meshes. As all topologies
+    /// of a subdivision geometry share the same face buffer the function does
+    /// not depend on the topology ID.
+    pub fn get_first_half_edge(&self, face_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcGetGeometryFirstHalfEdge(self.handle, face_id)
+            },
+            _ => {
+                panic!(
+                    "First half edge not allowed for geometries of type {:?}!",
+                    self.kind
+                );
+            }
+        }
+    }
+
+    /// Returns the face of some half edge.
+    ///
+    /// This function can only be used for subdivision meshes. As all topologies
+    /// of a subdivision geometry share the same face buffer the function does
+    /// not depend on the topology ID.
+    pub fn get_face(&self, half_edge_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe { rtcGetGeometryFace(self.handle, half_edge_id) },
+            _ => {
+                panic!("Face not allowed for geometries of type {:?}!", self.kind);
+            }
+        }
+    }
+
+    /// Returns the next half edge of some half edge.
+    ///
+    /// This function can only be used for subdivision meshes. As all topologies
+    /// of a subdivision geometry share the same face buffer the function does
+    /// not depend on the topology ID.
+    pub fn get_next_half_edge(&self, half_edge_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcGetGeometryNextHalfEdge(self.handle, half_edge_id)
+            },
+            _ => {
+                panic!(
+                    "Next half edge not allowed for geometries of type {:?}!",
+                    self.kind
+                );
+            }
+        }
+    }
+
+    /// Returns the previous half edge of some half edge.
+    pub fn get_previous_half_edge(&self, half_edge_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcGetGeometryPreviousHalfEdge(self.handle, half_edge_id)
+            },
+            _ => {
+                panic!(
+                    "Prev half edge not allowed for geometries of type {:?}!",
+                    self.kind
+                );
+            }
+        }
+    }
+
+    /// Returns the opposite half edge of some half edge.
+    pub fn get_opposite_half_edge(&self, topology_id: u32, edge_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcGetGeometryOppositeHalfEdge(self.handle, topology_id, edge_id)
+            },
+            _ => {
+                panic!(
+                    "Opposite half edge not allowed for geometries of type {:?}!",
+                    self.kind
+                );
+            }
+        }
+    }
 }
+
+// TODO(yang): rtcInterpolate, rtcInterpolateN
 
 macro_rules! impl_geometry_type {
     ($name:ident, $kind:path, $(#[$meta:meta])*) => {
@@ -663,9 +1364,7 @@ macro_rules! impl_geometry_type {
     };
 }
 
-use std::ops::{Deref, DerefMut};
-
-impl_geometry_type!(TriangleMesh, GeometryType::TRIANGLE,
+impl_geometry_type!(TriangleMesh, GeometryKind::TRIANGLE,
     /// A triangle mesh geometry.
     ///
     /// The index buffer must contain an array of three 32-bit indices per triangle
@@ -695,7 +1394,7 @@ impl_geometry_type!(TriangleMesh, GeometryType::TRIANGLE,
     /// these buffers have to have the same stride and size.
 );
 
-impl_geometry_type!(QuadMesh, GeometryType::QUAD,
+impl_geometry_type!(QuadMesh, GeometryKind::QUAD,
     /// A quad mesh geometry.
     ///
     /// The index buffer must contain an array of four 32-bit indices per triangle

@@ -13,49 +13,73 @@
 
 use std::{alloc, mem};
 
-pub mod buffer;
+mod buffer;
 mod callback;
-pub mod device;
-pub mod error;
+mod device;
+mod error;
 mod geometry;
-pub mod instance;
-pub mod intersect_context;
-pub mod ray;
-pub mod ray_packet;
-pub mod ray_stream;
-pub mod scene;
-pub mod soa_ray;
+mod instance;
+mod intersect_context;
+mod ray;
+mod scene;
+
+/// Automatically generated bindings to the Embree C API.
 #[allow(non_upper_case_globals)]
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
 pub mod sys;
-pub use buffer::{Buffer, BufferSize, BufferSlice, BufferView, BufferViewMut};
-pub use device::{Config, Device, FrequencyLevel, Isa};
-pub use instance::Instance;
-pub use intersect_context::IntersectContext;
-pub use ray::{Hit, Ray, RayHit};
-pub use ray_packet::{Hit4, Ray4, RayHit4};
-pub use ray_stream::{HitN, RayHitN, RayN};
-pub use scene::Scene;
-pub use soa_ray::{
-    SoAHit, SoAHitIter, SoAHitIterMut, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, SoARayRef,
-    SoARayRefMut,
-};
 
+pub use buffer::*;
+pub use device::*;
+pub use error::*;
 pub use geometry::*;
+pub use instance::*;
+pub use intersect_context::*;
+pub use ray::*;
+pub use scene::*;
 
 // Pull in some cleaned up enum and bitfield types directly,
 // with prettier aliases
-pub use sys::{
-    RTCBufferType as BufferUsage, RTCBuildQuality as BuildQuality,
-    RTCDeviceProperty as DeviceProperty, RTCError as Error, RTCFormat as Format,
-    RTCGeometryType as GeometryType, RTCSubdivisionMode as SubdivisionMode,
-};
+pub type Bounds = sys::RTCBounds;
 
-pub use sys::{
-    RTCBounds as Bounds, RTCBuildFlags as BuildFlags, RTCCurveFlags as CurveFlags,
-    RTCIntersectContextFlags as IntersectContextFlags, RTCSceneFlags as SceneFlags,
-};
+/// Defines the type of slots to assign data buffers to.
+///
+/// For most geometry types the [`BufferUsage::INDEX`] slot is used to assign
+/// an index buffer, while the [`BufferUsage::VERTEX`] is used to assign the
+/// corresponding vertex buffer.
+///
+/// The [`BufferUsage::VERTEX_ATTRIBUTE`] slot can get used to assign
+/// arbitrary additional vertex data which can get interpolated using the
+/// [`rtcInterpolate`] API call.
+///
+/// The [`BufferUsage::NORMAL`], [`BufferUsage::TANGENT`], and
+/// [`BufferUsage::NORMAL_DERIVATIVE`] are special buffers required to assign
+/// per vertex normals, tangents, and normal derivatives for some curve types.
+///
+/// The [`BufferUsage::GRID`] buffer is used to assign the grid primitive buffer
+/// for grid geometries (see [`GeometryKind::GRID`]).
+///
+/// The [`BufferUsage::FACE`], [`BufferUsage::LEVEL`],
+/// [`BufferUsage::EDGE_CREASE_INDEX`], [`BufferUsage::EDGE_CREASE_WEIGHT`],
+/// [`BufferUsage::VERTEX_CREASE_INDEX`], [`BufferUsage::VERTEX_CREASE_WEIGHT`],
+/// and [`BufferUsage::HOLE`] are special buffers required to create subdivision
+/// meshes (see [`GeometryKind::SUBDIVISION`]).
+///
+/// [`BufferUsage::FLAGS`] can get used to add additional flag per primitive of
+/// a geometry, and is currently only used for linear curves.
+pub type BufferUsage = sys::RTCBufferType;
+pub type BuildQuality = sys::RTCBuildQuality;
+pub type BuildFlags = sys::RTCBuildFlags;
+pub type CurveFlags = sys::RTCCurveFlags;
+pub type DeviceProperty = sys::RTCDeviceProperty;
+pub type Error = sys::RTCError;
+pub type Format = sys::RTCFormat;
+pub type IntersectContextFlags = sys::RTCIntersectContextFlags;
+pub type SceneFlags = sys::RTCSceneFlags;
+pub type SubdivisionMode = sys::RTCSubdivisionMode;
+/// The type of a geometry, used to determine which geometry type to create.
+pub type GeometryKind = sys::RTCGeometryType;
+pub type QuaternionDecomposition = sys::RTCQuaternionDecomposition;
 
 /// The invalid ID for Embree intersection results (e.g. `Hit::geomID`,
 /// `Hit::primID`, etc.)
