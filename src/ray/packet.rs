@@ -1,7 +1,4 @@
-use crate::{
-    soa::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut},
-    sys,
-};
+use crate::{sys, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut};
 
 pub type Ray4 = sys::RTCRay4;
 pub type Hit4 = sys::RTCHit4;

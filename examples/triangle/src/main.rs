@@ -4,7 +4,6 @@ extern crate embree;
 extern crate support;
 
 use embree::{BufferUsage, Device, Format, IntersectContext, RayHitN, RayN, TriangleMesh};
-use std::sync::Arc;
 
 fn main() {
     let display = support::Display::new(512, 512, "triangle");
@@ -35,7 +34,6 @@ fn main() {
         .copy_from_slice(&[[0, 1, 2]]);
     triangle.commit();
 
-    let triangle = Arc::new(triangle);
     let mut scene = device.create_scene().unwrap();
     scene.attach_geometry(&triangle);
     scene.commit();

@@ -1,9 +1,8 @@
 use std::{f32, iter::Iterator, u32};
 
 use crate::{
-    aligned_vector, aligned_vector_init,
-    soa::{SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut},
-    sys,
+    aligned_vector, aligned_vector_init, sys, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter,
+    SoARayIterMut,
 };
 
 /// A ray stream stored in SoA format

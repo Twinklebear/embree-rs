@@ -1,8 +1,12 @@
 use crate::{sys, INVALID_ID};
 
-pub mod packet;
-pub mod soa;
-pub mod stream;
+mod packet;
+mod soa;
+mod stream;
+
+pub use packet::*;
+pub use soa::*;
+pub use stream::*;
 
 /// New type alias for [`sys::RTCRay`] that provides some convenience
 /// methods.

@@ -10,11 +10,7 @@ use crate::{
     device::Device,
     geometry::Geometry,
     intersect_context::IntersectContext,
-    ray::{
-        packet::{Ray4, RayHit4},
-        stream::{RayHitN, RayN},
-        Ray, RayHit,
-    },
+    ray::{Ray, Ray4, RayHit, RayHit4, RayHitN, RayN},
     sys::*,
 };
 

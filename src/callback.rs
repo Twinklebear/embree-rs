@@ -1,6 +1,4 @@
-use crate::{
-    geometry::GeometryUserData, Bounds, IntersectContext, UserData,
-};
+use crate::{geometry::GeometryUserData, Bounds, IntersectContext, UserData};
 use std::os::raw::c_void;
 
 use crate::sys::*;
