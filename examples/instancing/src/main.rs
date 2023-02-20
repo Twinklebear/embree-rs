@@ -6,86 +6,110 @@ extern crate support;
 
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Vector3, Vector4};
 use embree::{
-    Device, Geometry, Instance, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh,
+    BufferUsage, BuildQuality, Device, Format, Geometry, Instance, IntersectContext, QuadMesh, Ray,
+    RayHit, Scene, SceneFlags, TriangleMesh,
 };
 use std::{f32, u32};
 use support::Camera;
 
-/// Make a triangulated sphere, from the Embree tutorial:
-/// https://github.com/embree/embree/blob/master/tutorials/instanced_geometry/instanced_geometry_device.cpp
-fn make_triangulated_sphere<'a>(
-    device: &'a Device,
-    pos: Vector3<f32>,
-    radius: f32,
-) -> Geometry<'a> {
-    let num_phi = 5;
-    let num_theta = 2 * num_phi;
-    let mut mesh = TriangleMesh::unanimated(
-        device,
-        2 * num_theta * (num_phi - 1),
-        num_theta * (num_phi + 1),
-    );
-    {
-        let mut verts = mesh.vertex_buffer.map();
-        let mut tris = mesh.index_buffer.map();
+const NUM_PHI: usize = 5;
+const NUM_THETA: usize = 2 * NUM_PHI;
 
-        let inv_num_phi = 1.0 / (num_phi as f32);
-        let inv_num_theta = 1.0 / (num_theta as f32);
-        for phi in 0..num_phi + 1 {
-            for theta in 0..num_theta {
-                let phif = phi as f32 * f32::consts::PI * inv_num_phi;
-                let thetaf = theta as f32 * f32::consts::PI * 2.0 * inv_num_theta;
+fn create_sphere(device: &Device, pos: Vec3, radius: f32) -> Geometry<'static> {
+    // Create a triangulated sphere
+    let mut geometry = device
+        .create_geometry(embree::GeometryKind::TRIANGLE)
+        .unwrap();
+    geometry.set_build_quality(quality);
 
-                let v = &mut verts[phi * num_theta + theta];
-                v.x = pos.x + radius * f32::sin(phif) * f32::sin(thetaf);
-                v.y = pos.y + radius * f32::cos(phif);
-                v.z = pos.z + radius * f32::sin(phif) * f32::cos(thetaf);
-            }
+    let mut vertices = geometry
+        .set_new_buffer(
+            BufferUsage::VERTEX,
+            0,
+            Format::FLOAT3,
+            16,
+            NUM_THETA * (NUM_PHI + 1),
+        )
+        .unwrap()
+        .view_mut::<[f32; 4]>()
+        .unwrap();
+
+    let mut indices = geometry
+        .set_new_buffer(
+            BufferUsage::INDEX,
+            0,
+            Format::UINT3,
+            12,
+            2 * NUM_THETA * (NUM_PHI - 1),
+        )
+        .unwrap()
+        .view_mut::<[u32; 3]>()
+        .unwrap();
+
+    let mut tri = 0;
+    let rcp_num_theta = 1.0 / NUM_THETA as f32;
+    let rcp_num_phi = 1.0 / NUM_PHI as f32;
+    for phi_idx in 0..NUM_PHI {
+        for theta_idx in 0..NUM_THETA {
+            let phi = phi_idx as f32 * rcp_num_phi * std::f32::consts::PI;
+            let theta = theta_idx as f32 * rcp_num_theta * 2.0 * std::f32::consts::PI;
+            vertices[phi_idx * NUM_THETA + theta_idx] = [
+                pos.x + radius * phi.sin() * theta.sin(),
+                pos.y + radius * phi.cos(),
+                pos.z + radius * phi.sin() * theta.cos(),
+                0.0,
+            ];
+        }
+        if phi_idx == 0 {
+            continue;
         }
 
-        let mut tri = 0;
-        for phi in 1..num_phi + 1 {
-            for theta in 1..num_theta + 1 {
-                let p00 = (phi - 1) * num_theta + theta - 1;
-                let p01 = (phi - 1) * num_theta + theta % num_theta;
-                let p10 = phi * num_theta + theta - 1;
-                let p11 = phi * num_theta + theta % num_theta;
+        for theta_idx in 1..=NUM_THETA {
+            let p00 = ((phi_idx - 1) * NUM_THETA + theta_idx - 1) as u32;
+            let p01 = ((phi_idx - 1) * NUM_THETA + theta_idx % NUM_THETA) as u32;
+            let p10 = (phi_idx * NUM_THETA + theta_idx - 1) as u32;
+            let p11 = (phi_idx * NUM_THETA + theta_idx % NUM_THETA) as u32;
 
-                if phi > 1 {
-                    tris[tri].x = p10 as u32;
-                    tris[tri].y = p01 as u32;
-                    tris[tri].z = p00 as u32;
-                    tri += 1;
-                }
-                if phi < num_phi {
-                    tris[tri].x = p11 as u32;
-                    tris[tri].y = p01 as u32;
-                    tris[tri].z = p10 as u32;
-                    tri += 1;
-                }
+            if phi_idx > 1 {
+                indices[tri] = [p10, p01, p00];
+                tri += 1;
+            }
+
+            if phi_idx < NUM_PHI {
+                indices[tri] = [p11, p01, p10];
+                tri += 1;
             }
         }
     }
-    let mut mesh = Geometry::Triangle(mesh);
-    mesh.commit();
-    mesh
+    geometry.commit();
+    geometry
 }
-fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut mesh = QuadMesh::unanimated(device, 1, 4);
-    {
-        let mut verts = mesh.vertex_buffer.map();
-        let mut quads = mesh.index_buffer.map();
-        verts[0] = Vector4::new(-10.0, -2.0, -10.0, 0.0);
-        verts[1] = Vector4::new(-10.0, -2.0, 10.0, 0.0);
-        verts[2] = Vector4::new(10.0, -2.0, 10.0, 0.0);
-        verts[3] = Vector4::new(10.0, -2.0, -10.0, 0.0);
 
-        quads[0] = Vector4::new(0, 1, 2, 3);
+fn create_ground_plane(device: &Device) -> Geometry<'static> {
+    let mut geometry = Geometry::new(device, embree::GeometryKind::TRIANGLE).unwrap();
+    {
+        geometry
+            .set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 4)
+            .unwrap()
+            .view_mut::<[f32; 4]>()
+            .unwrap()
+            .copy_from_slice(&[
+                [-10.0, -2.0, -10.0, 0.0],
+                [-10.0, -2.0, 10.0, 0.0],
+                [10.0, -2.0, -10.0, 0.0],
+                [10.0, -2.0, 10.0, 0.0],
+            ]);
+        geometry
+            .set_new_buffer(BufferUsage::INDEX, 0, Format::UINT3, 12, 2)
+            .unwrap()
+            .view_mut::<[u32; 3]>()
+            .unwrap()
+            .copy_from_slice(&[[0, 1, 2], [1, 3, 2]]);
     }
-    let mut mesh = Geometry::Quad(mesh);
-    mesh.commit();
-    mesh
+    geometry.commit();
+    geometry
 }
+
 // Animate like the Embree example, returns the (transforms, normal_transforms)
 fn animate_instances(time: f32, num_instances: usize) -> (Vec<Matrix4<f32>>, Vec<Matrix4<f32>>) {
     let t0 = 0.7 * time;
@@ -113,15 +137,26 @@ fn animate_instances(time: f32, num_instances: usize) -> (Vec<Matrix4<f32>>, Vec
 
 fn main() {
     let mut display = support::Display::new(512, 512, "instancing");
-    let device = Device::new();
+    let device = Device::new().unwrap();
 
-    // Make the scene we'll instance with 4 triangulated spheres.
+    // Create a scene.
+    let mut scene = device.create_scene().unwrap();
+    scene.set_build_quality(BuildQuality::LOW).unwrap();
+    scene.set_flags(SceneFlags::DYNAMIC);
+
+    // Create a scene with 4 triangulated spheres.
+    let mut scene1 = device.create_scene().unwrap();
     let spheres = vec![
-        make_triangulated_sphere(&device, Vector3::new(0.0, 0.0, 1.0), 0.5),
-        make_triangulated_sphere(&device, Vector3::new(1.0, 0.0, 0.0), 0.5),
-        make_triangulated_sphere(&device, Vector3::new(0.0, 0.0, -1.0), 0.5),
-        make_triangulated_sphere(&device, Vector3::new(-1.0, 0.0, 0.0), 0.5),
+        create_sphere(&device, Vector3::new(0.0, 0.0, 1.0), 0.5),
+        create_sphere(&device, Vector3::new(1.0, 0.0, 0.0), 0.5),
+        create_sphere(&device, Vector3::new(0.0, 0.0, -1.0), 0.5),
+        create_sphere(&device, Vector3::new(-1.0, 0.0, 0.0), 0.5),
     ];
+    for s in spheres.into_iter() {
+        scene1.attach_geometry(&s);
+    }
+    scene1.commit();
+
     let mut instanced_scene = Scene::new(&device);
     for s in spheres.into_iter() {
         instanced_scene.attach_geometry(s);

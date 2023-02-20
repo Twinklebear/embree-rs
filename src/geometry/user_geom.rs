@@ -147,7 +147,7 @@ impl UserGeometry {
     // TODO(yang): deal with RTCRayN, then we can make this function safe
     /// Sets the callback function to occlude a user geometry.
     ///
-    /// Similar to [`Geometry::set_user_intersect_function`], but for occlusion
+    /// Similar to [`Geometry::set_intersect_function`], but for occlusion
     /// queries.
     pub unsafe fn set_occluded_function<F, D>(&mut self, occluded: F)
         where
@@ -166,7 +166,7 @@ impl UserGeometry {
     }
 
     /// Sets the number of primitives of a user-defined geometry.
-    pub fn set_user_primitive_count(&mut self, count: u32) {
+    pub fn set_primitive_count(&mut self, count: u32) {
         // Update the primitive count.
         unsafe {
             sys::rtcSetGeometryUserPrimitiveCount(self.handle, count);
