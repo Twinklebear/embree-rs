@@ -10,12 +10,12 @@ const NUM_SPHERES: usize = 20;
 const NUM_PHI: usize = 120;
 const NUM_THETA: usize = 2 * NUM_PHI;
 
-fn create_sphere(
-    device: &Device,
+fn create_sphere<'a, 'b>(
+    device: &'a Device,
     quality: BuildQuality,
     pos: Vec3,
     radius: f32,
-) -> Geometry<'static> {
+) -> Geometry<'b> {
     // Create a triangulated sphere
     let mut geometry = device
         .create_geometry(embree::GeometryKind::TRIANGLE)
@@ -85,7 +85,7 @@ fn create_sphere(
     geometry
 }
 
-fn create_ground_plane(device: &Device) -> Geometry<'static> {
+fn create_ground_plane<'a, 'b>(device: &'a Device) -> Geometry<'b> {
     let mut geometry = Geometry::new(device, embree::GeometryKind::TRIANGLE).unwrap();
     {
         geometry

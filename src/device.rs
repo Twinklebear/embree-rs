@@ -211,7 +211,8 @@ impl Device {
 
     /// Creates a [`Geometry`] object bound to the device without any
     /// buffers attached.
-    pub fn create_geometry(&self, kind: GeometryKind) -> Result<Geometry<'static>, Error> {
+    pub fn create_geometry<'a, 'b>(&'a self, kind: GeometryKind) -> Result<Geometry<'b>, Error>
+    {
         Geometry::new(self, kind)
     }
 }

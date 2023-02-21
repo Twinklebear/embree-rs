@@ -12,6 +12,7 @@
 //! for some example applications using the bindings.
 
 use std::{alloc, mem};
+use std::mem::MaybeUninit;
 
 mod buffer;
 mod callback;
@@ -77,7 +78,126 @@ pub type SceneFlags = sys::RTCSceneFlags;
 pub type SubdivisionMode = sys::RTCSubdivisionMode;
 /// The type of a geometry, used to determine which geometry type to create.
 pub type GeometryKind = sys::RTCGeometryType;
+
+/// Structure that represents a quaternion decomposition of an affine transformation.
+///
+/// The affine transformation can be decomposed into three parts:
+///
+/// 1. A upper triangular scaling/skew/shift matrix
+///
+///   ```
+///   | scale_x  skew_xy  skew_xz  shift_x |
+///   |   0      scale_y  skew_yz  shift_y |
+///   |   0         0     scale_z  shitf_z |
+///   |   0         0        0         1   |
+///   ```
+///
+/// 2. A translation matrix
+///   ```
+///   | 1   0   0 translation_x |
+///   | 0   1   0 translation_y |
+///   | 0   0   1 translation_z |
+///   | 0   0   0       1       |
+///   ```
+///
+/// 3. A rotation matrix R, represented as a quaternion
+///   ```quaternion_r + i * quaternion_i + j * quaternion_j + k * quaternion_k```
+///   where i, j, k are the imaginary unit vectors. The passed quaternion will
+///   be normalized internally.
+///
+/// The affine transformation matrix corresponding to a quaternion decomposition
+/// is TRS and a point `p = (x, y, z, 1)^T` is transformed as follows:
+///
+/// ```
+/// p' = T * R * S * p
+/// ```
 pub type QuaternionDecomposition = sys::RTCQuaternionDecomposition;
+
+impl Default for QuaternionDecomposition {
+    fn default() -> Self {
+        QuaternionDecomposition::identity()
+    }
+}
+
+impl QuaternionDecomposition {
+    /// Create a new quaternion decomposition with the identity transformation.
+    pub fn identity() -> Self {
+        QuaternionDecomposition {
+            scale_x: 1.0,
+            scale_y: 1.0,
+            scale_z: 1.0,
+            skew_xy: 0.0,
+            skew_xz: 0.0,
+            skew_yz: 0.0,
+            shift_x: 0.0,
+            shift_y: 0.0,
+            shift_z: 0.0,
+            quaternion_r: 1.0,
+            quaternion_i: 0.0,
+            quaternion_j: 0.0,
+            quaternion_k: 0.0,
+            translation_x: 0.0,
+            translation_y: 0.0,
+            translation_z: 0.0,
+        }
+    }
+
+    /// Returns the scale part of the decomposition.
+    pub fn scale(&self) -> [f32; 3] {
+        [self.scale_x, self.scale_y, self.scale_z]
+    }
+
+    /// Returns the skew part of the decomposition.
+    pub fn skew(&self) -> [f32; 3] {
+        [self.skew_xy, self.skew_xz, self.skew_yz]
+    }
+
+    /// Returns the shift part of the decomposition.
+    pub fn shift(&self) -> [f32; 3] {
+        [self.shift_x, self.shift_y, self.shift_z]
+    }
+
+    /// Returns the translation part of the decomposition.
+    pub fn quaternion(&self) -> [f32; 4] {
+        [self.quaternion_r, self.quaternion_i, self.quaternion_j, self.quaternion_k]
+    }
+
+    /// Set the quaternion part of the decomposition.
+    pub fn set_quaternion(&mut self, quaternion: [f32; 4]) {
+        self.quaternion_r = quaternion[0];
+        self.quaternion_i = quaternion[1];
+        self.quaternion_j = quaternion[2];
+        self.quaternion_k = quaternion[3];
+    }
+
+    /// Set the scaling part of the decomposition.
+    pub fn set_scale(&mut self, scale: [f32; 3]) {
+        self.scale_x = scale[0];
+        self.scale_y = scale[1];
+        self.scale_z = scale[2];
+    }
+
+    /// Set the skew part of the decomposition.
+    pub fn set_skew(&mut self, skew: [f32; 3]) {
+        self.skew_xy = skew[0];
+        self.skew_xz = skew[1];
+        self.skew_yz = skew[2];
+    }
+
+    /// Set the shift part of the decomposition.
+    pub fn set_shift(&mut self, shift: [f32; 3]) {
+        self.shift_x = shift[0];
+        self.shift_y = shift[1];
+        self.shift_z = shift[2];
+    }
+
+    /// Set the translation part of the decomposition.
+    pub fn set_translation(&mut self, translation: [f32; 3]) {
+        self.translation_x = translation[0];
+        self.translation_y = translation[1];
+        self.translation_z = translation[2];
+    }
+}
 
 /// The invalid ID for Embree intersection results (e.g. `Hit::geomID`,
 /// `Hit::primID`, etc.)
@@ -110,7 +230,7 @@ impl Bounds {
 /// for each primitive of the scene that intersects the query domain.
 ///
 /// See [`Scene::point_query`] for more information.
-type PointQuery = sys::RTCPointQuery;
+pub type PointQuery = sys::RTCPointQuery;
 
 /// Utility for making specifically aligned vectors
 pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
