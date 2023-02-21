@@ -33,6 +33,15 @@ impl Clone for Scene {
     }
 }
 
+impl Drop for Scene {
+    fn drop(&mut self) {
+        println!("Dropping scene");
+        unsafe {
+            rtcReleaseScene(self.handle);
+        }
+    }
+}
+
 impl Scene {
     /// Creates a new scene with the given device.
     pub(crate) fn new(device: Device) -> Result<Scene, Error> {
@@ -432,13 +441,5 @@ impl Scene {
             rtcGetSceneBounds(self.handle(), &mut bounds as *mut Bounds);
         }
         bounds
-    }
-}
-
-impl Drop for Scene {
-    fn drop(&mut self) {
-        unsafe {
-            rtcReleaseScene(self.handle);
-        }
     }
 }

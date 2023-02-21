@@ -1,6 +1,4 @@
-use crate::{sys,
-    Device, Error, Format, Geometry, GeometryKind, QuaternionDecomposition, Scene,
-};
+use crate::{sys, Device, Error, Format, Geometry, GeometryKind, QuaternionDecomposition, Scene};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug)]

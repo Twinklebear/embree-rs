@@ -1,7 +1,12 @@
-use std::ops::{Deref, DerefMut};
-use std::ptr;
-use crate::{Bounds, Device, Error, Geometry, GeometryKind, IntersectContext, sys, UserData};
-use crate::sys::{RTCRayHitN, RTCRayN};
+use crate::{
+    sys,
+    sys::{RTCRayHitN, RTCRayN},
+    Bounds, Device, Error, Geometry, GeometryKind, IntersectContext, UserGeometryData,
+};
+use std::{
+    ops::{Deref, DerefMut},
+    ptr,
+};
 
 #[derive(Debug)]
 pub struct UserGeometry(Geometry<'static>);
@@ -50,16 +55,19 @@ impl UserGeometry {
     /// proper bounding box for the requested primitive and time, and store
     /// that bounding box to the destination structure (`bounds_o` member).
     pub fn set_bounds_function<F, D>(&mut self, bounds: F)
-        where
-            D: UserData,
-            F: FnMut(Option<&mut D>, u32, u32, &mut Bounds),
+    where
+        D: UserGeometryData,
+        F: FnMut(Option<&mut D>, u32, u32, &mut Bounds),
     {
         match self.kind {
             GeometryKind::USER => unsafe {
                 let mut state = self.state.lock().unwrap();
                 let mut closure = bounds;
-                state.user_data.user_bounds_payload =
-                    &mut closure as *mut _ as *mut std::os::raw::c_void;
+                state.data
+                    .user_fns
+                    .as_mut()
+                    .unwrap()
+                    .bounds_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
                 sys::rtcSetGeometryBoundsFunction(
                     self.handle,
                     crate::callback::user_bounds_function_helper(&mut closure),
@@ -128,20 +136,24 @@ impl UserGeometry {
     /// algorithms that need to extend the ray with additional data must use
     /// the rayID component of the ray to identify the original ray to
     /// access the per-ray data.
-    pub unsafe fn set_intersect_function<F, D>(&mut self, intersect: F)
-        where
-            D: UserData,
-            F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayHitN, u32),
+    pub fn set_intersect_function<F, D>(&mut self, intersect: F)
+    where
+        D: UserGeometryData,
+        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayHitN, u32),
     {
         // TODO: deal with RTCRayHitN
         let mut state = self.state.lock().unwrap();
         let mut closure = intersect;
-        state.user_data.user_intersect_payload =
+        state.data
+            .user_fns
+            .as_mut()
+            .unwrap()
+            .intersect_fn =
             &mut closure as *mut _ as *mut std::os::raw::c_void;
-        sys::rtcSetGeometryIntersectFunction(
+        unsafe { sys::rtcSetGeometryIntersectFunction(
             self.handle,
             crate::callback::user_intersect_function_helper(&mut closure),
-        );
+        ) };
     }
 
     // TODO(yang): deal with RTCRayN, then we can make this function safe
@@ -149,20 +161,21 @@ impl UserGeometry {
     ///
     /// Similar to [`Geometry::set_intersect_function`], but for occlusion
     /// queries.
-    pub unsafe fn set_occluded_function<F, D>(&mut self, occluded: F)
-        where
-            D: UserData,
-            F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayN, u32),
+    pub fn set_occluded_function<F, D>(&mut self, occluded: F)
+    where
+        D: UserGeometryData,
+        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayN, u32),
     {
         // TODO: deal with RTCRayN
         let mut state = self.state.lock().unwrap();
         let mut closure = occluded;
-        state.user_data.user_occluded_payload =
-            &mut closure as *mut _ as *mut std::os::raw::c_void;
-        sys::rtcSetGeometryOccludedFunction(
+        state.data
+            .user_fns.as_mut().unwrap().occluded_fn
+             = &mut closure as *mut _ as *mut std::os::raw::c_void;
+        unsafe { sys::rtcSetGeometryOccludedFunction(
             self.handle,
             crate::callback::user_occluded_function_helper(&mut closure),
-        );
+        ) };
     }
 
     /// Sets the number of primitives of a user-defined geometry.

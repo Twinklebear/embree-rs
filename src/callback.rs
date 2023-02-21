@@ -1,5 +1,8 @@
-use crate::{geometry::GeometryUserData, Bounds, IntersectContext, UserData};
-use std::os::raw::c_void;
+use crate::{geometry::GeometryData, Bounds, IntersectContext, UserGeometryData};
+use std::{
+    any::{Any, TypeId},
+    os::raw::c_void,
+};
 
 use crate::sys::*;
 
@@ -61,22 +64,36 @@ where
 /// callback.
 pub fn user_intersect_function_helper<F, D>(_f: &mut F) -> RTCIntersectFunctionN
 where
-    D: UserData,
+    D: UserGeometryData,
     F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayHitN, u32),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCIntersectFunctionNArguments)
     where
+        D: UserGeometryData,
         F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayHitN, u32),
     {
-        let cb_ptr =
-            (*((*args).geometryUserPtr as *mut GeometryUserData)).user_intersect_payload as *mut F;
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+            .user_fns
+            .as_ref()
+            .expect(
+                "User payloads not set! Make sure the geometry was created with kind \
+                 GeometryKind::USER",
+            )
+            .intersect_fn as *mut F;
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                let user_data_ptr = (*((*args).geometryUserPtr as *mut GeometryUserData)).data;
-                user_data_ptr
-                    .is_null()
-                    .then(|| &mut *(user_data_ptr as *mut D))
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.data.type_id() != TypeId::of::<D>()
+                        {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    },
+                    None => None,
+                }
             };
             cb(
                 std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
@@ -98,22 +115,36 @@ where
 /// callback.
 pub fn user_occluded_function_helper<F, D>(_f: &mut F) -> RTCOccludedFunctionN
 where
-    D: UserData,
+    D: UserGeometryData,
     F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayN, u32),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCOccludedFunctionNArguments)
     where
+        D: UserGeometryData,
         F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayN, u32),
     {
-        let cb_ptr =
-            (*((*args).geometryUserPtr as *mut GeometryUserData)).user_occluded_payload as *mut F;
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+            .user_fns
+            .as_ref()
+            .expect(
+                "User payloads not set! Make sure the geometry was created with kind \
+                 GeometryKind::USER",
+            )
+            .occluded_fn as *mut F;
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                let user_data_ptr = (*((*args).geometryUserPtr as *mut GeometryUserData)).data;
-                user_data_ptr
-                    .is_null()
-                    .then(|| &mut *(user_data_ptr as *mut D))
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.data.type_id() != TypeId::of::<D>()
+                        {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    },
+                    None => None,
+                }
             };
             cb(
                 std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
@@ -134,11 +165,12 @@ where
 /// for intersect.
 pub fn intersect_filter_function_helper<F, D>(_f: &mut F) -> RTCFilterFunctionN
 where
-    D: UserData,
+    D: UserGeometryData,
     F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, &mut RTCRayN, &mut RTCHitN, u32),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
     where
+        D: UserGeometryData,
         F: FnMut(
             &mut [i32],
             Option<&mut D>,
@@ -148,15 +180,22 @@ where
             u32,
         ),
     {
-        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryUserData)).intersect_filter_payload
-            as *mut F;
+        let cb_ptr =
+            (*((*args).geometryUserPtr as *mut GeometryData)).intersect_filter_fn as *mut F;
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                let user_data_ptr = (*((*args).geometryUserPtr as *mut GeometryUserData)).data;
-                user_data_ptr
-                    .is_null()
-                    .then(|| &mut *(user_data_ptr as *mut D))
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.data.type_id() != TypeId::of::<D>()
+                        {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    },
+                    None => None,
+                }
             };
             cb(
                 std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
@@ -176,11 +215,12 @@ where
 /// for occuluded.
 pub fn occluded_filter_function_helper<F, D>(_f: &mut F) -> RTCFilterFunctionN
 where
-    D: UserData,
+    D: UserGeometryData,
     F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, &mut RTCRayN, &mut RTCHitN, u32),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
     where
+        D: UserGeometryData,
         F: FnMut(
             &mut [i32],
             Option<&mut D>,
@@ -190,15 +230,21 @@ where
             u32,
         ),
     {
-        let cb_ptr =
-            (*((*args).geometryUserPtr as *mut GeometryUserData)).occluded_filter_payload as *mut F;
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData)).occluded_filter_fn as *mut F;
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                let user_data_ptr = (*((*args).geometryUserPtr as *mut GeometryUserData)).data;
-                user_data_ptr
-                    .is_null()
-                    .then(|| &mut *(user_data_ptr as *mut D))
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.data.type_id() != TypeId::of::<D>()
+                        {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    },
+                    None => None,
+                }
             };
             cb(
                 std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
@@ -217,22 +263,36 @@ where
 /// Helper function to convert a Rust closure to `RTCBoundsFunction` callback.
 pub fn user_bounds_function_helper<F, D>(_f: &mut F) -> RTCBoundsFunction
 where
-    D: UserData,
+    D: UserGeometryData,
     F: FnMut(Option<&mut D>, u32, u32, &mut Bounds),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCBoundsFunctionArguments)
     where
+        D: UserGeometryData,
         F: FnMut(Option<&mut D>, u32, u32, &mut Bounds),
     {
-        let cb_ptr =
-            (*((*args).geometryUserPtr as *mut GeometryUserData)).user_bounds_payload as *mut F;
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+            .user_fns
+            .as_ref()
+            .expect(
+                "User payloads not set! Make sure the geometry was created with kind \
+                 GeometryKind::USER",
+            )
+            .bounds_fn as *mut F;
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                let user_data_ptr = (*((*args).geometryUserPtr as *mut GeometryUserData)).data;
-                user_data_ptr
-                    .is_null()
-                    .then(|| &mut *(user_data_ptr as *mut D))
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.data.type_id() != TypeId::of::<D>()
+                        {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    },
+                    None => None,
+                }
             };
             cb(
                 user_data,

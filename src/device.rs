@@ -20,43 +20,29 @@ impl Clone for Device {
     }
 }
 
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe {
+            rtcReleaseDevice(self.handle);
+        }
+    }
+}
+
+unsafe impl Sync for Device {}
+
 impl Device {
     pub fn new() -> Result<Device, Error> {
-        enable_ftz_and_daz();
-        let handle = unsafe { rtcNewDevice(ptr::null()) };
-        if handle.is_null() {
-            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
-        } else {
-            let device = Device { handle };
-            device.set_error_function(default_error_function);
-            Ok(device)
-        }
+        create_device(None)
     }
 
     pub fn debug() -> Result<Device, Error> {
         let cfg = CString::new("verbose=4").unwrap();
-        enable_ftz_and_daz();
-        let handle = unsafe { rtcNewDevice(cfg.as_ptr()) };
-        if handle.is_null() {
-            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
-        } else {
-            let device = Device { handle };
-            device.set_error_function(default_error_function);
-            Ok(device)
-        }
+        create_device(Some(cfg))
     }
 
     pub fn with_config(config: Config) -> Result<Device, Error> {
-        enable_ftz_and_daz();
         let cfg = config.to_c_string();
-        let handle = unsafe { rtcNewDevice(cfg.as_ptr()) };
-        if handle.is_null() {
-            Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
-        } else {
-            let device = Device { handle };
-            device.set_error_function(default_error_function);
-            Ok(device)
-        }
+        create_device(Some(cfg))
     }
 
     /// Register a callback function to be called when an error occurs.
@@ -209,7 +195,9 @@ impl Device {
     pub fn get_error(&self) -> RTCError { unsafe { rtcGetDeviceError(self.handle) } }
 
     /// Creates a new scene bound to the device.
-    pub fn create_scene(&self) -> Result<Scene, Error> { Scene::new(self.clone()) }
+    pub fn create_scene(&self) -> Result<Scene, Error> {
+        Scene::new(self.clone())
+    }
 
     /// Creates a new scene bound to the device with the given configuration.
     /// It's the same as calling [`Device::create_scene`] and then
@@ -231,16 +219,6 @@ impl Device {
         Geometry::new(self, kind)
     }
 }
-
-impl Drop for Device {
-    fn drop(&mut self) {
-        unsafe {
-            rtcReleaseDevice(self.handle);
-        }
-    }
-}
-
-unsafe impl Sync for Device {}
 
 /// Instruction Set Architecture.
 #[derive(Debug, Clone, Copy)]
@@ -401,4 +379,17 @@ pub fn enable_ftz_and_daz() {
 
 fn default_error_function(error: Error, msg: &str) {
     eprintln!("Embree error {:?} - {}", error, msg);
+}
+
+fn create_device(config: Option<CString>) -> Result<Device, Error> {
+    enable_ftz_and_daz();
+    let config = config.unwrap_or_else(|| Config::default().to_c_string());
+    let handle = unsafe { rtcNewDevice(config.as_ptr()) };
+    if handle.is_null() {
+        Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
+    } else {
+        let device = Device { handle };
+        device.set_error_function(default_error_function);
+        Ok(device)
+    }
 }

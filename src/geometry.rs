@@ -1,22 +1,25 @@
 use std::{
+    any::TypeId,
     collections::HashMap,
     marker::PhantomData,
     num::NonZeroUsize,
     ptr,
-    sync::{Arc, Mutex},
+    sync::{Mutex},
 };
 
 use crate::{
-    sys::*, Bounds, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryKind,
-    IntersectContext, QuaternionDecomposition, Scene,
+    sys::*, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryKind,
+    IntersectContext,
 };
 
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 
 mod instance;
 mod user_geom;
 
 pub use instance::*;
+pub use user_geom::*;
 
 // TODO(yang): maybe enforce format and stride when get the view?
 /// Information about how a (part of) buffer is bound to a geometry.
@@ -31,49 +34,65 @@ pub(crate) struct AttachedBuffer<'src> {
 }
 
 /// Trait for user-defined data that can be attached to a geometry.
-pub trait UserData: Sized + Send + Sync + 'static {}
+pub trait UserGeometryData: Sized + Send + Sync + 'static {}
 
-impl<T> UserData for T where T: Sized + Send + Sync + 'static {}
+impl<T> UserGeometryData for T where T: Sized + Send + Sync + 'static {}
 
-// TODO(yang): remove user geometry related payload to user geometry module.
 /// User-defined data for a geometry.
 ///
-/// This contains also the payloads for different callbacks, which makes it
-/// possible to pass Rust closures to Embree.
-#[derive(Debug, Copy, Clone)]
-pub(crate) struct GeometryUserData {
+/// This contains the pointer to the user-defined data and the type ID of the
+/// user-defined data (which is used to check the type when getting the data).
+#[derive(Debug, Clone)]
+pub(crate) struct UserData {
     /// Pointer to the user-defined data.
     pub data: *mut std::os::raw::c_void,
-    /// Payload for the [`Geometry::set_intersect_filter_function`] call.
-    pub intersect_filter_payload: *mut std::os::raw::c_void,
-    /// Payload for the [`Geometry::set_occluded_filter_function`] call.
-    pub occluded_filter_payload: *mut std::os::raw::c_void,
-    /// Payload for the [`Geometry::set_user_intersect_function`] call.
-    pub user_intersect_payload: *mut std::os::raw::c_void,
-    /// Payload for the [`Geometry::set_user_occluded_function`] call.
-    pub user_occluded_payload: *mut std::os::raw::c_void,
-    /// Payload for the [`Geometry::set_user_bounds_function`] call.
-    pub user_bounds_payload: *mut std::os::raw::c_void,
+    /// Type ID of the user-defined data.
+    pub type_id: TypeId,
 }
 
-impl Default for GeometryUserData {
+/// Payloads for user-defined callbacks of a geometry of kind
+/// [`GeometryKind::USER`].
+#[derive(Debug, Clone)]
+pub(crate) struct UserGeometryPayloads {
+    /// Payload for the [`UserGeometry::set_intersect_function`] call.
+    pub intersect_fn: *mut std::os::raw::c_void,
+    /// Payload for the [`UserGeometry::set_occluded_function`] call.
+    pub occluded_fn: *mut std::os::raw::c_void,
+    /// Payload for the [`UserGeometry::set_bounds_function`] call.
+    pub bounds_fn: *mut std::os::raw::c_void,
+}
+
+impl Default for UserGeometryPayloads {
     fn default() -> Self {
         Self {
-            data: ptr::null_mut(),
-            user_intersect_payload: ptr::null_mut(),
-            user_occluded_payload: ptr::null_mut(),
-            intersect_filter_payload: ptr::null_mut(),
-            occluded_filter_payload: ptr::null_mut(),
-            user_bounds_payload: ptr::null_mut(),
+            intersect_fn: ptr::null_mut(),
+            occluded_fn: ptr::null_mut(),
+            bounds_fn: ptr::null_mut(),
         }
     }
 }
 
+/// User-defined data for a geometry.
+///
+/// This contains also the payloads for different callbacks, which makes it
+/// possible to pass Rust closures to Embree.
+#[derive(Debug, Clone)]
+pub(crate) struct GeometryData {
+    /// User-defined data.
+    pub user_data: Option<UserData>,
+    /// Payload for the [`Geometry::set_intersect_filter_function`] call.
+    pub intersect_filter_fn: *mut std::os::raw::c_void,
+    /// Payload for the [`Geometry::set_occluded_filter_function`] call.
+    pub occluded_filter_fn: *mut std::os::raw::c_void,
+    /// Payloads only used for user geometry.
+    pub user_fns: Option<UserGeometryPayloads>,
+}
+
 /// Extra data for a geometry.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct GeometryState<'buf> {
     attachments: HashMap<BufferUsage, Vec<AttachedBuffer<'buf>>>,
-    user_data: GeometryUserData,
+    data: GeometryData,
 }
 
 /// Wrapper around an Embree geometry object.
@@ -124,7 +143,7 @@ pub struct Geometry<'buf> {
     pub(crate) device: Device,
     pub(crate) handle: RTCGeometry,
     kind: GeometryKind,
-    state: Arc<Mutex<GeometryState<'buf>>>,
+    state: Rc<Mutex<GeometryState<'buf>>>,
 }
 
 impl<'buf> Clone for Geometry<'buf> {
@@ -174,11 +193,28 @@ impl<'buf> Geometry<'buf> {
         if handle.is_null() {
             Err(device.get_error())
         } else {
+            let state = GeometryState {
+                attachments: Default::default(),
+                data: GeometryData {
+                    user_data: None,
+                    intersect_filter_fn: ptr::null_mut(),
+                    occluded_filter_fn: ptr::null_mut(),
+                    user_fns: if kind == GeometryKind::USER {
+                        Some(UserGeometryPayloads {
+                            intersect_fn: ptr::null_mut(),
+                            occluded_fn: ptr::null_mut(),
+                            bounds_fn: ptr::null_mut(),
+                        })
+                    } else {
+                        None
+                    },
+                },
+            };
             Ok(Geometry {
                 device: device.clone(),
                 handle,
                 kind,
-                state: Arc::new(Mutex::new(Default::default())),
+                state: Rc::new(Mutex::new(state)),
             })
         }
     }
@@ -488,7 +524,7 @@ impl<'buf> Geometry<'buf> {
 
     /// Returns the buffer bound to the given slot and usage.
     pub fn get_buffer(&self, usage: BufferUsage, slot: u32) -> Option<BufferSlice> {
-        let mut state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap();
         state
             .attachments
             .get(&usage)
@@ -623,7 +659,7 @@ impl<'buf> Geometry<'buf> {
     /// pointer.
     pub unsafe fn set_intersect_filter_function<F, D>(&mut self, filter: F)
     where
-        D: UserData,
+        D: UserGeometryData,
         F: FnMut(
             &mut [i32],
             Option<&mut D>,
@@ -636,7 +672,7 @@ impl<'buf> Geometry<'buf> {
         let mut state = self.state.lock().unwrap();
         unsafe {
             let mut closure = filter;
-            state.user_data.intersect_filter_payload =
+            state.data.intersect_filter_fn =
                 &mut closure as *mut _ as *mut std::os::raw::c_void;
             rtcSetGeometryIntersectFilterFunction(
                 self.handle,
@@ -669,7 +705,7 @@ impl<'buf> Geometry<'buf> {
     /// pointer.
     pub unsafe fn set_occluded_filter_function<F, D>(&mut self, filter: F)
     where
-        D: UserData,
+        D: UserGeometryData,
         F: FnMut(
             &mut [i32],
             Option<&mut D>,
@@ -682,7 +718,7 @@ impl<'buf> Geometry<'buf> {
         let mut state = self.state.lock().unwrap();
         unsafe {
             let mut closure = filter;
-            state.user_data.occluded_filter_payload =
+            state.data.occluded_filter_fn =
                 &mut closure as *mut _ as *mut std::os::raw::c_void;
             rtcSetGeometryOccludedFilterFunction(
                 self.handle,
@@ -885,29 +921,43 @@ impl<'buf> Geometry<'buf> {
     /// access its geometry representation.
     pub fn set_user_data<D>(&mut self, user_data: &mut D)
     where
-        D: UserData,
+        D: UserGeometryData,
     {
         let mut state = self.state.lock().unwrap();
-        state.user_data.data = user_data as *mut D as *mut _;
+        state.data.
+            user_data = Some(UserData {
+            data: user_data as *mut D as *mut std::os::raw::c_void,
+            type_id: TypeId::of::<D>(),
+        });
         unsafe {
             rtcSetGeometryUserData(
                 self.handle,
-                &mut state.user_data as *mut GeometryUserData as *mut _,
+                &mut state.data as *mut GeometryData as *mut _,
             );
         }
     }
 
     /// Returns the user data pointer of the geometry.
-    pub unsafe fn get_user_data<D>(&self) -> Option<&mut D>
+    pub fn get_user_data<D>(&self) -> Option<&mut D>
     where
-        D: UserData,
+        D: UserGeometryData,
     {
         unsafe {
-            let ptr = rtcGetGeometryUserData(self.handle);
+            let ptr =
+                rtcGetGeometryUserData(self.handle) as *mut GeometryData;
             if ptr.is_null() {
                 None
             } else {
-                Some(&mut *std::mem::transmute::<*mut std::os::raw::c_void, *mut D>(ptr))
+                match (*ptr).user_data.as_mut() {
+                    None => None,
+                    Some(user_data @ UserData { .. }) => {
+                        if user_data.type_id == TypeId::of::<D>() {
+                            Some(&mut *(user_data.data as *mut D))
+                        } else {
+                            None
+                        }
+                    }
+                }
             }
         }
     }
