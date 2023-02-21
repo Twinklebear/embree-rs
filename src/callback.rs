@@ -91,7 +91,7 @@ where
                         } else {
                             Some(&mut *(user_data.data as *mut D))
                         }
-                    },
+                    }
                     None => None,
                 }
             };
@@ -142,7 +142,7 @@ where
                         } else {
                             Some(&mut *(user_data.data as *mut D))
                         }
-                    },
+                    }
                     None => None,
                 }
             };
@@ -193,7 +193,7 @@ where
                         } else {
                             Some(&mut *(user_data.data as *mut D))
                         }
-                    },
+                    }
                     None => None,
                 }
             };
@@ -242,7 +242,7 @@ where
                         } else {
                             Some(&mut *(user_data.data as *mut D))
                         }
-                    },
+                    }
                     None => None,
                 }
             };
@@ -290,7 +290,7 @@ where
                         } else {
                             Some(&mut *(user_data.data as *mut D))
                         }
-                    },
+                    }
                     None => None,
                 }
             };
@@ -305,3 +305,5 @@ where
 
     Some(inner::<F, D>)
 }
+
+// TODO: point query function helper

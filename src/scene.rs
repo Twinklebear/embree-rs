@@ -7,9 +7,9 @@ use std::{
 
 use crate::{
     callback,
+    context::IntersectContext,
     device::Device,
     geometry::Geometry,
-    intersect_context::IntersectContext,
     ray::{Ray, Ray4, RayHit, RayHit4, RayHitN, RayN},
     sys::*,
 };
@@ -35,7 +35,6 @@ impl Clone for Scene {
 
 impl Drop for Scene {
     fn drop(&mut self) {
-        println!("Dropping scene");
         unsafe {
             rtcReleaseScene(self.handle);
         }

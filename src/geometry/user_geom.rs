@@ -63,11 +63,8 @@ impl UserGeometry {
             GeometryKind::USER => unsafe {
                 let mut state = self.state.lock().unwrap();
                 let mut closure = bounds;
-                state.data
-                    .user_fns
-                    .as_mut()
-                    .unwrap()
-                    .bounds_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
+                state.data.user_fns.as_mut().unwrap().bounds_fn =
+                    &mut closure as *mut _ as *mut std::os::raw::c_void;
                 sys::rtcSetGeometryBoundsFunction(
                     self.handle,
                     crate::callback::user_bounds_function_helper(&mut closure),
@@ -144,16 +141,14 @@ impl UserGeometry {
         // TODO: deal with RTCRayHitN
         let mut state = self.state.lock().unwrap();
         let mut closure = intersect;
-        state.data
-            .user_fns
-            .as_mut()
-            .unwrap()
-            .intersect_fn =
+        state.data.user_fns.as_mut().unwrap().intersect_fn =
             &mut closure as *mut _ as *mut std::os::raw::c_void;
-        unsafe { sys::rtcSetGeometryIntersectFunction(
-            self.handle,
-            crate::callback::user_intersect_function_helper(&mut closure),
-        ) };
+        unsafe {
+            sys::rtcSetGeometryIntersectFunction(
+                self.handle,
+                crate::callback::user_intersect_function_helper(&mut closure),
+            )
+        };
     }
 
     // TODO(yang): deal with RTCRayN, then we can make this function safe
@@ -169,13 +164,14 @@ impl UserGeometry {
         // TODO: deal with RTCRayN
         let mut state = self.state.lock().unwrap();
         let mut closure = occluded;
-        state.data
-            .user_fns.as_mut().unwrap().occluded_fn
-             = &mut closure as *mut _ as *mut std::os::raw::c_void;
-        unsafe { sys::rtcSetGeometryOccludedFunction(
-            self.handle,
-            crate::callback::user_occluded_function_helper(&mut closure),
-        ) };
+        state.data.user_fns.as_mut().unwrap().occluded_fn =
+            &mut closure as *mut _ as *mut std::os::raw::c_void;
+        unsafe {
+            sys::rtcSetGeometryOccludedFunction(
+                self.handle,
+                crate::callback::user_occluded_function_helper(&mut closure),
+            )
+        };
     }
 
     /// Sets the number of primitives of a user-defined geometry.

@@ -15,10 +15,10 @@ use std::{alloc, mem};
 
 mod buffer;
 mod callback;
+mod context;
 mod device;
 mod error;
 mod geometry;
-mod intersect_context;
 mod ray;
 mod scene;
 
@@ -29,10 +29,10 @@ mod scene;
 pub mod sys;
 
 pub use buffer::*;
+pub use context::*;
 pub use device::*;
 pub use error::*;
 pub use geometry::*;
-pub use intersect_context::*;
 pub use ray::*;
 pub use scene::*;
 
@@ -105,6 +105,12 @@ impl Bounds {
     /// Returns the upper bounds of the bounding box.
     pub fn upper(&self) -> [f32; 3] { [self.upper_x, self.upper_y, self.upper_z] }
 }
+
+/// Object used to traverses the BVH and calls a user defined callback function
+/// for each primitive of the scene that intersects the query domain.
+///
+/// See [`Scene::point_query`] for more information.
+type PointQuery = sys::RTCPointQuery;
 
 /// Utility for making specifically aligned vectors
 pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {

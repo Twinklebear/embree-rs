@@ -24,31 +24,33 @@ impl Instance {
         unsafe { sys::rtcSetGeometryInstancedScene(self.handle, scene.handle) }
     }
 
-    // TODO(yang): Better transform type
     /// Returns the interpolated instance transformation for the specified time
     /// step.
-    pub fn get_geometry_transform(&mut self, time: f32, format: Format) -> [f32; 16] {
+    ///
+    /// The transformation is returned as a 4x4 column-major matrix.
+    pub fn get_transform(&mut self, time: f32) -> [f32; 16] {
         unsafe {
             let mut transform = [0.0; 16];
             sys::rtcGetGeometryTransform(
                 self.handle,
                 time,
-                format,
+                Format::FLOAT4X4_COLUMN_MAJOR,
                 transform.as_mut_ptr() as *mut _,
             );
             transform
         }
     }
 
-    // TODO(yang): Better transform type
     /// Sets the transformation for a particular time step of an instance
     /// geometry.
-    pub fn set_geometry_transform(&mut self, time_step: u32, format: Format, transform: &[f32]) {
+    ///
+    /// The transformation is specified as a 4x4 column-major matrix.
+    pub fn set_transform(&mut self, time_step: u32, transform: &[f32; 16]) {
         unsafe {
             sys::rtcSetGeometryTransform(
                 self.handle,
                 time_step,
-                format,
+                Format::FLOAT4X4_COLUMN_MAJOR,
                 transform.as_ptr() as *const _,
             );
         }

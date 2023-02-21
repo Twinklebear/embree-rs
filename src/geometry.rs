@@ -1,10 +1,5 @@
 use std::{
-    any::TypeId,
-    collections::HashMap,
-    marker::PhantomData,
-    num::NonZeroUsize,
-    ptr,
-    sync::{Mutex},
+    any::TypeId, collections::HashMap, marker::PhantomData, num::NonZeroUsize, ptr, sync::Mutex,
 };
 
 use crate::{
@@ -12,8 +7,10 @@ use crate::{
     IntersectContext,
 };
 
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
+use std::{
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
 
 mod instance;
 mod user_geom;
@@ -672,8 +669,7 @@ impl<'buf> Geometry<'buf> {
         let mut state = self.state.lock().unwrap();
         unsafe {
             let mut closure = filter;
-            state.data.intersect_filter_fn =
-                &mut closure as *mut _ as *mut std::os::raw::c_void;
+            state.data.intersect_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
             rtcSetGeometryIntersectFilterFunction(
                 self.handle,
                 crate::callback::intersect_filter_function_helper(&mut closure),
@@ -718,8 +714,7 @@ impl<'buf> Geometry<'buf> {
         let mut state = self.state.lock().unwrap();
         unsafe {
             let mut closure = filter;
-            state.data.occluded_filter_fn =
-                &mut closure as *mut _ as *mut std::os::raw::c_void;
+            state.data.occluded_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
             rtcSetGeometryOccludedFilterFunction(
                 self.handle,
                 crate::callback::occluded_filter_function_helper(&mut closure),
@@ -924,16 +919,12 @@ impl<'buf> Geometry<'buf> {
         D: UserGeometryData,
     {
         let mut state = self.state.lock().unwrap();
-        state.data.
-            user_data = Some(UserData {
+        state.data.user_data = Some(UserData {
             data: user_data as *mut D as *mut std::os::raw::c_void,
             type_id: TypeId::of::<D>(),
         });
         unsafe {
-            rtcSetGeometryUserData(
-                self.handle,
-                &mut state.data as *mut GeometryData as *mut _,
-            );
+            rtcSetGeometryUserData(self.handle, &mut state.data as *mut GeometryData as *mut _);
         }
     }
 
@@ -943,8 +934,7 @@ impl<'buf> Geometry<'buf> {
         D: UserGeometryData,
     {
         unsafe {
-            let ptr =
-                rtcGetGeometryUserData(self.handle) as *mut GeometryData;
+            let ptr = rtcGetGeometryUserData(self.handle) as *mut GeometryData;
             if ptr.is_null() {
                 None
             } else {

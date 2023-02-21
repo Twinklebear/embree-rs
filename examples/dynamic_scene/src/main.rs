@@ -193,8 +193,7 @@ fn main() {
 
     let display = support::Display::new(512, 512, "Dynamic Scene");
     let light_dir = vec3(1.0, 1.0, 1.0).normalize();
-    let mut time = 0.0;
-    support::display::run(display, move |image, camera_pose, _| {
+    support::display::run(display, move |image, camera_pose, time| {
         for p in image.iter_mut() {
             *p = 0;
         }
@@ -243,6 +242,5 @@ fn main() {
                 }
             }
         }
-        time += 0.2;
     });
 }

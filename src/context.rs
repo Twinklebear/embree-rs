@@ -51,3 +51,12 @@ impl IntersectContext {
         }
     }
 }
+
+/// A stack which stores the IDs and instance transformations during a BVH
+/// traversal for a point query.
+///
+/// The transformations are assumed to be affine transformations
+/// (3×3 matrix plus translation) and therefore the last column is ignored.
+pub type PointQueryContext = RTCPointQueryContext;
+
+// TODO: PointQueryContext::new

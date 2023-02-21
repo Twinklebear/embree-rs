@@ -31,9 +31,7 @@ impl Drop for Device {
 unsafe impl Sync for Device {}
 
 impl Device {
-    pub fn new() -> Result<Device, Error> {
-        create_device(None)
-    }
+    pub fn new() -> Result<Device, Error> { create_device(None) }
 
     pub fn debug() -> Result<Device, Error> {
         let cfg = CString::new("verbose=4").unwrap();
@@ -195,9 +193,7 @@ impl Device {
     pub fn get_error(&self) -> RTCError { unsafe { rtcGetDeviceError(self.handle) } }
 
     /// Creates a new scene bound to the device.
-    pub fn create_scene(&self) -> Result<Scene, Error> {
-        Scene::new(self.clone())
-    }
+    pub fn create_scene(&self) -> Result<Scene, Error> { Scene::new(self.clone()) }
 
     /// Creates a new scene bound to the device with the given configuration.
     /// It's the same as calling [`Device::create_scene`] and then
