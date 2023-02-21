@@ -11,10 +11,10 @@
 //! See the [examples/](https://github.com/Twinklebear/embree-rs/tree/master/examples)
 //! for some example applications using the bindings.
 
-use std::{alloc, mem};
-use std::mem::MaybeUninit;
+use std::{alloc, mem, mem::MaybeUninit};
 
 mod buffer;
+mod bvh;
 mod callback;
 mod context;
 mod device;
@@ -30,6 +30,7 @@ mod scene;
 pub mod sys;
 
 pub use buffer::*;
+pub use bvh::*;
 pub use context::*;
 pub use device::*;
 pub use error::*;
@@ -79,7 +80,8 @@ pub type SubdivisionMode = sys::RTCSubdivisionMode;
 /// The type of a geometry, used to determine which geometry type to create.
 pub type GeometryKind = sys::RTCGeometryType;
 
-/// Structure that represents a quaternion decomposition of an affine transformation.
+/// Structure that represents a quaternion decomposition of an affine
+/// transformation.
 ///
 /// The affine transformation can be decomposed into three parts:
 ///
@@ -101,9 +103,9 @@ pub type GeometryKind = sys::RTCGeometryType;
 ///   ```
 ///
 /// 3. A rotation matrix R, represented as a quaternion
-///   ```quaternion_r + i * quaternion_i + j * quaternion_j + k * quaternion_k```
-///   where i, j, k are the imaginary unit vectors. The passed quaternion will
-///   be normalized internally.
+///   ```quaternion_r + i * quaternion_i + j * quaternion_j + k *
+/// quaternion_k```   where i, j, k are the imaginary unit vectors. The passed
+/// quaternion will   be normalized internally.
 ///
 /// The affine transformation matrix corresponding to a quaternion decomposition
 /// is TRS and a point `p = (x, y, z, 1)^T` is transformed as follows:
@@ -114,9 +116,7 @@ pub type GeometryKind = sys::RTCGeometryType;
 pub type QuaternionDecomposition = sys::RTCQuaternionDecomposition;
 
 impl Default for QuaternionDecomposition {
-    fn default() -> Self {
-        QuaternionDecomposition::identity()
-    }
+    fn default() -> Self { QuaternionDecomposition::identity() }
 }
 
 impl QuaternionDecomposition {
@@ -143,23 +143,22 @@ impl QuaternionDecomposition {
     }
 
     /// Returns the scale part of the decomposition.
-    pub fn scale(&self) -> [f32; 3] {
-        [self.scale_x, self.scale_y, self.scale_z]
-    }
+    pub fn scale(&self) -> [f32; 3] { [self.scale_x, self.scale_y, self.scale_z] }
 
     /// Returns the skew part of the decomposition.
-    pub fn skew(&self) -> [f32; 3] {
-        [self.skew_xy, self.skew_xz, self.skew_yz]
-    }
+    pub fn skew(&self) -> [f32; 3] { [self.skew_xy, self.skew_xz, self.skew_yz] }
 
     /// Returns the shift part of the decomposition.
-    pub fn shift(&self) -> [f32; 3] {
-        [self.shift_x, self.shift_y, self.shift_z]
-    }
+    pub fn shift(&self) -> [f32; 3] { [self.shift_x, self.shift_y, self.shift_z] }
 
     /// Returns the translation part of the decomposition.
     pub fn quaternion(&self) -> [f32; 4] {
-        [self.quaternion_r, self.quaternion_i, self.quaternion_j, self.quaternion_k]
+        [
+            self.quaternion_r,
+            self.quaternion_i,
+            self.quaternion_j,
+            self.quaternion_k,
+        ]
     }
 
     /// Set the quaternion part of the decomposition.

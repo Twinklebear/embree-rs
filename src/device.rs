@@ -1,4 +1,4 @@
-use crate::{sys::*, Buffer, BufferSize, Error, Geometry, GeometryKind, Scene};
+use crate::{sys::*, Buffer, BufferSize, Bvh, Error, Geometry, GeometryKind, Scene};
 use std::{
     ffi::CString,
     fmt::{self, Display, Formatter},
@@ -203,6 +203,9 @@ impl Device {
         Scene::new_with_flags(self.clone(), flags)
     }
 
+    /// Creates a new [`Bvh`] object.
+    pub fn create_bvh(&self) -> Result<Bvh, Error> { Bvh::new(self) }
+
     /// Creates a new data buffer.
     /// The created buffer is always aligned to 16 bytes.
     pub fn create_buffer(&self, size: usize) -> Result<Buffer, Error> {
@@ -211,8 +214,7 @@ impl Device {
 
     /// Creates a [`Geometry`] object bound to the device without any
     /// buffers attached.
-    pub fn create_geometry<'a, 'b>(&'a self, kind: GeometryKind) -> Result<Geometry<'b>, Error>
-    {
+    pub fn create_geometry<'a, 'b>(&'a self, kind: GeometryKind) -> Result<Geometry<'b>, Error> {
         Geometry::new(self, kind)
     }
 }

@@ -1,4 +1,4 @@
-use crate::{Bounds, Error, SceneFlags};
+use crate::{Bounds, Error, RayHit8, SceneFlags};
 use std::{
     collections::HashMap,
     mem,
@@ -324,7 +324,11 @@ impl Scene {
     ///
     /// # Arguments
     ///
-    /// * `ctx` - The intersection context to use for the ray query.
+    /// * `ctx` - The intersection context to use for the ray query. It specifies flags
+    ///   to optimize traversal and a filter callback function to be invoked for every
+    ///   intersection. Further, the pointer to the intersection context is propagated
+    ///   to callback functions invoked during traversal and can thus be used to extend
+    ///   the ray with additional data. See [`IntersectContext`] for more information.
     /// * `ray` - The ray to intersect with the scene.
     pub fn intersect(&self, ctx: &mut IntersectContext, ray: Ray) -> RayHit {
         let mut ray_hit = RayHit::new(ray);
@@ -339,6 +343,19 @@ impl Scene {
     }
 
     /// Checks for a single ray if whether there is any hit with the scene.
+    ///
+    /// When no intersection is found, the ray data is not updated. In case
+    /// a hit was found, the `tfar` component of the ray is set to `-inf`.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It specifies flags
+    ///   to optimize traversal and a filter callback function to be invoked for every
+    ///   intersection. Further, the pointer to the intersection context is propagated
+    ///   to callback functions invoked during traversal and can thus be used to extend
+    ///   the ray with additional data. See [`IntersectContext`] for more information.
+    ///
+    /// * `ray` - The ray to intersect with the scene.
     pub fn occluded(&self, ctx: &mut IntersectContext, ray: &mut Ray) -> bool {
         unsafe {
             rtcOccluded1(
@@ -350,6 +367,20 @@ impl Scene {
         ray.tfar == -f32::INFINITY
     }
 
+    /// Finds the closest hits for a ray packet of size 4 with the scene.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It specifies flags
+    ///   to optimize traversal and a filter callback function to be invoked for every
+    ///   intersection. Further, the pointer to the intersection context is propagated
+    ///   to callback functions invoked during traversal and can thus be used to extend
+    ///   the ray with additional data. See [`IntersectContext`] for more information.
+    /// * `ray` - The ray packet to intersect with the scene.
+    /// * `valid` - A mask indicating which rays in the packet are valid. -1 means
+    ///  valid, 0 means invalid.
+    ///
+    /// Only active rays are processed, and hit data of inactive rays is not changed.
     pub fn intersect4(&self, ctx: &mut IntersectContext, ray: &mut RayHit4, valid: &[i32; 4]) {
         unsafe {
             rtcIntersect4(
@@ -357,6 +388,31 @@ impl Scene {
                 self.handle,
                 ctx as *mut RTCIntersectContext,
                 ray as *mut RTCRayHit4,
+            );
+        }
+    }
+
+    /// Finds the closest hits for a ray packet of size 8 with the scene.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It specifies flags
+    ///   to optimize traversal and a filter callback function to be invoked for every
+    ///   intersection. Further, the pointer to the intersection context is propagated
+    ///   to callback functions invoked during traversal and can thus be used to extend
+    ///   the ray with additional data. See [`IntersectContext`] for more information.
+    /// * `ray` - The ray packet to intersect with the scene.
+    /// * `valid` - A mask indicating which rays in the packet are valid. -1 means
+    ///  valid, 0 means invalid.
+    ///
+    /// Only active rays are processed, and hit data of inactive rays is not changed.
+    pub fn intersect8(&self, ctx: &mut IntersectContext, ray: &mut RayHit8, valid: &[i32; 8]) {
+        unsafe {
+            rtcIntersect8(
+                valid.as_ptr(),
+                self.handle,
+                ctx as *mut RTCIntersectContext,
+                ray as *mut RTCRayHit8,
             );
         }
     }
@@ -398,6 +454,18 @@ impl Scene {
         }
     }
 
+    /// Finds the closest hit for a SOA ray stream of size `n`.
+    ///
+    /// The implementation of the stream ray query functions may re-order rays
+    /// arbitrarily and re-pack rays into ray packets of different size. For
+    /// this reason, callback functions may be invoked with an arbitrary
+    /// packet size (of size 1, 4, 8, or 16) and different ordering as
+    /// specified initially. For this reason, one may have to use the rayID
+    /// component of the ray to identify the original ray, e.g. to access
+    /// a per-ray payload.
+    ///
+    /// A ray in a ray stream is considered inactive if its tnear value is
+    /// larger than its tfar value.
     pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitN) {
         let n = rays.len();
         unsafe {
@@ -411,6 +479,18 @@ impl Scene {
         }
     }
 
+    /// Finds any hits for a SOA ray stream of size `n`.
+    ///
+    /// The implementation of the stream ray query functions may re-order rays
+    /// arbitrarily and re-pack rays into ray packets of different size. For
+    /// this reason, callback functions may be invoked with an arbitrary
+    /// packet size (of size 1, 4, 8, or 16) and different ordering as
+    /// specified initially. For this reason, one may have to use the rayID
+    /// component of the ray to identify the original ray, e.g. to access
+    /// a per-ray payload.
+    ///
+    /// A ray in a ray stream is considered inactive if its tnear value is
+    /// larger than its tfar value.
     pub fn occluded_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayN) {
         let n = rays.len();
         unsafe {
@@ -421,6 +501,8 @@ impl Scene {
                 &mut r as *mut RTCRayNp,
                 n as u32,
             );
+
+            let a: RTCRayN;
         }
     }
 

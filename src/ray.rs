@@ -31,7 +31,7 @@ pub use stream::*;
 ///
 /// [`packet`](`crate::ray::packet`) defines types in SOA (structure of array)
 /// layout for ray packets of size 4 (RTCRay4 type), size 8 (RTCRay8 type),
-/// and size 16 (RTCRay16 type). A const-generic type [`RayPacket`] is
+/// and size 16 (RTCRay16 type). A const-generic type [`RayNt`] is
 /// defined for ray packets of arbitrary size N at compile time.
 ///
 /// See [`sys::RTCRay`] for more details.
@@ -99,7 +99,7 @@ impl Ray {
 /// of size 4 (RTCHit4 type), size 8 (RTCHit8 type), and size 16 (RTCHit16
 /// type).
 ///
-/// [`HitPacket`] defines the type for hit packets of arbitrary size N at
+/// [`HitNt`] defines the type for hit packets of arbitrary size N at
 /// compile time.
 ///
 /// See [`sys::RTCHit`] for more details.
@@ -145,7 +145,7 @@ impl Hit {
 ///
 /// [`packet`](`crate::ray::packet`) defines types in SOA (structure of array)
 /// layout for ray/hit packets of size 4 (RTCRayHit4 type), size 8 (RTCRayHit8
-/// type), and size 16 (RTCRayHit16 type). A const-generic type [`RayHitPacket`]
+/// type), and size 16 (RTCRayHit16 type). A const-generic type [`RayHitNt`]
 /// is defined for ray/hit packets of arbitrary size N at compile time.
 ///
 /// See [`sys::RTCRayHit`] for more details.

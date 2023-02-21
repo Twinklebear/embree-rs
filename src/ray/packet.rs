@@ -4,6 +4,14 @@ pub type Ray4 = sys::RTCRay4;
 pub type Hit4 = sys::RTCHit4;
 pub type RayHit4 = sys::RTCRayHit4;
 
+pub type Ray8 = sys::RTCRay8;
+pub type Hit8 = sys::RTCHit8;
+pub type RayHit8 = sys::RTCRayHit8;
+
+pub type Ray16 = sys::RTCRay16;
+pub type Hit16 = sys::RTCHit16;
+pub type RayHit16 = sys::RTCRayHit16;
+
 impl Ray4 {
     pub fn empty() -> Ray4 {
         Ray4::segment(
@@ -132,7 +140,7 @@ impl RayHit4 {
     }
 }
 
-pub struct RayPacket<const N: usize> {
+pub struct RayNt<const N: usize> {
     pub org_x: [f32; N],
     pub org_y: [f32; N],
     pub org_z: [f32; N],
@@ -147,7 +155,8 @@ pub struct RayPacket<const N: usize> {
     pub flags: [u32; N],
 }
 
-pub struct HitPacket<const N: usize> {
+#[allow(non_snake_case)]
+pub struct HitNt<const N: usize> {
     pub Ng_x: [f32; N],
     pub Ng_y: [f32; N],
     pub Ng_z: [f32; N],
@@ -158,7 +167,7 @@ pub struct HitPacket<const N: usize> {
     pub instID: [[u32; 1]; N],
 }
 
-pub struct RayHitPacket<const N: usize> {
-    pub ray: RayPacket<N>,
-    pub hit: HitPacket<N>,
+pub struct RayHitNt<const N: usize> {
+    pub ray: RayNt<N>,
+    pub hit: HitNt<N>,
 }
