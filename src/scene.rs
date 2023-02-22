@@ -1,4 +1,7 @@
-use crate::{Bounds, Error, RayHit8, SceneFlags};
+use crate::{
+    sys, Bounds, Error, Ray16, Ray8, RayHit16, RayHit8, RayHitPacket, RayHitStream, RayPacket,
+    SceneFlags, SoARay,
+};
 use std::{
     collections::HashMap,
     mem,
@@ -10,7 +13,7 @@ use crate::{
     context::IntersectContext,
     device::Device,
     geometry::Geometry,
-    ray::{Ray, Ray4, RayHit, RayHit4, RayHitN, RayN},
+    ray::{Ray, Ray4, RayHit, RayHit4, RayHitN, RayStream},
     sys::*,
 };
 
@@ -324,11 +327,12 @@ impl Scene {
     ///
     /// # Arguments
     ///
-    /// * `ctx` - The intersection context to use for the ray query. It specifies flags
-    ///   to optimize traversal and a filter callback function to be invoked for every
-    ///   intersection. Further, the pointer to the intersection context is propagated
-    ///   to callback functions invoked during traversal and can thus be used to extend
-    ///   the ray with additional data. See [`IntersectContext`] for more information.
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
     /// * `ray` - The ray to intersect with the scene.
     pub fn intersect(&self, ctx: &mut IntersectContext, ray: Ray) -> RayHit {
         let mut ray_hit = RayHit::new(ray);
@@ -342,45 +346,29 @@ impl Scene {
         ray_hit
     }
 
-    /// Checks for a single ray if whether there is any hit with the scene.
-    ///
-    /// When no intersection is found, the ray data is not updated. In case
-    /// a hit was found, the `tfar` component of the ray is set to `-inf`.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The intersection context to use for the ray query. It specifies flags
-    ///   to optimize traversal and a filter callback function to be invoked for every
-    ///   intersection. Further, the pointer to the intersection context is propagated
-    ///   to callback functions invoked during traversal and can thus be used to extend
-    ///   the ray with additional data. See [`IntersectContext`] for more information.
-    ///
-    /// * `ray` - The ray to intersect with the scene.
-    pub fn occluded(&self, ctx: &mut IntersectContext, ray: &mut Ray) -> bool {
-        unsafe {
-            rtcOccluded1(
-                self.handle,
-                ctx as *mut RTCIntersectContext,
-                <&mut Ray as Into<&mut RTCRay>>::into(ray) as *mut RTCRay,
-            );
-        }
-        ray.tfar == -f32::INFINITY
-    }
-
     /// Finds the closest hits for a ray packet of size 4 with the scene.
     ///
     /// # Arguments
     ///
-    /// * `ctx` - The intersection context to use for the ray query. It specifies flags
-    ///   to optimize traversal and a filter callback function to be invoked for every
-    ///   intersection. Further, the pointer to the intersection context is propagated
-    ///   to callback functions invoked during traversal and can thus be used to extend
-    ///   the ray with additional data. See [`IntersectContext`] for more information.
-    /// * `ray` - The ray packet to intersect with the scene.
-    /// * `valid` - A mask indicating which rays in the packet are valid. -1 means
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
+    /// * `ray` - The ray packet of size 4 to intersect with the scene. The ray
+    ///   packet must be aligned to 16 bytes.
+    /// * `valid` - A mask indicating which rays in the packet are valid. -1
+    ///   means
     ///  valid, 0 means invalid.
     ///
-    /// Only active rays are processed, and hit data of inactive rays is not changed.
+    /// The ray packet pointer passed to callback functions is not guaranteed to
+    /// be identical to the original ray provided. To extend the ray with
+    /// additional data to be accessed in callback functions, use the
+    /// intersection context.
+    ///
+    /// Only active rays are processed, and hit data of inactive rays is not
+    /// changed.
     pub fn intersect4(&self, ctx: &mut IntersectContext, ray: &mut RayHit4, valid: &[i32; 4]) {
         unsafe {
             rtcIntersect4(
@@ -396,16 +384,25 @@ impl Scene {
     ///
     /// # Arguments
     ///
-    /// * `ctx` - The intersection context to use for the ray query. It specifies flags
-    ///   to optimize traversal and a filter callback function to be invoked for every
-    ///   intersection. Further, the pointer to the intersection context is propagated
-    ///   to callback functions invoked during traversal and can thus be used to extend
-    ///   the ray with additional data. See [`IntersectContext`] for more information.
-    /// * `ray` - The ray packet to intersect with the scene.
-    /// * `valid` - A mask indicating which rays in the packet are valid. -1 means
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
+    /// * `ray` - The ray packet of size 8 to intersect with the scene. The ray
+    ///   packet must be aligned to 32 bytes.
+    /// * `valid` - A mask indicating which rays in the packet are valid. -1
+    ///   means
     ///  valid, 0 means invalid.
     ///
-    /// Only active rays are processed, and hit data of inactive rays is not changed.
+    /// The ray packet pointer passed to callback functions is not guaranteed to
+    /// be identical to the original ray provided. To extend the ray with
+    /// additional data to be accessed in callback functions, use the
+    /// intersection context.
+    ///
+    /// Only active rays are processed, and hit data of inactive rays is not
+    /// changed.
     pub fn intersect8(&self, ctx: &mut IntersectContext, ray: &mut RayHit8, valid: &[i32; 8]) {
         unsafe {
             rtcIntersect8(
@@ -417,6 +414,90 @@ impl Scene {
         }
     }
 
+    /// Finds the closest hits for a ray packet of size 16 with the scene.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
+    /// * `ray` - The ray packet of size 16 to intersect with the scene. The ray
+    ///   packet must be aligned to 64 bytes.
+    /// * `valid` - A mask indicating which rays in the packet are valid. -1
+    ///   means
+    ///  valid, 0 means invalid.
+    ///
+    /// The ray packet pointer passed to callback functions is not guaranteed to
+    /// be identical to the original ray provided. To extend the ray with
+    /// additional data to be accessed in callback functions, use the
+    /// intersection context.
+    ///
+    /// Only active rays are processed, and hit data of inactive rays is not
+    /// changed.
+    pub fn intersect16(&self, ctx: &mut IntersectContext, ray: &mut RayHit16, valid: &[i32; 16]) {
+        unsafe {
+            rtcIntersect16(
+                valid.as_ptr(),
+                self.handle,
+                ctx as *mut RTCIntersectContext,
+                ray as *mut RTCRayHit16,
+            );
+        }
+    }
+
+    /// Checks for a single ray if whether there is any hit with the scene.
+    ///
+    /// When no intersection is found, the ray data is not updated. In case
+    /// a hit was found, the `tfar` component of the ray is set to `-inf`.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
+    ///
+    /// * `ray` - The ray to intersect with the scene.
+    pub fn occluded(&self, ctx: &mut IntersectContext, ray: &mut Ray) -> bool {
+        unsafe {
+            rtcOccluded1(
+                self.handle,
+                ctx as *mut RTCIntersectContext,
+                <&mut Ray as Into<&mut RTCRay>>::into(ray) as *mut RTCRay,
+            );
+        }
+        ray.tfar == -f32::INFINITY
+    }
+
+    /// Checks for each active ray of a ray packet of size 4 if whether there is
+    /// any hit with the scene.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
+    /// * `ray` - The ray packet of size 4 to intersect with the scene. The ray
+    ///   packet must be aligned to 16 bytes.
+    /// * `valid` - A mask indicating which rays in the packet are valid. -1
+    ///   means
+    ///  valid, 0 means invalid.
+    ///
+    /// The ray packet pointer passed to callback functions is not guaranteed to
+    /// be identical to the original ray provided. To extend the ray with
+    /// additional data to be accessed in callback functions, use the
+    /// intersection context.
+    ///
+    /// Only active rays are processed, and hit data of inactive rays is not
+    /// changed.
     pub fn occluded4(&self, ctx: &mut IntersectContext, ray: &mut Ray4, valid: &[i32; 4]) {
         unsafe {
             rtcOccluded4(
@@ -428,29 +509,180 @@ impl Scene {
         }
     }
 
-    pub fn intersect_stream_aos(&self, ctx: &mut IntersectContext, rays: &mut Vec<RayHit>) {
-        let m = rays.len();
+    /// Checks for each active ray of a ray packet of size 4 if whether there is
+    /// any hit with the scene.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
+    /// * `ray` - The ray packet of size 8 to intersect with the scene. The ray
+    ///   packet must be aligned to 32 bytes.
+    /// * `valid` - A mask indicating which rays in the packet are valid. -1
+    ///   means
+    ///  valid, 0 means invalid.
+    ///
+    /// The ray packet pointer passed to callback functions is not guaranteed to
+    /// be identical to the original ray provided. To extend the ray with
+    /// additional data to be accessed in callback functions, use the
+    /// intersection context.
+    ///
+    /// Only active rays are processed, and hit data of inactive rays is not
+    /// changed.
+    pub fn occluded8(&self, ctx: &mut IntersectContext, ray: &mut Ray8, valid: &[i32; 8]) {
         unsafe {
-            rtcIntersect1M(
+            rtcOccluded8(
+                valid.as_ptr(),
                 self.handle,
                 ctx as *mut RTCIntersectContext,
-                rays.as_mut_ptr(),
-                m as u32,
-                mem::size_of::<RayHit>(),
+                ray as *mut RTCRay8,
             );
         }
     }
 
-    pub fn occluded_stream_aos(&self, ctx: &mut IntersectContext, rays: &mut Vec<Ray>) {
-        let m = rays.len();
+    /// Checks for each active ray of a ray packet of size 16 if whether there
+    /// is any hit with the scene.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
+    /// * `ray` - The ray packet of size 16 to intersect with the scene. The ray
+    ///   packet must be aligned to 64 bytes.
+    /// * `valid` - A mask indicating which rays in the packet are valid. -1
+    ///   means
+    ///  valid, 0 means invalid.
+    ///
+    /// The ray packet pointer passed to callback functions is not guaranteed to
+    /// be identical to the original ray provided. To extend the ray with
+    /// additional data to be accessed in callback functions, use the
+    /// intersection context.
+    ///
+    /// Only active rays are processed, and hit data of inactive rays is not
+    /// changed.
+    pub fn occluded16(&self, ctx: &mut IntersectContext, ray: &mut Ray16, valid: &[i32; 16]) {
         unsafe {
-            rtcOccluded1M(
+            rtcOccluded16(
+                valid.as_ptr(),
                 self.handle,
                 ctx as *mut RTCIntersectContext,
-                rays.as_mut_ptr() as *mut RTCRay,
-                m as u32,
-                mem::size_of::<Ray>(),
+                ray as *mut RTCRay16,
             );
+        }
+    }
+
+    /// Finds the closest hits for a stream of M ray packets.
+    ///
+    /// A ray in the stream is inactive if its `tnear` value is larger than its
+    /// `tfar` value. The stream can be any size including zero. Each ray
+    /// must be aligned to 16 bytes.
+    ///
+    /// The implementation of the stream ray query functions may re-order rays
+    /// arbitrarily and re-pack rays into ray packets of different size. For
+    /// this reason, the callback functions may be invoked with an arbitrary
+    /// packet size (of size 1, 4, 8, or 16) and different ordering as
+    /// specified initially in the ray stream. For this reason, you MUST NOT
+    /// rely on the ordering of the rays in the ray stream to be preserved but
+    /// instead use the `rayID` component of the ray to identify the original
+    /// rya, e.g. to access a per-ray payload.
+    ///
+    /// Analogous to [`rtcIntersectNM`] and [`rtcIntersect1M`].
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags to optimize traversal and a filter callback function
+    ///   to be invoked for every intersection. Further, the pointer to the
+    ///   intersection context is propagated to callback functions invoked
+    ///   during traversal and can thus be used to extend the ray with
+    ///   additional data. See [`IntersectContext`] for more information.
+    ///
+    /// * `rays` - The ray stream to intersect with the scene.
+    pub fn intersect_stream_aos<P: RayHitPacket>(
+        &self,
+        ctx: &mut IntersectContext,
+        rays: &mut Vec<P>,
+    ) {
+        let m = rays.len();
+        unsafe {
+            if P::Ray::LEN == 1 {
+                rtcIntersect1M(
+                    self.handle,
+                    ctx as *mut RTCIntersectContext,
+                    rays.as_mut_ptr() as *mut _,
+                    m as u32,
+                    mem::size_of::<P>(),
+                );
+            } else {
+                rtcIntersectNM(
+                    self.handle,
+                    ctx as *mut RTCIntersectContext,
+                    rays.as_mut_ptr() as *mut _,
+                    P::Ray::LEN as u32,
+                    m as u32,
+                    mem::size_of::<P>(),
+                );
+            }
+        }
+    }
+
+    /// Finds the closest hits for a stream of M ray packets.
+    ///
+    /// A ray in the stream is inactive if its `tnear` value is larger than its
+    /// `tfar` value. The stream can be any size including zero. Each ray
+    /// must be aligned to 16 bytes.
+    ///
+    /// The implementation of the stream ray query functions may re-order rays
+    /// arbitrarily and re-pack rays into ray packets of different size. For
+    /// this reason, the callback functions may be invoked with an arbitrary
+    /// packet size (of size 1, 4, 8, or 16) and different ordering as
+    /// specified initially in the ray stream. For this reason, you MUST NOT
+    /// rely on the ordering of the rays in the ray stream to be preserved but
+    /// instead use the `rayID` component of the ray to identify the original
+    /// rya, e.g. to access a per-ray payload.
+    ///
+    /// Analogous to [`rtcOccluded1M`] and [`rtcOccludedNM`].
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The intersection context to use for the ray query. It
+    ///   specifies flags
+    /// to optimize traversal and a filter callback function to be invoked for
+    /// every intersection. Further, the pointer to the intersection context
+    /// is propagated to callback functions invoked during traversal and can
+    /// thus be used to extend the ray with additional data. See
+    /// [`IntersectContext`] for more information.
+    ///
+    /// * `rays` - The ray stream to intersect with the scene.
+    pub fn occluded_stream_aos<P: RayPacket>(&self, ctx: &mut IntersectContext, rays: &mut Vec<P>) {
+        let m = rays.len();
+        unsafe {
+            if P::LEN == 1 {
+                rtcOccluded1M(
+                    self.handle,
+                    ctx as *mut RTCIntersectContext,
+                    rays.as_mut_ptr() as *mut RTCRay,
+                    m as u32,
+                    mem::size_of::<P>(),
+                );
+            } else {
+                rtcOccludedNM(
+                    self.handle,
+                    ctx as *mut RTCIntersectContext,
+                    rays.as_mut_ptr() as *mut RTCRayN,
+                    P::LEN as u32,
+                    m as u32,
+                    mem::size_of::<P>(),
+                );
+            }
         }
     }
 
@@ -466,7 +698,7 @@ impl Scene {
     ///
     /// A ray in a ray stream is considered inactive if its tnear value is
     /// larger than its tfar value.
-    pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitN) {
+    pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitStream) {
         let n = rays.len();
         unsafe {
             let mut rayhit = rays.as_rayhitnp();
@@ -491,7 +723,7 @@ impl Scene {
     ///
     /// A ray in a ray stream is considered inactive if its tnear value is
     /// larger than its tfar value.
-    pub fn occluded_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayN) {
+    pub fn occluded_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayStream) {
         let n = rays.len();
         unsafe {
             let mut r = rays.as_raynp();
@@ -501,8 +733,6 @@ impl Scene {
                 &mut r as *mut RTCRayNp,
                 n as u32,
             );
-
-            let a: RTCRayN;
         }
     }
 
@@ -524,3 +754,5 @@ impl Scene {
         bounds
     }
 }
+
+// TODO: implement rtcIntersect1Mp

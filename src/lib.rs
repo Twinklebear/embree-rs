@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 //! [![Crates.io](https://img.shields.io/crates/v/embree.svg)](https://crates.io/crates/embree)
 //! [![Build Status](https://travis-ci.org/Twinklebear/embree-rs.svg?branch=master)](https://travis-ci.org/Twinklebear/embree-rs)
 //!

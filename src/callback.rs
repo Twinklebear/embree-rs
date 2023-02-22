@@ -1,4 +1,6 @@
-use crate::{geometry::GeometryData, Bounds, IntersectContext, UserGeometryData};
+use crate::{
+    geometry::GeometryData, Bounds, Geometry, HitN, IntersectContext, RayN, UserGeometryData,
+};
 use std::{
     any::{Any, TypeId},
     os::raw::c_void,
@@ -166,19 +168,12 @@ where
 pub fn intersect_filter_function_helper<F, D>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
-    F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, &mut RTCRayN, &mut RTCHitN, u32),
+    F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
-        F: FnMut(
-            &mut [i32],
-            Option<&mut D>,
-            &mut IntersectContext,
-            &mut RTCRayN,
-            &mut RTCHitN,
-            u32,
-        ),
+        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
     {
         let cb_ptr =
             (*((*args).geometryUserPtr as *mut GeometryData)).intersect_filter_fn as *mut F;
@@ -201,9 +196,14 @@ where
                 std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
                 user_data,
                 &mut *(*args).context,
-                &mut *(*args).ray,
-                &mut *(*args).hit,
-                (*args).N,
+                RayN {
+                    ptr: &mut *(*args).ray,
+                    len: (*args).N as usize,
+                },
+                HitN {
+                    ptr: &mut *(*args).hit,
+                    len: (*args).N as usize,
+                },
             );
         }
     }
@@ -216,20 +216,14 @@ where
 pub fn occluded_filter_function_helper<F, D>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
-    F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, &mut RTCRayN, &mut RTCHitN, u32),
+    F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
-        F: FnMut(
-            &mut [i32],
-            Option<&mut D>,
-            &mut IntersectContext,
-            &mut RTCRayN,
-            &mut RTCHitN,
-            u32,
-        ),
+        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
     {
+        let len = (*args).N as usize;
         let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData)).occluded_filter_fn as *mut F;
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
@@ -247,12 +241,17 @@ where
                 }
             };
             cb(
-                std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
+                std::slice::from_raw_parts_mut((*args).valid, len),
                 user_data,
                 &mut *(*args).context,
-                &mut *(*args).ray,
-                &mut *(*args).hit,
-                (*args).N,
+                RayN {
+                    ptr: &mut *(*args).ray,
+                    len,
+                },
+                HitN {
+                    ptr: &mut *(*args).hit,
+                    len,
+                },
             );
         }
     }
@@ -299,6 +298,87 @@ where
                 (*args).primID,
                 (*args).timeStep,
                 &mut *(*args).bounds_o,
+            );
+        }
+    }
+
+    Some(inner::<F, D>)
+}
+
+/// Helper function to convert a Rust closure to `RTCDisplacementFunctionN`
+/// callback.
+pub fn subdivision_displacement_function_helper<F, D>(_f: &mut F) -> RTCDisplacementFunctionN
+where
+    D: UserGeometryData,
+    F: FnMut(
+        Option<&mut D>,
+        RTCGeometry,
+        u32,
+        u32,
+        &[f32],
+        &[f32],
+        &[f32],
+        &[f32],
+        &[f32],
+        &mut [f32],
+        &mut [f32],
+        &mut [f32],
+    ),
+{
+    unsafe extern "C" fn inner<F, D>(args: *const RTCDisplacementFunctionNArguments)
+    where
+        D: UserGeometryData,
+        F: FnMut(
+            Option<&mut D>,
+            RTCGeometry,
+            u32,
+            u32,
+            &[f32],
+            &[f32],
+            &[f32],
+            &[f32],
+            &[f32],
+            &mut [f32],
+            &mut [f32],
+            &mut [f32],
+        ),
+    {
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+            .subdivision_fns
+            .as_ref()
+            .expect(
+                "User payloads not set! Make sure the geometry was created with kind \
+                 GeometryKind::SUBDIVISION",
+            )
+            .displacement_fn as *mut F;
+        if !cb_ptr.is_null() {
+            let cb = &mut *cb_ptr;
+            let user_data = {
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.data.type_id() != TypeId::of::<D>()
+                        {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    }
+                    None => None,
+                }
+            };
+            cb(
+                user_data,
+                (*args).geometry,
+                (*args).primID,
+                (*args).timeStep,
+                std::slice::from_raw_parts((*args).u, (*args).N as usize),
+                std::slice::from_raw_parts((*args).v, (*args).N as usize),
+                std::slice::from_raw_parts((*args).Ng_x, (*args).N as usize * 3),
+                std::slice::from_raw_parts((*args).Ng_y, (*args).N as usize * 3),
+                std::slice::from_raw_parts((*args).Ng_z, (*args).N as usize * 3),
+                std::slice::from_raw_parts_mut((*args).P_x, (*args).N as usize * 3),
+                std::slice::from_raw_parts_mut((*args).P_y, (*args).N as usize * 3),
+                std::slice::from_raw_parts_mut((*args).P_z, (*args).N as usize * 3),
             );
         }
     }

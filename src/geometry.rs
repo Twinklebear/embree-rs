@@ -2,10 +2,7 @@ use std::{
     any::TypeId, collections::HashMap, marker::PhantomData, num::NonZeroUsize, ptr, sync::Mutex,
 };
 
-use crate::{
-    sys::*, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryKind,
-    IntersectContext,
-};
+use crate::{sys::*, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryKind, HitN, HitPacket, IntersectContext, RayN, RayPacket, Scene};
 
 use std::{
     ops::{Deref, DerefMut},
@@ -13,9 +10,11 @@ use std::{
 };
 
 mod instance;
+mod subdivision;
 mod user_geom;
 
 pub use instance::*;
+pub use subdivision::*;
 pub use user_geom::*;
 
 // TODO(yang): maybe enforce format and stride when get the view?
@@ -59,12 +58,28 @@ pub(crate) struct UserGeometryPayloads {
     pub bounds_fn: *mut std::os::raw::c_void,
 }
 
+/// Payloads for subdivision callbacks of a geometry of kind
+/// [`GeometryKind::SUBDIVISION`].
+#[derive(Debug, Clone)]
+pub(crate) struct SubdivisionGeometryPayloads {
+    /// Payload for the [`SubdivisionGeometry::set_vertex_function`] call.
+    pub displacement_fn: *mut std::os::raw::c_void,
+}
+
 impl Default for UserGeometryPayloads {
     fn default() -> Self {
         Self {
             intersect_fn: ptr::null_mut(),
             occluded_fn: ptr::null_mut(),
             bounds_fn: ptr::null_mut(),
+        }
+    }
+}
+
+impl Default for SubdivisionGeometryPayloads {
+    fn default() -> Self {
+        Self {
+            displacement_fn: ptr::null_mut(),
         }
     }
 }
@@ -83,6 +98,8 @@ pub(crate) struct GeometryData {
     pub occluded_filter_fn: *mut std::os::raw::c_void,
     /// Payloads only used for user geometry.
     pub user_fns: Option<UserGeometryPayloads>,
+    /// Payloads only used for subdivision geometry.
+    pub subdivision_fns: Option<SubdivisionGeometryPayloads>,
 }
 
 /// Extra data for a geometry.
@@ -197,11 +214,12 @@ impl<'buf> Geometry<'buf> {
                     intersect_filter_fn: ptr::null_mut(),
                     occluded_filter_fn: ptr::null_mut(),
                     user_fns: if kind == GeometryKind::USER {
-                        Some(UserGeometryPayloads {
-                            intersect_fn: ptr::null_mut(),
-                            occluded_fn: ptr::null_mut(),
-                            bounds_fn: ptr::null_mut(),
-                        })
+                        Some(UserGeometryPayloads::default())
+                    } else {
+                        None
+                    },
+                    subdivision_fns: if kind == GeometryKind::SUBDIVISION {
+                        Some(SubdivisionGeometryPayloads::default())
                     } else {
                         None
                     },
@@ -631,40 +649,20 @@ impl<'buf> Geometry<'buf> {
     /// the initial ray packet. However, under some circumstances these
     /// properties are guaranteed, and whether this is the case can be
     /// queried using [`Device::get_property`]. When performing ray queries
-    /// using the stream API such as [`Scene::intersect1M`],
-    /// [`Scene::intersect1Mp`], [`Scene::intersectNM`], or
-    /// [`Scene::intersectNp`] the order of rays and ray packet size of the
-    /// callback function might change to either 1, 4, 8, or 16.
+    /// using the stream API such as [`Scene::intersect_stream_aos`],
+    /// [`Scene::intersect1Mp`], [`Scene::intersect_stream_soa`], the order
+    /// of rays and ray packet size of the callback function might change to
+    /// either 1, 4, 8, or 16.
     ///
     /// For many usage scenarios, repacking and re-ordering of rays does not
     /// cause difficulties in implementing the callback function. However,
     /// algorithms that need to extend the ray with additional data must use
     /// the rayID component of the ray to identify the original ray to
     /// access the per-ray data.
-    ///
-    /// The implementation of the filter function can choose to implement a
-    /// single code path that uses the ray access helper functions
-    /// `RTCRay_XXX` and hit access helper functions `RTCHit_XXX` to access
-    /// ray and hit data. Alternatively the code can branch to optimized
-    /// implementations for specific sizes of N and cast the ray
-    /// and hit inputs to the proper packet types.
-    ///
-    /// # Safety
-    ///
-    /// Because the Embree filter function does not provide the user
-    /// data pointer, we cannot use a closure but instead a static function
-    /// pointer.
-    pub unsafe fn set_intersect_filter_function<F, D>(&mut self, filter: F)
+    pub fn set_intersect_filter_function<F, D>(&mut self, filter: F)
     where
         D: UserGeometryData,
-        F: FnMut(
-            &mut [i32],
-            Option<&mut D>,
-            &mut IntersectContext,
-            &mut RTCRayN,
-            &mut RTCHitN,
-            u32,
-        ),
+        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
     {
         let mut state = self.state.lock().unwrap();
         unsafe {
@@ -693,23 +691,10 @@ impl<'buf> Geometry<'buf> {
     /// inside or outside the leaf. Please see the description of the
     /// [`Geometry::set_intersect_filter_function`] for a description of the
     /// filter callback function.
-    ///
-    /// # Safety
-    ///
-    /// Because the Embree filter function does not provide the user
-    /// data pointer, we cannot use a closure but instead a static function
-    /// pointer.
-    pub unsafe fn set_occluded_filter_function<F, D>(&mut self, filter: F)
+    pub fn set_occluded_filter_function<F, D>(&mut self, filter: F)
     where
         D: UserGeometryData,
-        F: FnMut(
-            &mut [i32],
-            Option<&mut D>,
-            &mut IntersectContext,
-            &mut RTCRayN,
-            &mut RTCHitN,
-            u32,
-        ),
+        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
     {
         let mut state = self.state.lock().unwrap();
         unsafe {
@@ -888,24 +873,6 @@ impl<'buf> Geometry<'buf> {
         }
     }
 
-    /// Sets the number of topologies of a subdivision geometry.
-    ///
-    /// The number of topologies of a subdivision geometry must be greater
-    /// or equal to 1.
-    ///
-    /// To use multiple topologies, first the number of topologies must be
-    /// specified, then the individual topologies can be configured using
-    /// [`Geometry::set_subdivision_mode`] and by setting an index buffer
-    /// ([`BufferUsage::INDEX`]) using the topology ID as the buffer slot.
-    pub fn set_topology_count(&mut self, count: u32) {
-        match self.kind {
-            GeometryKind::SUBDIVISION => unsafe {
-                rtcSetGeometryTopologyCount(self.handle, count);
-            },
-            _ => panic!("Geometry::set_topology_count is only supported for subdivision meshes"),
-        }
-    }
-
     /// Sets the user-defined data pointer of the geometry.
     ///
     /// The user data pointer is intended to be pointing to the application's
@@ -981,44 +948,6 @@ impl<'buf> Geometry<'buf> {
         }
     }
 
-    /// Set the subdivision mode for the topology of the specified subdivision
-    /// geometry.
-    ///
-    /// The subdivision modes can be used to force linear interpolation for
-    /// certain parts of the subdivision mesh:
-    ///
-    /// * [`RTCSubdivisionMode::NO_BOUNDARY`]: Boundary patches are ignored.
-    /// This way each rendered patch has a full set of control vertices.
-    ///
-    /// * [`RTCSubdivisionMode::SMOOTH_BOUNDARY`]: The sequence of boundary
-    /// control points are used to generate a smooth B-spline boundary curve
-    /// (default mode).
-    ///
-    /// * [`RTCSubdivisionMode::PIN_CORNERS`]: Corner vertices are pinned to
-    /// their location during subdivision.
-    ///
-    /// * [`RTCSubdivisionMode::PIN_BOUNDARY`]: All vertices at the border are
-    /// pinned to their location during subdivision. This way the boundary is
-    /// interpolated linearly. This mode is typically used for texturing to also
-    /// map texels at the border of the texture to the mesh.
-    ///
-    /// * [`RTCSubdivisionMode::PIN_ALL`]: All vertices at the border are pinned
-    /// to their location during subdivision. This way all patches are linearly
-    /// interpolated.
-    pub fn set_subdivision_mode(&self, topology_id: u32, mode: RTCSubdivisionMode) {
-        match self.kind {
-            GeometryKind::SUBDIVISION => unsafe {
-                rtcSetGeometrySubdivisionMode(self.handle, topology_id, mode);
-            },
-            _ => {
-                panic!(
-                    "Subdivision mode not allowed for geometries of type {:?}!",
-                    self.kind
-                );
-            }
-        }
-    }
-
     /// Binds a vertex attribute to a topology of the geometry.
     ///
     /// This function binds a vertex attribute buffer slot to a topology for the
@@ -1038,104 +967,6 @@ impl<'buf> Geometry<'buf> {
     pub fn set_vertex_attribute_topology(&self, vertex_attribute_id: u32, topology_id: u32) {
         unsafe {
             rtcSetGeometryVertexAttributeTopology(self.handle, vertex_attribute_id, topology_id);
-        }
-    }
-
-    // TODO(yang): Add documentation.
-    /// Sets the displacement function for a subdivision geometry.
-    pub unsafe fn set_displacement_function(&self, displacement: RTCDisplacementFunctionN) {
-        match self.kind {
-            GeometryKind::SUBDIVISION => unsafe {
-                rtcSetGeometryDisplacementFunction(self.handle, displacement);
-            },
-            _ => {
-                panic!(
-                    "Displacement function not allowed for geometries of type {:?}!",
-                    self.kind
-                );
-            }
-        }
-    }
-
-    /// Returns the first half edge of a face.
-    ///
-    /// This function can only be used for subdivision meshes. As all topologies
-    /// of a subdivision geometry share the same face buffer the function does
-    /// not depend on the topology ID.
-    pub fn get_first_half_edge(&self, face_id: u32) -> u32 {
-        match self.kind {
-            GeometryKind::SUBDIVISION => unsafe {
-                rtcGetGeometryFirstHalfEdge(self.handle, face_id)
-            },
-            _ => {
-                panic!(
-                    "First half edge not allowed for geometries of type {:?}!",
-                    self.kind
-                );
-            }
-        }
-    }
-
-    /// Returns the face of some half edge.
-    ///
-    /// This function can only be used for subdivision meshes. As all topologies
-    /// of a subdivision geometry share the same face buffer the function does
-    /// not depend on the topology ID.
-    pub fn get_face(&self, half_edge_id: u32) -> u32 {
-        match self.kind {
-            GeometryKind::SUBDIVISION => unsafe { rtcGetGeometryFace(self.handle, half_edge_id) },
-            _ => {
-                panic!("Face not allowed for geometries of type {:?}!", self.kind);
-            }
-        }
-    }
-
-    /// Returns the next half edge of some half edge.
-    ///
-    /// This function can only be used for subdivision meshes. As all topologies
-    /// of a subdivision geometry share the same face buffer the function does
-    /// not depend on the topology ID.
-    pub fn get_next_half_edge(&self, half_edge_id: u32) -> u32 {
-        match self.kind {
-            GeometryKind::SUBDIVISION => unsafe {
-                rtcGetGeometryNextHalfEdge(self.handle, half_edge_id)
-            },
-            _ => {
-                panic!(
-                    "Next half edge not allowed for geometries of type {:?}!",
-                    self.kind
-                );
-            }
-        }
-    }
-
-    /// Returns the previous half edge of some half edge.
-    pub fn get_previous_half_edge(&self, half_edge_id: u32) -> u32 {
-        match self.kind {
-            GeometryKind::SUBDIVISION => unsafe {
-                rtcGetGeometryPreviousHalfEdge(self.handle, half_edge_id)
-            },
-            _ => {
-                panic!(
-                    "Prev half edge not allowed for geometries of type {:?}!",
-                    self.kind
-                );
-            }
-        }
-    }
-
-    /// Returns the opposite half edge of some half edge.
-    pub fn get_opposite_half_edge(&self, topology_id: u32, edge_id: u32) -> u32 {
-        match self.kind {
-            GeometryKind::SUBDIVISION => unsafe {
-                rtcGetGeometryOppositeHalfEdge(self.handle, topology_id, edge_id)
-            },
-            _ => {
-                panic!(
-                    "Opposite half edge not allowed for geometries of type {:?}!",
-                    self.kind
-                );
-            }
         }
     }
 }

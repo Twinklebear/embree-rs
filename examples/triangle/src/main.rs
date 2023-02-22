@@ -3,7 +3,7 @@
 extern crate embree;
 extern crate support;
 
-use embree::{BufferUsage, Device, Format, IntersectContext, RayHitN, RayN, TriangleMesh};
+use embree::{BufferUsage, Device, Format, IntersectContext, RayHitN, RayStream, TriangleMesh};
 
 fn main() {
     let display = support::Display::new(512, 512, "triangle");
@@ -47,7 +47,7 @@ fn main() {
             let y = -(j as f32 + 0.5) / img_dims.1 as f32 + 0.5;
 
             // Try out streams of scanlines across x
-            let mut rays = RayN::new(img_dims.0 as usize);
+            let mut rays = RayStream::new(img_dims.0 as usize);
             for (i, mut ray) in rays.iter_mut().enumerate() {
                 let x = (i as f32 + 0.5) / img_dims.0 as f32 - 0.5;
                 let dir_len = f32::sqrt(x * x + y * y + 1.0);

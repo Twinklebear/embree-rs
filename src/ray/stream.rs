@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// A ray stream stored in SoA format
-pub struct RayN {
+pub struct RayStream {
     org_x: Vec<f32>,
     org_y: Vec<f32>,
     org_z: Vec<f32>,
@@ -21,10 +21,10 @@ pub struct RayN {
     flags: Vec<::std::os::raw::c_uint>,
 }
 
-impl RayN {
+impl RayStream {
     /// Allocate a new Ray stream with room for `n` rays
-    pub fn new(n: usize) -> RayN {
-        RayN {
+    pub fn new(n: usize) -> RayStream {
+        RayStream {
             org_x: aligned_vector::<f32>(n, 16),
             org_y: aligned_vector::<f32>(n, 16),
             org_z: aligned_vector::<f32>(n, 16),
@@ -39,8 +39,8 @@ impl RayN {
             flags: aligned_vector_init::<u32>(n, 16, 0),
         }
     }
-    pub fn iter(&self) -> SoARayIter<RayN> { SoARayIter::new(self, self.len()) }
-    pub fn iter_mut(&mut self) -> SoARayIterMut<RayN> {
+    pub fn iter(&self) -> SoARayIter<RayStream> { SoARayIter::new(self, self.len()) }
+    pub fn iter_mut(&mut self) -> SoARayIterMut<RayStream> {
         let n = self.len();
         SoARayIterMut::new(self, n)
     }
@@ -64,7 +64,7 @@ impl RayN {
     }
 }
 
-impl SoARay for RayN {
+impl SoARay for RayStream {
     fn org(&self, i: usize) -> [f32; 3] { [self.org_x[i], self.org_y[i], self.org_z[i]] }
     fn set_org(&mut self, i: usize, o: [f32; 3]) {
         self.org_x[i] = o[0];
@@ -98,7 +98,7 @@ impl SoARay for RayN {
     fn set_flags(&mut self, i: usize, flags: u32) { self.flags[i] = flags; }
 }
 
-pub struct HitN {
+pub struct HitStream {
     ng_x: Vec<f32>,
     ng_y: Vec<f32>,
     ng_z: Vec<f32>,
@@ -109,9 +109,9 @@ pub struct HitN {
     inst_id: Vec<::std::os::raw::c_uint>,
 }
 
-impl HitN {
-    pub fn new(n: usize) -> HitN {
-        HitN {
+impl HitStream {
+    pub fn new(n: usize) -> HitStream {
+        HitStream {
             ng_x: aligned_vector::<f32>(n, 16),
             ng_y: aligned_vector::<f32>(n, 16),
             ng_z: aligned_vector::<f32>(n, 16),
@@ -126,8 +126,8 @@ impl HitN {
     pub fn hits<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
         self.geom_id.iter().map(|g| *g != u32::MAX)
     }
-    pub fn iter(&self) -> SoAHitIter<HitN> { SoAHitIter::new(self, self.len()) }
-    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item = SoAHitRef<HitN>> + 'a {
+    pub fn iter(&self) -> SoAHitIter<HitStream> { SoAHitIter::new(self, self.len()) }
+    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item = SoAHitRef<HitStream>> + 'a {
         SoAHitIter::new(self, self.len()).filter(|h| h.hit())
     }
     pub fn len(&self) -> usize { self.ng_x.len() }
@@ -145,7 +145,7 @@ impl HitN {
     }
 }
 
-impl SoAHit for HitN {
+impl SoAHit for HitStream {
     fn normal(&self, i: usize) -> [f32; 3] { [self.ng_x[i], self.ng_y[i], self.ng_z[i]] }
     fn set_normal(&mut self, i: usize, n: [f32; 3]) {
         self.ng_x[i] = n[0];
@@ -167,20 +167,20 @@ impl SoAHit for HitN {
     fn set_inst_id(&mut self, i: usize, id: u32) { self.inst_id[i] = id; }
 }
 
-pub struct RayHitN {
-    pub ray: RayN,
-    pub hit: HitN,
+pub struct RayHitStream {
+    pub ray: RayStream,
+    pub hit: HitStream,
 }
 
-impl RayHitN {
-    pub fn new(ray: RayN) -> RayHitN {
+impl RayHitStream {
+    pub fn new(ray: RayStream) -> RayHitStream {
         let n = ray.len();
-        RayHitN {
+        RayHitStream {
             ray,
-            hit: HitN::new(n),
+            hit: HitStream::new(n),
         }
     }
-    pub fn iter(&self) -> std::iter::Zip<SoARayIter<RayN>, SoAHitIter<HitN>> {
+    pub fn iter(&self) -> std::iter::Zip<SoARayIter<RayStream>, SoAHitIter<HitStream>> {
         self.ray.iter().zip(self.hit.iter())
     }
     pub fn len(&self) -> usize { self.ray.len() }
