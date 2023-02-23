@@ -2,9 +2,13 @@ use std::{
     any::TypeId, collections::HashMap, marker::PhantomData, num::NonZeroUsize, ptr, sync::Mutex,
 };
 
-use crate::{sys::*, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryKind, HitN, HitPacket, IntersectContext, RayN, RayPacket, Scene};
+use crate::{
+    aligned_vector, sys::*, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format,
+    GeometryKind, HitN, IntersectContext, RayN,
+};
 
 use std::{
+    borrow::Cow,
     ops::{Deref, DerefMut},
     rc::Rc,
 };
@@ -39,7 +43,7 @@ impl<T> UserGeometryData for T where T: Sized + Send + Sync + 'static {}
 /// This contains the pointer to the user-defined data and the type ID of the
 /// user-defined data (which is used to check the type when getting the data).
 #[derive(Debug, Clone)]
-pub(crate) struct UserData {
+pub(crate) struct GeometryUserData {
     /// Pointer to the user-defined data.
     pub data: *mut std::os::raw::c_void,
     /// Type ID of the user-defined data.
@@ -91,7 +95,7 @@ impl Default for SubdivisionGeometryPayloads {
 #[derive(Debug, Clone)]
 pub(crate) struct GeometryData {
     /// User-defined data.
-    pub user_data: Option<UserData>,
+    pub user_data: Option<GeometryUserData>,
     /// Payload for the [`Geometry::set_intersect_filter_function`] call.
     pub intersect_filter_fn: *mut std::os::raw::c_void,
     /// Payload for the [`Geometry::set_occluded_filter_function`] call.
@@ -601,7 +605,8 @@ impl<'buf> Geometry<'buf> {
     ///
     /// Only a single callback function can be registered per geometry, and
     /// further invocations overwrite the previously set callback function.
-    /// Passing `None` as the filter function removes the filter function.
+    /// Unregister the callback function by calling
+    /// [`Geometry::unset_intersect_filter_function`].
     ///
     /// The registered filter function is invoked for every hit encountered
     /// during the intersect-type ray queries and can accept or reject that
@@ -670,8 +675,15 @@ impl<'buf> Geometry<'buf> {
             state.data.intersect_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
             rtcSetGeometryIntersectFilterFunction(
                 self.handle,
-                crate::callback::intersect_filter_function_helper(&mut closure),
+                intersect_filter_function(&mut closure),
             );
+        }
+    }
+
+    /// Unsets the intersection filter function for the geometry.
+    pub fn unset_intersect_filter_function(&mut self) {
+        unsafe {
+            rtcSetGeometryIntersectFilterFunction(self.handle, None);
         }
     }
 
@@ -679,7 +691,8 @@ impl<'buf> Geometry<'buf> {
     ///
     /// Only a single callback function can be registered per geometry, and
     /// further invocations overwrite the previously set callback function.
-    /// Passing `None` as the filter function removes the filter function.
+    /// Unregister the callback function by calling
+    /// [`Geometry::unset_occluded_filter_function`].
     ///
     /// The registered intersection filter function is invoked for every hit
     /// encountered during the occluded-type ray queries and can accept or
@@ -702,8 +715,15 @@ impl<'buf> Geometry<'buf> {
             state.data.occluded_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
             rtcSetGeometryOccludedFilterFunction(
                 self.handle,
-                crate::callback::occluded_filter_function_helper(&mut closure),
+                occluded_filter_function(&mut closure),
             );
+        }
+    }
+
+    /// Unsets the occlusion filter function for the geometry.
+    pub fn unset_occluded_filter_function(&mut self) {
+        unsafe {
+            rtcSetGeometryOccludedFilterFunction(self.handle, None);
         }
     }
 
@@ -711,8 +731,8 @@ impl<'buf> Geometry<'buf> {
     ///
     /// Only a single callback function can be registered per geometry and
     /// further invocations overwrite the previously set callback function.
-    /// Passing `None` as function pointer disables the registered callback
-    /// function.
+    /// Unregister the callback function by calling
+    /// [`Geometry::unset_point_query_function`].
     ///
     /// The registered callback function is invoked by rtcPointQuery for every
     /// primitive of the geometry that intersects the corresponding point query
@@ -778,8 +798,15 @@ impl<'buf> Geometry<'buf> {
     /// rtcPointQuery is called. For a reference implementation of a closest
     /// point traversal of triangle meshes using instancing and user defined
     /// instancing see the tutorial [ClosestPoint].
-    pub unsafe fn set_point_query_function(&mut self, query_func: RTCPointQueryFunction) {
-        rtcSetGeometryPointQueryFunction(self.handle, query_func);
+    pub unsafe fn set_point_query_function<F>(&mut self, query_fn: RTCPointQueryFunction) {
+        rtcSetGeometryPointQueryFunction(self.handle, query_fn);
+    }
+
+    /// Unsets the point query function for the geometry.
+    pub fn unset_point_query_function(&mut self) {
+        unsafe {
+            rtcSetGeometryPointQueryFunction(self.handle, None);
+        }
     }
 
     /// Sets the tessellation rate for a subdivision mesh or flat curves.
@@ -886,7 +913,7 @@ impl<'buf> Geometry<'buf> {
         D: UserGeometryData,
     {
         let mut state = self.state.lock().unwrap();
-        state.data.user_data = Some(UserData {
+        state.data.user_data = Some(GeometryUserData {
             data: user_data as *mut D as *mut std::os::raw::c_void,
             type_id: TypeId::of::<D>(),
         });
@@ -907,7 +934,7 @@ impl<'buf> Geometry<'buf> {
             } else {
                 match (*ptr).user_data.as_mut() {
                     None => None,
-                    Some(user_data @ UserData { .. }) => {
+                    Some(user_data @ GeometryUserData { .. }) => {
                         if user_data.type_id == TypeId::of::<D>() {
                             Some(&mut *(user_data.data as *mut D))
                         } else {
@@ -967,6 +994,208 @@ impl<'buf> Geometry<'buf> {
     pub fn set_vertex_attribute_topology(&self, vertex_attribute_id: u32, topology_id: u32) {
         unsafe {
             rtcSetGeometryVertexAttributeTopology(self.handle, vertex_attribute_id, topology_id);
+        }
+    }
+
+    /// Smoothly interpolates per-vertex data over the geometry.
+    ///
+    /// This interpolation is supported for triangle meshes, quad meshes, curve
+    /// geometries, and subdivision geometries. Apart from interpolating the
+    /// vertex at- tribute itself, it is also possible to get the first and
+    /// second order derivatives of that value. This interpolation ignores
+    /// displacements of subdivision surfaces and always interpolates the
+    /// underlying base surface.
+    ///
+    /// Interpolated values are written to `args.p`, `args.dp_du`, `args.dp_dv`,
+    /// `args.ddp_du_du`, `args.ddp_dv_dv`, and `args.ddp_du_dv`. Set them to
+    /// `None` if you do not need to interpolate them.
+    ///
+    /// All output arrays must be padded to 16 bytes.
+    pub fn interpolate(&self, input: InterpolateInput, output: &mut InterpolateOutput) {
+        let args = RTCInterpolateArguments {
+            geometry: self.handle,
+            primID: input.prim_id,
+            u: input.u,
+            v: input.v,
+            bufferType: input.usage,
+            bufferSlot: input.slot,
+            P: output
+                .p
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            dPdu: output
+                .dp_du
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            dPdv: output
+                .dp_dv
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            ddPdudu: output
+                .ddp_du_du
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            ddPdvdv: output
+                .ddp_dv_dv
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            ddPdudv: output
+                .ddp_du_dv
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            valueCount: output.count,
+        };
+        unsafe {
+            rtcInterpolate(&args as _);
+        }
+    }
+
+    /// Performs N interpolations of vertex attribute data.
+    ///
+    /// Similar to [`Geometry::interpolate`], but performs N many interpolations
+    /// at once. It additionally gets an array of u/v coordinates
+    /// [`InterpolateNInput::u/v`]and a valid mask
+    /// [`InterpolateNInput::valid`] that specifies which of these
+    /// coordinates are valid. The valid mask points to `n` integers, and a
+    /// value of -1 denotes valid and 0 invalid.
+    ///
+    /// If [`InterpolateNInput::valid`] is `None`, all coordinates are
+    /// assumed to be valid.
+    ///
+    /// The destination arrays are filled in structure of array (SOA) layout.
+    /// The value [`InterpolateNInput::n`] must be divisible by 4.
+    ///
+    /// All changes to that geometry must be properly committed.
+    pub fn interpolate_n(&self, input: InterpolateNInput, output: &mut InterpolateOutput) {
+        assert_eq!(input.n % 4, 0, "N must be a multiple of 4!");
+        let args = RTCInterpolateNArguments {
+            geometry: self.handle,
+            N: input.n,
+            valid: input
+                .valid
+                .as_ref()
+                .map(|v| v.as_ptr() as *const _)
+                .unwrap_or(ptr::null()),
+            primIDs: input.prim_id.as_ptr(),
+            u: input.u.as_ptr(),
+            v: input.v.as_ptr(),
+            bufferType: input.usage,
+            bufferSlot: input.slot,
+            P: output
+                .p
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            dPdu: output
+                .dp_du
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            dPdv: output
+                .dp_dv
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            ddPdudu: output
+                .ddp_du_du
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            ddPdvdv: output
+                .ddp_dv_dv
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            ddPdudv: output
+                .ddp_du_dv
+                .as_mut()
+                .map(|p| p.as_mut_ptr())
+                .unwrap_or(ptr::null_mut()),
+            valueCount: output.count,
+        };
+        unsafe {
+            rtcInterpolateN(&args as _);
+        }
+    }
+}
+
+/// The arguments for the `Geometry::interpolate` function.
+pub struct InterpolateInput {
+    pub prim_id: u32,
+    pub u: f32,
+    pub v: f32,
+    pub usage: BufferUsage,
+    pub slot: u32,
+}
+
+/// The arguments for the `Geometry::interpolate_n` function.
+pub struct InterpolateNInput<'a> {
+    pub valid: Option<Cow<'a, [u32]>>,
+    pub prim_id: Cow<'a, [u32]>,
+    pub u: Cow<'a, [f32]>,
+    pub v: Cow<'a, [f32]>,
+    pub usage: BufferUsage,
+    pub slot: u32,
+    pub n: u32,
+}
+
+/// The output of the `Geometry::interpolate` and `Geometry::interpolate_n`
+/// functions in structure of array (SOA) layout.
+pub struct InterpolateOutput {
+    pub count: u32,
+    pub p: Option<Vec<f32>>,
+    pub dp_du: Option<Vec<f32>>,
+    pub dp_dv: Option<Vec<f32>>,
+    pub ddp_du_du: Option<Vec<f32>>,
+    pub ddp_dv_dv: Option<Vec<f32>>,
+    pub ddp_du_dv: Option<Vec<f32>>,
+}
+
+impl InterpolateOutput {
+    pub fn new(
+        count: u32,
+        origin_value: bool,
+        first_order_derivative: bool,
+        second_order_derivative: bool,
+    ) -> Self {
+        Self {
+            count,
+            p: if origin_value {
+                Some(aligned_vector::<f32>(count as usize, 16))
+            } else {
+                None
+            },
+            dp_du: if first_order_derivative {
+                Some(aligned_vector::<f32>(count as usize, 16))
+            } else {
+                None
+            },
+            dp_dv: if first_order_derivative {
+                Some(aligned_vector::<f32>(count as usize, 16))
+            } else {
+                None
+            },
+            ddp_du_du: if second_order_derivative {
+                Some(aligned_vector::<f32>(count as usize, 16))
+            } else {
+                None
+            },
+            ddp_dv_dv: if second_order_derivative {
+                Some(aligned_vector::<f32>(count as usize, 16))
+            } else {
+                None
+            },
+            ddp_du_dv: if second_order_derivative {
+                Some(aligned_vector::<f32>(count as usize, 16))
+            } else {
+                None
+            },
         }
     }
 }
@@ -1064,3 +1293,96 @@ impl_geometry_type!(QuadMesh, GeometryKind::QUAD,
     ///    p0 ------> p1
     ///        u
 );
+
+/// Helper function to convert a Rust closure to `RTCFilterFunctionN` callback
+/// for intersect.
+fn intersect_filter_function<F, D>(_f: &mut F) -> RTCFilterFunctionN
+where
+    D: UserGeometryData,
+    F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+{
+    unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
+    where
+        D: UserGeometryData,
+        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+    {
+        let cb_ptr =
+            (*((*args).geometryUserPtr as *mut GeometryData)).intersect_filter_fn as *mut F;
+        if !cb_ptr.is_null() {
+            let cb = &mut *cb_ptr;
+            let user_data = {
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    }
+                    None => None,
+                }
+            };
+            cb(
+                std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
+                user_data,
+                &mut *(*args).context,
+                RayN {
+                    ptr: &mut *(*args).ray,
+                    len: (*args).N as usize,
+                },
+                HitN {
+                    ptr: &mut *(*args).hit,
+                    len: (*args).N as usize,
+                },
+            );
+        }
+    }
+    Some(inner::<F, D>)
+}
+
+/// Helper function to convert a Rust closure to `RTCFilterFunctionN` callback
+/// for occluded.
+fn occluded_filter_function<F, D>(_f: &mut F) -> RTCFilterFunctionN
+where
+    D: UserGeometryData,
+    F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+{
+    unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
+    where
+        D: UserGeometryData,
+        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+    {
+        let len = (*args).N as usize;
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData)).occluded_filter_fn as *mut F;
+        if !cb_ptr.is_null() {
+            let cb = &mut *cb_ptr;
+            let user_data = {
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    }
+                    None => None,
+                }
+            };
+            cb(
+                std::slice::from_raw_parts_mut((*args).valid, len),
+                user_data,
+                &mut *(*args).context,
+                RayN {
+                    ptr: &mut *(*args).ray,
+                    len,
+                },
+                HitN {
+                    ptr: &mut *(*args).hit,
+                    len,
+                },
+            );
+        }
+    }
+
+    Some(inner::<F, D>)
+}

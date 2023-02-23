@@ -29,7 +29,7 @@ fn main() {
     let device = Device::new().unwrap();
 
     device.set_error_function(|err, msg| {
-        println!("error {:?}: {}", err, msg);
+        println!("[embree] {:?}: {}", err, msg);
     });
 
     let mut scene = device.create_scene().unwrap();

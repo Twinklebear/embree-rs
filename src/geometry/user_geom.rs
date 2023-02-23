@@ -1,9 +1,9 @@
 use crate::{
-    sys,
-    sys::{RTCRayHitN, RTCRayN},
-    Bounds, Device, Error, Geometry, GeometryKind, IntersectContext, UserGeometryData,
+    geometry::GeometryData, sys::*, Bounds, Device, Error, Geometry, GeometryKind,
+    IntersectContext, RayHitN, RayN, UserGeometryData,
 };
 use std::{
+    any::TypeId,
     ops::{Deref, DerefMut},
     ptr,
 };
@@ -30,8 +30,9 @@ impl UserGeometry {
     ///
     /// Only a single callback function can be registered per geometry, and
     /// further invocations overwrite the previously set callback function.
-    /// Passing `None` as function pointer disables the registered callback
-    /// function.
+    ///
+    /// Unregister the callback function by calling
+    /// [`UserGeometry::unset_bounds_function`].
     ///
     /// The registered bounding box callback function is invoked to calculate
     /// axis- aligned bounding boxes of the primitives of the user-defined
@@ -59,29 +60,33 @@ impl UserGeometry {
         D: UserGeometryData,
         F: FnMut(Option<&mut D>, u32, u32, &mut Bounds),
     {
-        match self.kind {
-            GeometryKind::USER => unsafe {
-                let mut state = self.state.lock().unwrap();
-                let mut closure = bounds;
-                state.data.user_fns.as_mut().unwrap().bounds_fn =
-                    &mut closure as *mut _ as *mut std::os::raw::c_void;
-                sys::rtcSetGeometryBoundsFunction(
-                    self.handle,
-                    crate::callback::user_bounds_function_helper(&mut closure),
-                    ptr::null_mut(),
-                );
-            },
-            _ => panic!("Only user-defined geometries can have a bounds function"),
+        unsafe {
+            let mut state = self.state.lock().unwrap();
+            let mut closure = bounds;
+            state.data.user_fns.as_mut().unwrap().bounds_fn =
+                &mut closure as *mut _ as *mut std::os::raw::c_void;
+            rtcSetGeometryBoundsFunction(
+                self.handle,
+                bounds_function(&mut closure),
+                ptr::null_mut(),
+            );
         }
     }
 
-    // TODO(yang): deal with RTCRayHitN, then we can make this function safe
+    /// Unsets the callback to calculate the bounding box of user-defined
+    /// geometry.
+    pub fn unset_bounds_function(&mut self) {
+        unsafe {
+            rtcSetGeometryBoundsFunction(self.handle, None, ptr::null_mut());
+        }
+    }
+
     /// Sets the callback function to intersect a user geometry.
     ///
     /// Only a single callback function can be registered per geometry and
     /// further invocations overwrite the previously set callback function.
-    /// Passing `None` as function pointer disables the registered callback
-    /// function.
+    /// Unregister the callback function by calling
+    /// [`UserGeometry::unset_intersect_function`].
     ///
     /// The registered callback function is invoked by intersect-type ray
     /// queries to calculate the intersection of a ray packet of variable
@@ -136,22 +141,22 @@ impl UserGeometry {
     pub fn set_intersect_function<F, D>(&mut self, intersect: F)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayHitN, u32),
+        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayHitN),
     {
-        // TODO: deal with RTCRayHitN
         let mut state = self.state.lock().unwrap();
         let mut closure = intersect;
         state.data.user_fns.as_mut().unwrap().intersect_fn =
             &mut closure as *mut _ as *mut std::os::raw::c_void;
-        unsafe {
-            sys::rtcSetGeometryIntersectFunction(
-                self.handle,
-                crate::callback::user_intersect_function_helper(&mut closure),
-            )
-        };
+        unsafe { rtcSetGeometryIntersectFunction(self.handle, intersect_function(&mut closure)) };
     }
 
-    // TODO(yang): deal with RTCRayN, then we can make this function safe
+    /// Unsets the callback to intersect user-defined geometry.
+    pub fn unset_intersect_function(&mut self) {
+        unsafe {
+            rtcSetGeometryIntersectFunction(self.handle, None);
+        }
+    }
+
     /// Sets the callback function to occlude a user geometry.
     ///
     /// Similar to [`Geometry::set_intersect_function`], but for occlusion
@@ -159,26 +164,174 @@ impl UserGeometry {
     pub fn set_occluded_function<F, D>(&mut self, occluded: F)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, &mut RTCRayN, u32),
+        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN),
     {
-        // TODO: deal with RTCRayN
         let mut state = self.state.lock().unwrap();
         let mut closure = occluded;
         state.data.user_fns.as_mut().unwrap().occluded_fn =
             &mut closure as *mut _ as *mut std::os::raw::c_void;
+        unsafe { rtcSetGeometryOccludedFunction(self.handle, occluded_function(&mut closure)) };
+    }
+
+    /// Unsets the callback to occlude user-defined geometry.
+    pub fn unset_occluded_function(&mut self) {
         unsafe {
-            sys::rtcSetGeometryOccludedFunction(
-                self.handle,
-                crate::callback::user_occluded_function_helper(&mut closure),
-            )
-        };
+            rtcSetGeometryOccludedFunction(self.handle, None);
+        }
     }
 
     /// Sets the number of primitives of a user-defined geometry.
     pub fn set_primitive_count(&mut self, count: u32) {
         // Update the primitive count.
         unsafe {
-            sys::rtcSetGeometryUserPrimitiveCount(self.handle, count);
+            rtcSetGeometryUserPrimitiveCount(self.handle, count);
         }
     }
+}
+
+/// Helper function to convert a Rust closure to `RTCBoundsFunction` callback.
+fn bounds_function<F, D>(_f: &mut F) -> RTCBoundsFunction
+where
+    D: UserGeometryData,
+    F: FnMut(Option<&mut D>, u32, u32, &mut Bounds),
+{
+    unsafe extern "C" fn inner<F, D>(args: *const RTCBoundsFunctionArguments)
+    where
+        D: UserGeometryData,
+        F: FnMut(Option<&mut D>, u32, u32, &mut Bounds),
+    {
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+            .user_fns
+            .as_ref()
+            .expect(
+                "User payloads not set! Make sure the geometry was created with kind \
+                 GeometryKind::USER",
+            )
+            .bounds_fn as *mut F;
+        if !cb_ptr.is_null() {
+            let cb = &mut *cb_ptr;
+            let user_data = {
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    }
+                    None => None,
+                }
+            };
+            cb(
+                user_data,
+                (*args).primID,
+                (*args).timeStep,
+                &mut *(*args).bounds_o,
+            );
+        }
+    }
+
+    Some(inner::<F, D>)
+}
+
+/// Helper function to convert a Rust closure to `RTCIntersectFunctionN`
+/// callback.
+fn intersect_function<F, D>(_f: &mut F) -> RTCIntersectFunctionN
+where
+    D: UserGeometryData,
+    F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayHitN),
+{
+    unsafe extern "C" fn inner<F, D>(args: *const RTCIntersectFunctionNArguments)
+    where
+        D: UserGeometryData,
+        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayHitN),
+    {
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+            .user_fns
+            .as_ref()
+            .expect(
+                "User payloads not set! Make sure the geometry was created with kind \
+                 GeometryKind::USER",
+            )
+            .intersect_fn as *mut F;
+        if !cb_ptr.is_null() {
+            let cb = &mut *cb_ptr;
+            let user_data = {
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    }
+                    None => None,
+                }
+            };
+            cb(
+                std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
+                user_data,
+                (*args).geomID,
+                (*args).primID,
+                &mut *(*args).context,
+                RayHitN {
+                    ptr: (*args).rayhit,
+                    len: (*args).N as usize,
+                },
+            );
+        }
+    }
+
+    Some(inner::<F, D>)
+}
+
+/// Helper function to convert a Rust closure to `RTCOccludedFunctionN`
+/// callback.
+fn occluded_function<F, D>(_f: &mut F) -> RTCOccludedFunctionN
+where
+    D: UserGeometryData,
+    F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN),
+{
+    unsafe extern "C" fn inner<F, D>(args: *const RTCOccludedFunctionNArguments)
+    where
+        D: UserGeometryData,
+        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN),
+    {
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+            .user_fns
+            .as_ref()
+            .expect(
+                "User payloads not set! Make sure the geometry was created with kind \
+                 GeometryKind::USER",
+            )
+            .occluded_fn as *mut F;
+        if !cb_ptr.is_null() {
+            let cb = &mut *cb_ptr;
+            let user_data = {
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    }
+                    None => None,
+                }
+            };
+            cb(
+                std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
+                user_data,
+                (*args).geomID,
+                (*args).primID,
+                &mut *(*args).context,
+                RayN {
+                    ptr: (*args).ray,
+                    len: (*args).N as usize,
+                },
+            )
+        }
+    }
+
+    Some(inner::<F, D>)
 }

@@ -12,11 +12,10 @@
 //! See the [examples/](https://github.com/Twinklebear/embree-rs/tree/master/examples)
 //! for some example applications using the bindings.
 
-use std::{alloc, mem, mem::MaybeUninit};
+use std::{alloc, mem};
 
 mod buffer;
 mod bvh;
-mod callback;
 mod context;
 mod device;
 mod error;
@@ -231,6 +230,9 @@ impl Bounds {
 ///
 /// See [`Scene::point_query`] for more information.
 pub type PointQuery = sys::RTCPointQuery;
+
+/// Primitives that can be used to build a BVH.
+pub type BuildPrimitive = sys::RTCBuildPrimitive;
 
 /// Utility for making specifically aligned vectors
 pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {

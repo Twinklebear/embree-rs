@@ -1,7 +1,6 @@
 use crate::{
     sys, Hit, Ray, RayHit, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut,
 };
-use std::{marker::PhantomData, ops::Add};
 
 mod sealed {
     pub trait Sealed {}

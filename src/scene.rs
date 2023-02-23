@@ -1,19 +1,19 @@
 use crate::{
-    sys, Bounds, Error, Ray16, Ray8, RayHit16, RayHit8, RayHitPacket, RayHitStream, RayPacket,
-    SceneFlags, SoARay,
+    Bounds, Error, PointQuery, PointQueryContext, Ray16, Ray8, RayHit16, RayHit8, RayHitPacket,
+    RayHitStream, RayPacket, SceneFlags,
 };
 use std::{
+    any::TypeId,
     collections::HashMap,
-    mem,
+    mem, ptr,
     sync::{Arc, Mutex},
 };
 
 use crate::{
-    callback,
     context::IntersectContext,
     device::Device,
     geometry::Geometry,
-    ray::{Ray, Ray4, RayHit, RayHit4, RayHitN, RayStream},
+    ray::{Ray, Ray4, RayHit, RayHit4, RayStream},
     sys::*,
 };
 
@@ -23,6 +23,7 @@ pub struct Scene {
     pub(crate) handle: RTCScene,
     pub(crate) device: Device,
     geometries: Arc<Mutex<HashMap<u32, Geometry<'static>>>>,
+    point_query_user_data: Arc<Mutex<PointQueryUserData>>,
 }
 
 impl Clone for Scene {
@@ -32,6 +33,7 @@ impl Clone for Scene {
             handle: self.handle,
             device: self.device.clone(),
             geometries: self.geometries.clone(),
+            point_query_user_data: self.point_query_user_data.clone(),
         }
     }
 }
@@ -55,6 +57,7 @@ impl Scene {
                 handle,
                 device,
                 geometries: Default::default(),
+                point_query_user_data: Arc::new(Mutex::new(PointQueryUserData::default())),
             })
         }
     }
@@ -231,6 +234,111 @@ impl Scene {
     /// ```
     pub fn get_flags(&self) -> RTCSceneFlags { unsafe { rtcGetSceneFlags(self.handle) } }
 
+    /// Traverses the BVH with a point query object.
+    ///
+    /// Traverses the BVH using the point query object and calls a user defined
+    /// callback function for each primitive of the scene that intersects the
+    /// query domain.
+    ///
+    /// The user has to initialize the query location (x, y and z member) and
+    /// query radius in the range [0, ∞]. If the scene contains motion blur
+    /// geometries, also the query time (time member) must be initialized to
+    /// a value in the range [0, 1].
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The point query object.
+    ///
+    /// * `context` - The point query context object. It contains ID and
+    ///   transformation information of the instancing hierarchy if
+    ///   (multilevel-)instancing is used. See [`PointQueryContext`].
+    ///
+    /// * `query_fn` - The user defined callback function. For each primitive
+    ///   that intersects the query domain, the callback function is called, in
+    ///   which distance computations to the primitive can be implemented. The
+    ///   user will be provided with the primitive ID and geometry ID of the
+    ///   according primitive, however, the geometry information has to be
+    ///   determined manually. The callback function can be `None`, in which
+    ///   case the callback function is not invoked.
+    ///
+    /// * `user_data` - The user defined data that is passed to the callback.
+    ///
+    /// A callback function can still get attached to a specific [`Geometry`]
+    /// object using [`Geometry::set_point_query_function`]. If a callback
+    /// function is attached to a geometry, and (a potentially different)
+    /// callback function is passed to this function, both functions will be
+    /// called for the primitives of the according geometries.
+    ///
+    /// The query radius can be decreased inside the callback function, which
+    /// allows to efficiently cull parts of the scene during BVH traversal.
+    /// Increasing the query radius and modifying time or location of the query
+    /// will result in undefined behavior.
+    ///
+    /// The callback function will be called for all primitives in a leaf node
+    /// of the BVH even if the primitive is outside the query domain,
+    /// since Embree does not gather geometry information of primitives
+    /// internally.
+    ///
+    /// Point queries can be used with (multi-)instancing. However, care has to
+    /// be taken when the instance transformation contains anisotropic scaling
+    /// or sheering. In these cases distance computations have to be performed
+    /// in world space to ensure correctness and the ellipsoidal query domain
+    /// (in instance space) will be approximated with its axis aligned
+    /// bounding box internally. Therefore, the callback function might be
+    /// invoked even for primitives in inner BVH nodes that do not intersect
+    /// the query domain.
+    ///
+    /// The point query structure must be aligned to 16 bytes.
+    ///
+    /// Currently, all primitive types are supported by the point query API
+    /// except of points (see [`GeometryKind::POINT`]), curves (see
+    /// [`GeometryKind::CURVE`]) and subdivision surfaces (see
+    /// [`GeometryKind::SUBDIVISION]).
+    ///
+    /// See **closet_point** in examples folder for an example of this.
+    pub fn point_query<F, D>(
+        &self,
+        query: &mut PointQuery,
+        context: &mut PointQueryContext,
+        query_fn: Option<F>,
+        mut user_data: Option<D>,
+    ) where
+        D: UserPointQueryData,
+        F: FnMut(&mut PointQuery, &mut PointQueryContext, Option<&mut D>, u32, u32, f32) -> bool,
+    {
+        let mut query_fn = query_fn;
+        let point_query_user_data = PointQueryUserData {
+            scene_closure: if query_fn.is_some() {
+                query_fn.as_mut().unwrap() as *mut F as *mut _
+            } else {
+                ptr::null_mut()
+            },
+            data: if user_data.is_some() {
+                user_data.as_mut().unwrap() as *mut D as *mut _
+            } else {
+                ptr::null_mut()
+            },
+            type_id: TypeId::of::<D>(),
+        };
+        unsafe {
+            rtcPointQuery(
+                self.handle,
+                query as *mut _,
+                context as *mut _,
+                if query_fn.is_some() {
+                    point_query_function(query_fn.as_mut().unwrap())
+                } else {
+                    None
+                },
+                if query_fn.is_some() {
+                    point_query_user_data.data as *mut D as *mut _
+                } else {
+                    std::ptr::null_mut()
+                },
+            );
+        }
+    }
+
     /// Set the build quality of the scene. See [`RTCBuildQuality`] for all
     /// possible values.
     ///
@@ -276,23 +384,22 @@ impl Scene {
     /// # Warning
     ///
     /// Must be called after the scene has been committed.
-    pub fn set_progress_monitor_function<F>(&self, progress: F)
+    pub fn set_progress_monitor_function<F>(&mut self, progress: F)
     where
         F: FnMut(f64) -> bool,
     {
         unsafe {
             let mut closure = progress;
-
             rtcSetSceneProgressMonitorFunction(
                 self.handle,
-                callback::progress_monitor_function_helper(&mut closure),
+                progress_monitor_function(&mut closure),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }
     }
 
     /// Unregister the progress monitor callback function.
-    pub fn unset_progress_monitor_function(&self) {
+    pub fn unset_progress_monitor_function(&mut self) {
         unsafe {
             rtcSetSceneProgressMonitorFunction(self.handle, None, ::std::ptr::null_mut());
         }
@@ -753,6 +860,85 @@ impl Scene {
         }
         bounds
     }
+}
+
+pub trait UserPointQueryData: Sized + Send + Sync + 'static {}
+
+impl<T> UserPointQueryData for T where T: Sized + Send + Sync + 'static {}
+
+/// User data for callback of [`Scene::point_query`] and
+/// [`Geometry::set_point_query_function`].
+#[derive(Debug)]
+pub(crate) struct PointQueryUserData {
+    pub scene_closure: *mut std::os::raw::c_void,
+    pub data: *mut std::os::raw::c_void,
+    pub type_id: TypeId,
+}
+
+impl Default for PointQueryUserData {
+    fn default() -> Self {
+        Self {
+            scene_closure: ptr::null_mut(),
+            data: ptr::null_mut(),
+            type_id: TypeId::of::<()>(),
+        }
+    }
+}
+
+/// Helper function to convert a Rust closure to `RTCProgressMonitorFunction`
+/// callback.
+fn progress_monitor_function<F>(_f: &mut F) -> RTCProgressMonitorFunction
+where
+    F: FnMut(f64) -> bool,
+{
+    unsafe extern "C" fn inner<F>(f: *mut std::os::raw::c_void, n: f64) -> bool
+    where
+        F: FnMut(f64) -> bool,
+    {
+        let cb = &mut *(f as *mut F);
+        cb(n)
+    }
+
+    Some(inner::<F>)
+}
+
+/// Helper function to convert a Rust closure to `RTCPointQueryFunction`
+/// callback.
+fn point_query_function<F, D>(_f: &mut F) -> RTCPointQueryFunction
+where
+    D: UserPointQueryData,
+    F: FnMut(&mut PointQuery, &mut PointQueryContext, Option<&mut D>, u32, u32, f32) -> bool,
+{
+    unsafe extern "C" fn inner<F, D>(args: *mut RTCPointQueryFunctionArguments) -> bool
+    where
+        D: UserPointQueryData,
+        F: FnMut(&mut PointQuery, &mut PointQueryContext, Option<&mut D>, u32, u32, f32) -> bool,
+    {
+        let user_data = &mut *((*args).userPtr as *mut PointQueryUserData);
+        let cb_ptr = user_data.scene_closure as *mut F;
+        if !cb_ptr.is_null() {
+            let data = {
+                if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
+                    None
+                } else {
+                    Some(&mut *(user_data.data as *mut D))
+                }
+            };
+            let cb = &mut *cb_ptr;
+            cb(
+                &mut *(*args).query,
+                &mut *(*args).context,
+                data,
+                (*args).primID,
+                (*args).geomID,
+                (*args).similarityScale,
+            )
+        } else {
+            false
+        }
+    }
+
+    Some(inner::<F, D>)
 }
 
 // TODO: implement rtcIntersect1Mp

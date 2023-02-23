@@ -66,9 +66,9 @@ impl Device {
     /// ```no_run
     /// use embree::Device;
     /// let device = Device::new().unwrap();
-    /// device.set_error_function(|error, msg| {
+    /// device.set_error_function(Some(|error, msg| {
     ///     println!("Error: {:?} {}", error, msg);
-    /// });
+    /// }));
     /// ```
     pub fn set_error_function<F>(&self, error_fn: F)
     where
@@ -78,7 +78,7 @@ impl Device {
         unsafe {
             rtcSetDeviceErrorFunction(
                 self.handle,
-                crate::callback::error_function_helper(&mut closure),
+                error_function(&mut closure),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }
@@ -104,12 +104,14 @@ impl Device {
     /// Unregister with [`Device::unset_memory_monitor_function`].
     ///
     /// # Arguments
+    ///
     /// * `monitor_fn` - A callback function that takes two arguments:
-    ///    * `bytes: isize` - The number of bytes allocated or deallocated
-    /// (> 0 for allocations and < 0 for deallocations). The Embree `Device`
-    ///   atomically accumulating `bytes` input parameter.
-    ///    * `post: bool` - Whether the callback is invoked after the allocation
-    ///      or deallocation took place.
+    ///
+    /// * `bytes: isize` - The number of bytes allocated or deallocated (> 0 for
+    ///   allocations and < 0 for deallocations). The Embree `Device` atomically
+    ///   accumulating `bytes` input parameter.
+    /// * `post: bool` - Whether the callback is invoked after the allocation or
+    ///   deallocation took place.
     ///
     /// Embree will continue its operation normally when the callback function
     /// returns `true`. If `false` returned, Embree will cancel the current
@@ -129,14 +131,14 @@ impl Device {
     /// ```no_run
     /// use embree::Device;
     /// let device = Device::new().unwrap();
-    /// device.set_memory_monitor_function(|bytes, post| {
+    /// device.set_memory_monitor_function(Some(|bytes, post| {
     ///     if bytes > 0 {
     ///         println!("allocated {} bytes", bytes);
     ///     } else {
     ///         println!("deallocated {} bytes", -bytes);
     ///     };
     ///     true
-    /// });
+    /// }));
     /// ```
     pub fn set_memory_monitor_function<F>(&self, monitor_fn: F)
     where
@@ -146,7 +148,7 @@ impl Device {
         unsafe {
             rtcSetDeviceMemoryMonitorFunction(
                 self.handle,
-                crate::callback::memory_monitor_function_helper(&mut closure),
+                memory_monitor_function(&mut closure),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }
@@ -214,7 +216,7 @@ impl Device {
 
     /// Creates a [`Geometry`] object bound to the device without any
     /// buffers attached.
-    pub fn create_geometry<'a, 'b>(&'a self, kind: GeometryKind) -> Result<Geometry<'b>, Error> {
+    pub fn create_geometry<'a>(&self, kind: GeometryKind) -> Result<Geometry<'a>, Error> {
         Geometry::new(self, kind)
     }
 }
@@ -376,10 +378,12 @@ pub fn enable_ftz_and_daz() {
     }
 }
 
+/// Default error function.
 fn default_error_function(error: Error, msg: &str) {
-    eprintln!("Embree error {:?} - {}", error, msg);
+    eprintln!("[Embree] {:?} - {}", error, msg);
 }
 
+/// Helper function to create a new Embree device.
 fn create_device(config: Option<CString>) -> Result<Device, Error> {
     enable_ftz_and_daz();
     let config = config.unwrap_or_else(|| Config::default().to_c_string());
@@ -391,4 +395,40 @@ fn create_device(config: Option<CString>) -> Result<Device, Error> {
         device.set_error_function(default_error_function);
         Ok(device)
     }
+}
+
+/// Helper function to convert a Rust closure to `RTCErrorFunction` callback.
+fn error_function<F>(_f: &mut F) -> RTCErrorFunction
+where
+    F: FnMut(RTCError, &'static str),
+{
+    unsafe extern "C" fn inner<F>(
+        f: *mut std::os::raw::c_void,
+        error: RTCError,
+        msg: *const std::os::raw::c_char,
+    ) where
+        F: FnMut(RTCError, &'static str),
+    {
+        let cb = &mut *(f as *mut F);
+        cb(error, std::ffi::CStr::from_ptr(msg).to_str().unwrap())
+    }
+
+    Some(inner::<F>)
+}
+
+/// Helper function to convert a Rust closure to `RTCMemoryMonitorFunction`
+/// callback.
+fn memory_monitor_function<F>(_f: &mut F) -> RTCMemoryMonitorFunction
+where
+    F: FnMut(isize, bool) -> bool,
+{
+    unsafe extern "C" fn inner<F>(f: *mut std::os::raw::c_void, bytes: isize, post: bool) -> bool
+    where
+        F: FnMut(isize, bool) -> bool,
+    {
+        let cb = &mut *(f as *mut F);
+        cb(bytes, post)
+    }
+
+    Some(inner::<F>)
 }
