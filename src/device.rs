@@ -66,9 +66,9 @@ impl Device {
     /// ```no_run
     /// use embree::Device;
     /// let device = Device::new().unwrap();
-    /// device.set_error_function(Some(|error, msg| {
+    /// device.set_error_function(|error, msg| {
     ///     println!("Error: {:?} {}", error, msg);
-    /// }));
+    /// });
     /// ```
     pub fn set_error_function<F>(&self, error_fn: F)
     where
@@ -131,14 +131,14 @@ impl Device {
     /// ```no_run
     /// use embree::Device;
     /// let device = Device::new().unwrap();
-    /// device.set_memory_monitor_function(Some(|bytes, post| {
+    /// device.set_memory_monitor_function(|bytes, post| {
     ///     if bytes > 0 {
     ///         println!("allocated {} bytes", bytes);
     ///     } else {
     ///         println!("deallocated {} bytes", -bytes);
     ///     };
     ///     true
-    /// }));
+    /// });
     /// ```
     pub fn set_memory_monitor_function<F>(&self, monitor_fn: F)
     where

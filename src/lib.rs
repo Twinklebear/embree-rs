@@ -86,7 +86,7 @@ pub type GeometryKind = sys::RTCGeometryType;
 ///
 /// 1. A upper triangular scaling/skew/shift matrix
 ///
-///   ```
+///   ```ignore
 ///   | scale_x  skew_xy  skew_xz  shift_x |
 ///   |   0      scale_y  skew_yz  shift_y |
 ///   |   0         0     scale_z  shitf_z |
@@ -94,7 +94,7 @@ pub type GeometryKind = sys::RTCGeometryType;
 ///   ```
 ///
 /// 2. A translation matrix
-///   ```
+///   ```ignore
 ///   | 1   0   0 translation_x |
 ///   | 0   1   0 translation_y |
 ///   | 0   0   1 translation_z |

@@ -147,7 +147,6 @@ impl SubdivisionGeometry {
         D: UserGeometryData,
         F: FnMut(
             Option<&mut D>,
-            sys::RTCGeometry,
             u32,
             u32,
             &[f32],
@@ -164,17 +163,14 @@ impl SubdivisionGeometry {
         unsafe {
             let mut closure = displacement;
             state.data.intersect_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
-            sys::rtcSetGeometryDisplacementFunction(
-                self.handle,
-                displacement_function(&mut closure),
-            )
+            rtcSetGeometryDisplacementFunction(self.handle, displacement_function(&mut closure))
         }
     }
 
     /// Removes the displacement function for a subdivision geometry.
     pub fn unset_displacement_function(&mut self) {
         unsafe {
-            sys::rtcSetGeometryDisplacementFunction(self.handle, None);
+            rtcSetGeometryDisplacementFunction(self.handle, None);
         }
     }
 }
@@ -186,7 +182,6 @@ where
     D: UserGeometryData,
     F: FnMut(
         Option<&mut D>,
-        RTCGeometry,
         u32,
         u32,
         &[f32],
@@ -204,7 +199,6 @@ where
         D: UserGeometryData,
         F: FnMut(
             Option<&mut D>,
-            RTCGeometry,
             u32,
             u32,
             &[f32],
@@ -239,19 +233,19 @@ where
                     None => None,
                 }
             };
+            let len = (*args).N as usize;
             cb(
                 user_data,
-                (*args).geometry,
                 (*args).primID,
                 (*args).timeStep,
-                std::slice::from_raw_parts((*args).u, (*args).N as usize),
-                std::slice::from_raw_parts((*args).v, (*args).N as usize),
-                std::slice::from_raw_parts((*args).Ng_x, (*args).N as usize * 3),
-                std::slice::from_raw_parts((*args).Ng_y, (*args).N as usize * 3),
-                std::slice::from_raw_parts((*args).Ng_z, (*args).N as usize * 3),
-                std::slice::from_raw_parts_mut((*args).P_x, (*args).N as usize * 3),
-                std::slice::from_raw_parts_mut((*args).P_y, (*args).N as usize * 3),
-                std::slice::from_raw_parts_mut((*args).P_z, (*args).N as usize * 3),
+                std::slice::from_raw_parts((*args).u, len),
+                std::slice::from_raw_parts((*args).v, len),
+                std::slice::from_raw_parts((*args).Ng_x, len),
+                std::slice::from_raw_parts((*args).Ng_y, len),
+                std::slice::from_raw_parts((*args).Ng_z, len),
+                std::slice::from_raw_parts_mut((*args).P_x, len),
+                std::slice::from_raw_parts_mut((*args).P_y, len),
+                std::slice::from_raw_parts_mut((*args).P_z, len),
             );
         }
     }
