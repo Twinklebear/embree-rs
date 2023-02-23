@@ -4,20 +4,16 @@ use std::{
 
 use crate::{
     aligned_vector, sys::*, Bounds, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format,
-    GeometryKind, HitN, IntersectContext, RayHitN, RayN,
+    GeometryKind, HitN, IntersectContext, QuaternionDecomposition, RayHitN, RayN, Scene,
+    SubdivisionMode,
 };
 
 use std::{
     borrow::Cow,
     ops::{Deref, DerefMut},
     rc::Rc,
+    slice::Iter,
 };
-
-mod instance;
-mod subdivision;
-
-pub use instance::*;
-pub use subdivision::*;
 
 // TODO(yang): maybe enforce format and stride when get the view?
 /// Information about how a (part of) buffer is bound to a geometry.
@@ -1309,6 +1305,253 @@ impl<'buf> Geometry<'buf> {
             _ => panic!("Only user geometries can have a primitive count!"),
         }
     }
+
+    /// Set the subdivision mode for the topology of the specified subdivision
+    /// geometry.
+    ///
+    /// The subdivision modes can be used to force linear interpolation for
+    /// certain parts of the subdivision mesh:
+    ///
+    /// * [`RTCSubdivisionMode::NO_BOUNDARY`]: Boundary patches are ignored.
+    /// This way each rendered patch has a full set of control vertices.
+    ///
+    /// * [`RTCSubdivisionMode::SMOOTH_BOUNDARY`]: The sequence of boundary
+    /// control points are used to generate a smooth B-spline boundary curve
+    /// (default mode).
+    ///
+    /// * [`RTCSubdivisionMode::PIN_CORNERS`]: Corner vertices are pinned to
+    /// their location during subdivision.
+    ///
+    /// * [`RTCSubdivisionMode::PIN_BOUNDARY`]: All vertices at the border are
+    /// pinned to their location during subdivision. This way the boundary is
+    /// interpolated linearly. This mode is typically used for texturing to also
+    /// map texels at the border of the texture to the mesh.
+    ///
+    /// * [`RTCSubdivisionMode::PIN_ALL`]: All vertices at the border are pinned
+    /// to their location during subdivision. This way all patches are linearly
+    /// interpolated.
+    pub fn set_subdivision_mode(&self, topology_id: u32, mode: SubdivisionMode) {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcSetGeometrySubdivisionMode(self.handle, topology_id, mode)
+            },
+            _ => panic!("Only subdivision geometries can have a subdivision mode!"),
+        }
+    }
+
+    /// Sets the number of topologies of a subdivision geometry.
+    ///
+    /// The number of topologies of a subdivision geometry must be greater
+    /// or equal to 1.
+    ///
+    /// To use multiple topologies, first the number of topologies must be
+    /// specified, then the individual topologies can be configured using
+    /// [`Geometry::set_subdivision_mode`] and by setting an index buffer
+    /// ([`BufferUsage::INDEX`]) using the topology ID as the buffer slot.
+    pub fn set_topology_count(&mut self, count: u32) {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcSetGeometryTopologyCount(self.handle, count);
+            },
+            _ => panic!("Only subdivision geometries can have multiple topologies!"),
+        }
+    }
+
+    /// Returns the first half edge of a face.
+    ///
+    /// This function can only be used for subdivision meshes. As all topologies
+    /// of a subdivision geometry share the same face buffer the function does
+    /// not depend on the topology ID.
+    pub fn get_first_half_edge(&self, face_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcGetGeometryFirstHalfEdge(self.handle, face_id)
+            },
+            _ => panic!("Only subdivision geometries can have half edges!"),
+        }
+    }
+
+    /// Returns the face of some half edge.
+    ///
+    /// This function can only be used for subdivision meshes. As all topologies
+    /// of a subdivision geometry share the same face buffer the function does
+    /// not depend on the topology ID.
+    pub fn get_face(&self, half_edge_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe { rtcGetGeometryFace(self.handle, half_edge_id) },
+            _ => panic!("Only subdivision geometries can have half edges!"),
+        }
+    }
+
+    /// Returns the next half edge of some half edge.
+    ///
+    /// This function can only be used for subdivision meshes. As all topologies
+    /// of a subdivision geometry share the same face buffer the function does
+    /// not depend on the topology ID.
+    pub fn get_next_half_edge(&self, half_edge_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcGetGeometryNextHalfEdge(self.handle, half_edge_id)
+            },
+            _ => panic!("Only subdivision geometries can have half edges!"),
+        }
+    }
+
+    /// Returns the previous half edge of some half edge.
+    pub fn get_previous_half_edge(&self, half_edge_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcGetGeometryPreviousHalfEdge(self.handle, half_edge_id)
+            },
+            _ => panic!("Only subdivision geometries can have half edges!"),
+        }
+    }
+
+    /// Returns the opposite half edge of some half edge.
+    pub fn get_opposite_half_edge(&self, topology_id: u32, edge_id: u32) -> u32 {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcGetGeometryOppositeHalfEdge(self.handle, topology_id, edge_id)
+            },
+            _ => panic!("Only subdivision geometries can have half edges!"),
+        }
+    }
+
+    /// Sets the displacement function for a subdivision geometry.
+    ///
+    /// Only one displacement function can be set per geometry, further calls to
+    /// this will overwrite the previous displacement function.
+    /// Passing `None` will remove the displacement function.
+    ///
+    /// The registered function is invoked to displace points on the subdivision
+    /// geometry during spatial acceleration structure construction,
+    /// during the [`Scene::commit`] call.
+    ///
+    /// The displacement function is called for each vertex of the subdivision
+    /// geometry. The function is called with the following parameters:
+    ///
+    /// * `geometry_user_data`: The user data pointer that was specified when
+    ///   the geometry was created.
+    /// * `geometry`: The geometry handle.
+    /// * `prim_id`: The ID of the primitive that contains the vertices to
+    ///   displace.
+    /// * `time_step`: The time step for which the displacement function is
+    ///   evaluated. Important for time dependent displacement and motion blur.
+    /// * `us`: The u coordinates of points to displace.
+    /// * `vs`: The v coordinates of points to displace.
+    /// * `ng_xs`: The x components of normal of vertices to displace
+    ///   (normalized).
+    /// * `ng_ys`: The y component of normal of vertices to displace
+    ///   (normalized).
+    /// * `ng_zs`: The z component of normal of vertices to displace
+    ///   (normalized).
+    /// * `pxs`: The x components of points to displace.
+    /// * `pys`: The y components of points to displace.
+    /// * `pzs`: The z components of points to displace.
+    ///
+    /// # Safety
+    ///
+    /// The callback function provided to this function contains a raw pointer
+    /// to Embree geometry.
+    pub unsafe fn set_displacement_function<F, D>(&mut self, displacement: F)
+    where
+        D: UserGeometryData,
+        F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, SoAVertices),
+    {
+        match self.kind {
+            GeometryKind::SUBDIVISION => {
+                let mut state = self.state.lock().unwrap();
+                unsafe {
+                    let mut closure = displacement;
+                    state.data.intersect_filter_fn =
+                        &mut closure as *mut _ as *mut std::os::raw::c_void;
+                    rtcSetGeometryDisplacementFunction(
+                        self.handle,
+                        displacement_function(&mut closure),
+                    )
+                }
+            }
+            _ => panic!("Only subdivision geometries can have displacement functions!"),
+        }
+    }
+
+    /// Removes the displacement function for a subdivision geometry.
+    pub fn unset_displacement_function(&mut self) {
+        match self.kind {
+            GeometryKind::SUBDIVISION => unsafe {
+                rtcSetGeometryDisplacementFunction(self.handle, None);
+            },
+            _ => panic!("Only subdivision geometries can have displacement functions!"),
+        }
+    }
+
+    /// Sets the instanced scene of an instance geometry.
+    pub fn set_instanced_scene(&mut self, scene: &Scene) {
+        match self.kind {
+            GeometryKind::INSTANCE => unsafe {
+                rtcSetGeometryInstancedScene(self.handle, scene.handle)
+            },
+            _ => panic!("Only instance geometries can have instanced scenes!"),
+        }
+    }
+
+    /// Returns the interpolated instance transformation for the specified time
+    /// step.
+    ///
+    /// The transformation is returned as a 4x4 column-major matrix.
+    pub fn get_transform(&mut self, time: f32) -> [f32; 16] {
+        match self.kind {
+            GeometryKind::INSTANCE => unsafe {
+                let mut transform = [0.0; 16];
+                rtcGetGeometryTransform(
+                    self.handle,
+                    time,
+                    Format::FLOAT4X4_COLUMN_MAJOR,
+                    transform.as_mut_ptr() as *mut _,
+                );
+                transform
+            },
+            _ => panic!("Only instance geometries can have instanced scenes!"),
+        }
+    }
+
+    /// Sets the transformation for a particular time step of an instance
+    /// geometry.
+    ///
+    /// The transformation is specified as a 4x4 column-major matrix.
+    pub fn set_transform(&mut self, time_step: u32, transform: &[f32; 16]) {
+        match self.kind {
+            GeometryKind::INSTANCE => unsafe {
+                rtcSetGeometryTransform(
+                    self.handle,
+                    time_step,
+                    Format::FLOAT4X4_COLUMN_MAJOR,
+                    transform.as_ptr() as *const _,
+                );
+            },
+            _ => panic!("Only instance geometries can have instanced scenes!"),
+        }
+    }
+
+    /// Sets the transformation for a particular time step of an instance
+    /// geometry as a decomposition of the transformation matrix using
+    /// quaternions to represent the rotation.
+    pub fn set_transform_quaternion(
+        &mut self,
+        time_step: u32,
+        transform: &QuaternionDecomposition,
+    ) {
+        match self.kind {
+            GeometryKind::INSTANCE => unsafe {
+                rtcSetGeometryTransformQuaternion(
+                    self.handle,
+                    time_step,
+                    transform as &QuaternionDecomposition as *const _,
+                );
+            },
+            _ => panic!("Only instance geometries can have instanced scenes!"),
+        }
+    }
 }
 
 /// The arguments for the `Geometry::interpolate` function.
@@ -1386,25 +1629,23 @@ impl InterpolateOutput {
     }
 }
 
-// TODO(yang): rtcInterpolate, rtcInterpolateN
-
 macro_rules! impl_geometry_type {
     ($name:ident, $kind:path, $(#[$meta:meta])*) => {
         #[derive(Debug)]
-        pub struct $name(Geometry<'static>);
+        pub struct $name<'a>(Geometry<'a>);
 
-        impl Deref for $name {
-            type Target = Geometry<'static>;
+        impl<'a> Deref for $name<'a> {
+            type Target = Geometry<'a>;
 
             fn deref(&self) -> &Self::Target { &self.0 }
         }
 
-        impl DerefMut for $name {
+        impl<'a> DerefMut for $name<'a> {
             fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
         }
 
         $(#[$meta])*
-        impl $name {
+        impl<'a> $name<'a> {
             pub fn new(device: &Device) -> Result<Self, Error> {
                 Ok(Self(Geometry::new(device, $kind)?))
             }
@@ -1482,6 +1723,10 @@ impl_geometry_type!(QuadMesh, GeometryKind::QUAD,
 
 impl_geometry_type!(UserGeometry, GeometryKind::USER,
     /// A user geometry.
+);
+
+impl_geometry_type!(Instance, GeometryKind::INSTANCE,
+    /// An instance geometry.
 );
 
 /// Helper function to convert a Rust closure to `RTCFilterFunctionN` callback
@@ -1718,6 +1963,76 @@ where
                     len: (*args).N as usize,
                 },
             )
+        }
+    }
+
+    Some(inner::<F, D>)
+}
+
+/// Struct holding data for a set of vertices in SoA layout.
+pub struct SoAVertices<'a> {
+    pub u: &'a [f32],
+    pub v: &'a [f32],
+    pub ng_x: &'a [f32],
+    pub ng_y: &'a [f32],
+    pub ng_z: &'a [f32],
+    pub p_x: &'a mut [f32],
+    pub p_y: &'a mut [f32],
+    pub p_z: &'a mut [f32],
+}
+
+/// Helper function to convert a Rust closure to `RTCDisplacementFunctionN`
+/// callback.
+fn displacement_function<F, D>(_f: &mut F) -> RTCDisplacementFunctionN
+where
+    D: UserGeometryData,
+    F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, SoAVertices),
+{
+    unsafe extern "C" fn inner<F, D>(args: *const RTCDisplacementFunctionNArguments)
+    where
+        D: UserGeometryData,
+        F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, SoAVertices),
+    {
+        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+            .subdivision_fns
+            .as_ref()
+            .expect(
+                "User payloads not set! Make sure the geometry was created with kind \
+                 GeometryKind::SUBDIVISION",
+            )
+            .displacement_fn as *mut F;
+        if !cb_ptr.is_null() {
+            let cb = &mut *cb_ptr;
+            let user_data = {
+                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                    Some(ref user_data) => {
+                        if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
+                            None
+                        } else {
+                            Some(&mut *(user_data.data as *mut D))
+                        }
+                    }
+                    None => None,
+                }
+            };
+            let len = (*args).N as usize;
+            let vertices = SoAVertices {
+                u: std::slice::from_raw_parts((*args).u, len),
+                v: std::slice::from_raw_parts((*args).v, len),
+                ng_x: std::slice::from_raw_parts((*args).Ng_x, len),
+                ng_y: std::slice::from_raw_parts((*args).Ng_y, len),
+                ng_z: std::slice::from_raw_parts((*args).Ng_z, len),
+                p_x: std::slice::from_raw_parts_mut((*args).P_x, len),
+                p_y: std::slice::from_raw_parts_mut((*args).P_y, len),
+                p_z: std::slice::from_raw_parts_mut((*args).P_z, len),
+            };
+            cb(
+                (*args).geometry,
+                user_data,
+                (*args).primID,
+                (*args).timeStep,
+                vertices,
+            );
         }
     }
 
