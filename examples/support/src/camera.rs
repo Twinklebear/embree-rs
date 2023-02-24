@@ -2,7 +2,7 @@ use std::f32;
 
 use cgmath::InnerSpace;
 
-use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
+use cgmath::Vector3;
 
 #[derive(PartialEq)]
 pub struct Camera {

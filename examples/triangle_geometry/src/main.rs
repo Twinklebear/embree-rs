@@ -8,7 +8,7 @@ use embree::{
 };
 use support::Camera;
 
-fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh {
+fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh<'static> {
     let mut mesh = TriangleMesh::new(device).unwrap();
     {
         mesh.set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 12, 8)
@@ -65,7 +65,7 @@ fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh {
     mesh
 }
 
-fn make_ground_plane(device: &Device) -> QuadMesh {
+fn make_ground_plane(device: &Device) -> QuadMesh<'static> {
     let mut mesh = QuadMesh::new(device).unwrap();
     {
         mesh.set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 4)

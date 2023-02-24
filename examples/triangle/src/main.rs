@@ -4,8 +4,7 @@ extern crate embree;
 extern crate support;
 
 use embree::{
-    BufferUsage, Device, Format, GeometryKind, IntersectContext, RayHitStream, RayStream,
-    SubdivisionGeometry, TriangleMesh,
+    BufferUsage, Device, Format, IntersectContext, RayHitStream, RayStream, TriangleMesh,
 };
 
 fn main() {

@@ -1,0 +1,16 @@
+[package]
+name = "displacement_geometry"
+authors = ["Yang Chen <matthiasychen@gmail.com>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glam = "0.22.0"
+embree = { path = "../.." }
+support = { path = "../support" }
+rayon = { version = "1.6.1", optional = true }
+
+[features]
+smooth_normals = []
+rayon = ["dep:rayon"]
+default = ["rayon"]

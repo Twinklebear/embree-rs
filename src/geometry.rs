@@ -3,16 +3,14 @@ use std::{
 };
 
 use crate::{
-    aligned_vector, sys::*, Bounds, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format,
-    GeometryKind, HitN, IntersectContext, QuaternionDecomposition, RayHitN, RayN, Scene,
-    SubdivisionMode,
+    sys::*, Bounds, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryKind,
+    HitN, IntersectContext, QuaternionDecomposition, RayHitN, RayN, Scene, SubdivisionMode,
 };
 
 use std::{
     borrow::Cow,
     ops::{Deref, DerefMut},
-    rc::Rc,
-    slice::Iter,
+    sync::Arc,
 };
 
 // TODO(yang): maybe enforce format and stride when get the view?
@@ -100,11 +98,16 @@ pub(crate) struct GeometryData {
     pub subdivision_fns: Option<SubdivisionGeometryPayloads>,
 }
 
-/// Extra data for a geometry.
-#[derive(Debug, Clone)]
-struct GeometryState<'buf> {
-    attachments: HashMap<BufferUsage, Vec<AttachedBuffer<'buf>>>,
-    data: GeometryData,
+impl Default for GeometryData {
+    fn default() -> Self {
+        Self {
+            user_data: None,
+            intersect_filter_fn: ptr::null_mut(),
+            occluded_filter_fn: ptr::null_mut(),
+            user_fns: None,
+            subdivision_fns: None,
+        }
+    }
 }
 
 /// Wrapper around an Embree geometry object.
@@ -155,7 +158,10 @@ pub struct Geometry<'buf> {
     pub(crate) device: Device,
     pub(crate) handle: RTCGeometry,
     kind: GeometryKind,
-    state: Rc<Mutex<GeometryState<'buf>>>,
+    /// Buffers that are attached to this geometry.
+    attachments: Arc<Mutex<HashMap<BufferUsage, Vec<AttachedBuffer<'buf>>>>>,
+    /// Data associated with this geometry.
+    data: Arc<Mutex<GeometryData>>,
 }
 
 impl<'buf> Clone for Geometry<'buf> {
@@ -167,7 +173,8 @@ impl<'buf> Clone for Geometry<'buf> {
             device: self.device.clone(),
             handle: self.handle,
             kind: self.kind,
-            state: self.state.clone(),
+            attachments: self.attachments.clone(),
+            data: self.data.clone(),
         }
     }
 }
@@ -205,29 +212,39 @@ impl<'buf> Geometry<'buf> {
         if handle.is_null() {
             Err(device.get_error())
         } else {
-            let state = GeometryState {
-                attachments: Default::default(),
-                data: GeometryData {
-                    user_data: None,
-                    intersect_filter_fn: ptr::null_mut(),
-                    occluded_filter_fn: ptr::null_mut(),
-                    user_fns: if kind == GeometryKind::USER {
-                        Some(UserGeometryPayloads::default())
-                    } else {
-                        None
-                    },
-                    subdivision_fns: if kind == GeometryKind::SUBDIVISION {
-                        Some(SubdivisionGeometryPayloads::default())
-                    } else {
-                        None
-                    },
+            let data = Arc::new(Mutex::new(GeometryData {
+                user_data: None,
+                intersect_filter_fn: ptr::null_mut(),
+                occluded_filter_fn: ptr::null_mut(),
+                user_fns: if kind == GeometryKind::USER {
+                    Some(UserGeometryPayloads {
+                        intersect_fn: ptr::null_mut(),
+                        occluded_fn: ptr::null_mut(),
+                        bounds_fn: ptr::null_mut(),
+                    })
+                } else {
+                    None
                 },
-            };
+                subdivision_fns: if kind == GeometryKind::SUBDIVISION {
+                    Some(SubdivisionGeometryPayloads {
+                        displacement_fn: ptr::null_mut(),
+                    })
+                } else {
+                    None
+                },
+            }));
+            unsafe {
+                rtcSetGeometryUserData(
+                    handle,
+                    Arc::into_raw(data.clone()) as *mut std::os::raw::c_void,
+                );
+            }
             Ok(Geometry {
                 device: device.clone(),
                 handle,
                 kind,
-                state: Rc::new(Mutex::new(state)),
+                attachments: Arc::new(Mutex::new(HashMap::default())),
+                data,
             })
         }
     }
@@ -337,8 +354,8 @@ impl<'buf> Geometry<'buf> {
                     stride,
                     count
                 );
-                let mut state = self.state.lock().unwrap();
-                let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
+                let mut attachments = self.attachments.lock().unwrap();
+                let bindings = attachments.entry(usage).or_insert_with(Vec::new);
                 match bindings.iter().position(|a| a.slot == slot) {
                     // If the slot is already bound, remove the old binding and
                     // replace it with the new one.
@@ -403,8 +420,8 @@ impl<'buf> Geometry<'buf> {
             BufferSlice::User {
                 ptr, offset, size, ..
             } => {
-                let mut state = self.state.lock().unwrap();
-                let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
+                let mut attachments = self.attachments.lock().unwrap();
+                let bindings = attachments.entry(usage).or_insert_with(Vec::new);
                 match bindings.iter().position(|a| a.slot == slot) {
                     // If the slot is already bound, remove the old binding and
                     // replace it with the new one.
@@ -506,8 +523,8 @@ impl<'buf> Geometry<'buf> {
             self.check_vertex_attribute()?;
         }
         {
-            let mut state = self.state.lock().unwrap();
-            let bindings = state.attachments.entry(usage).or_insert_with(Vec::new);
+            let mut attachments = self.attachments.lock().unwrap();
+            let bindings = attachments.entry(usage).or_insert_with(Vec::new);
             if !bindings.iter().any(|a| a.slot == slot) {
                 let raw_ptr = unsafe {
                     rtcSetNewGeometryBuffer(self.handle, usage, slot, format, stride, count)
@@ -537,9 +554,8 @@ impl<'buf> Geometry<'buf> {
 
     /// Returns the buffer bound to the given slot and usage.
     pub fn get_buffer(&self, usage: BufferUsage, slot: u32) -> Option<BufferSlice> {
-        let state = self.state.lock().unwrap();
-        state
-            .attachments
+        let attachments = self.attachments.lock().unwrap();
+        attachments
             .get(&usage)
             .and_then(|v| v.iter().find(|a| a.slot == slot))
             .map(|a| a.source)
@@ -663,10 +679,10 @@ impl<'buf> Geometry<'buf> {
         D: UserGeometryData,
         F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
     {
-        let mut state = self.state.lock().unwrap();
+        let mut geom_data = self.data.lock().unwrap();
         unsafe {
             let mut closure = filter;
-            state.data.intersect_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
+            geom_data.intersect_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
             rtcSetGeometryIntersectFilterFunction(
                 self.handle,
                 intersect_filter_function(&mut closure),
@@ -703,10 +719,10 @@ impl<'buf> Geometry<'buf> {
         D: UserGeometryData,
         F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
     {
-        let mut state = self.state.lock().unwrap();
+        let mut geom_data = self.data.lock().unwrap();
         unsafe {
             let mut closure = filter;
-            state.data.occluded_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
+            geom_data.occluded_filter_fn = &mut closure as *mut _ as *mut std::os::raw::c_void;
             rtcSetGeometryOccludedFilterFunction(
                 self.handle,
                 occluded_filter_function(&mut closure),
@@ -906,13 +922,16 @@ impl<'buf> Geometry<'buf> {
     where
         D: UserGeometryData,
     {
-        let mut state = self.state.lock().unwrap();
-        state.data.user_data = Some(GeometryUserData {
+        let mut geom_data = self.data.lock().unwrap();
+        geom_data.user_data = Some(GeometryUserData {
             data: user_data as *mut D as *mut std::os::raw::c_void,
             type_id: TypeId::of::<D>(),
         });
         unsafe {
-            rtcSetGeometryUserData(self.handle, &mut state.data as *mut GeometryData as *mut _);
+            rtcSetGeometryUserData(
+                self.handle,
+                geom_data.deref_mut() as *mut GeometryData as *mut _,
+            );
         }
     }
 
@@ -1014,36 +1033,30 @@ impl<'buf> Geometry<'buf> {
             bufferType: input.usage,
             bufferSlot: input.slot,
             P: output
-                .p
-                .as_mut()
+                .p_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             dPdu: output
-                .dp_du
-                .as_mut()
+                .dp_du_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             dPdv: output
-                .dp_dv
-                .as_mut()
+                .dp_dv_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             ddPdudu: output
-                .ddp_du_du
-                .as_mut()
+                .ddp_du_du_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             ddPdvdv: output
-                .ddp_dv_dv
-                .as_mut()
+                .ddp_dv_dv_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             ddPdudv: output
-                .ddp_du_dv
-                .as_mut()
+                .ddp_du_dv_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
-            valueCount: output.count,
+            valueCount: output.value_count(),
         };
         unsafe {
             rtcInterpolate(&args as _);
@@ -1082,36 +1095,30 @@ impl<'buf> Geometry<'buf> {
             bufferType: input.usage,
             bufferSlot: input.slot,
             P: output
-                .p
-                .as_mut()
+                .p_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             dPdu: output
-                .dp_du
-                .as_mut()
+                .dp_du_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             dPdv: output
-                .dp_dv
-                .as_mut()
+                .dp_dv_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             ddPdudu: output
-                .ddp_du_du
-                .as_mut()
+                .ddp_du_du_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             ddPdvdv: output
-                .ddp_dv_dv
-                .as_mut()
+                .ddp_dv_dv_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
             ddPdudv: output
-                .ddp_du_dv
-                .as_mut()
+                .ddp_du_dv_mut()
                 .map(|p| p.as_mut_ptr())
                 .unwrap_or(ptr::null_mut()),
-            valueCount: output.count,
+            valueCount: output.value_count(),
         };
         unsafe {
             rtcInterpolateN(&args as _);
@@ -1154,9 +1161,9 @@ impl<'buf> Geometry<'buf> {
     {
         match self.kind {
             GeometryKind::USER => unsafe {
-                let mut state = self.state.lock().unwrap();
+                let mut geom_data = self.data.lock().unwrap();
                 let mut closure = bounds;
-                state.data.user_fns.as_mut().unwrap().bounds_fn =
+                geom_data.user_fns.as_mut().unwrap().bounds_fn =
                     &mut closure as *mut _ as *mut std::os::raw::c_void;
                 rtcSetGeometryBoundsFunction(
                     self.handle,
@@ -1243,9 +1250,9 @@ impl<'buf> Geometry<'buf> {
     {
         match self.kind {
             GeometryKind::USER => unsafe {
-                let mut state = self.state.lock().unwrap();
+                let mut geom_data = self.data.lock().unwrap();
                 let mut closure = intersect;
-                state.data.user_fns.as_mut().unwrap().intersect_fn =
+                geom_data.user_fns.as_mut().unwrap().intersect_fn =
                     &mut closure as *mut _ as *mut std::os::raw::c_void;
                 rtcSetGeometryIntersectFunction(self.handle, intersect_function(&mut closure));
             },
@@ -1274,9 +1281,9 @@ impl<'buf> Geometry<'buf> {
     {
         match self.kind {
             GeometryKind::USER => {
-                let mut state = self.state.lock().unwrap();
+                let mut geom_data = self.data.lock().unwrap();
                 let mut closure = occluded;
-                state.data.user_fns.as_mut().unwrap().occluded_fn =
+                geom_data.user_fns.as_mut().unwrap().occluded_fn =
                     &mut closure as *mut _ as *mut std::os::raw::c_void;
                 unsafe {
                     rtcSetGeometryOccludedFunction(self.handle, occluded_function(&mut closure))
@@ -1456,15 +1463,18 @@ impl<'buf> Geometry<'buf> {
     pub unsafe fn set_displacement_function<F, D>(&mut self, displacement: F)
     where
         D: UserGeometryData,
-        F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, SoAVertices),
+        F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, Vertices),
     {
         match self.kind {
             GeometryKind::SUBDIVISION => {
-                let mut state = self.state.lock().unwrap();
+                let mut geom_data = self.data.lock().unwrap();
                 unsafe {
                     let mut closure = displacement;
-                    state.data.intersect_filter_fn =
-                        &mut closure as *mut _ as *mut std::os::raw::c_void;
+                    geom_data
+                        .subdivision_fns
+                        .replace(SubdivisionGeometryPayloads {
+                            displacement_fn: &mut closure as *mut _ as *mut std::os::raw::c_void,
+                        });
                     rtcSetGeometryDisplacementFunction(
                         self.handle,
                         displacement_function(&mut closure),
@@ -1577,56 +1587,165 @@ pub struct InterpolateNInput<'a> {
 /// The output of the `Geometry::interpolate` and `Geometry::interpolate_n`
 /// functions in structure of array (SOA) layout.
 pub struct InterpolateOutput {
-    pub count: u32,
-    pub p: Option<Vec<f32>>,
-    pub dp_du: Option<Vec<f32>>,
-    pub dp_dv: Option<Vec<f32>>,
-    pub ddp_du_du: Option<Vec<f32>>,
-    pub ddp_dv_dv: Option<Vec<f32>>,
-    pub ddp_du_dv: Option<Vec<f32>>,
+    /// The buffer containing the interpolated values.
+    buffer: Vec<f32>,
+    /// The number of values per attribute.
+    count_per_attribute: u32,
+    /// The offset of the `p` attribute in the buffer.
+    p_offset: Option<u32>,
+    /// The offset of the `dp_du` attribute in the buffer.
+    dp_du_offset: Option<u32>,
+    /// The offset of the `dp_dv` attribute in the buffer.
+    dp_dv_offset: Option<u32>,
+    /// The offset of the `ddp_du_du` attribute in the buffer.
+    ddp_du_du_offset: Option<u32>,
+    /// The offset of the `ddp_dv_dv` attribute in the buffer.
+    ddp_dv_dv_offset: Option<u32>,
+    /// The offset of the `ddp_du_dv` attribute in the buffer.
+    ddp_du_dv_offset: Option<u32>,
 }
 
 impl InterpolateOutput {
-    pub fn new(
-        count: u32,
-        origin_value: bool,
-        first_order_derivative: bool,
-        second_order_derivative: bool,
-    ) -> Self {
+    pub fn new(count: u32, zeroth_order: bool, first_order: bool, second_order: bool) -> Self {
+        assert!(
+            count > 0,
+            "The number of interpolated values must be greater than 0!"
+        );
+        assert!(
+            zeroth_order || first_order || second_order,
+            "At least one of the origin value, first order derivative, or second order derivative \
+             must be true!"
+        );
+        let mut offset = 0;
+        let p_offset = zeroth_order.then(|| {
+            let _offset = offset;
+            offset += count;
+            _offset
+        });
+        let dp_du_offset = first_order.then(|| {
+            let _offset = offset;
+            offset += count;
+            _offset
+        });
+        let dp_dv_offset = first_order.then(|| {
+            let _offset = offset;
+            offset += count;
+            _offset
+        });
+        let ddp_du_du_offset = second_order.then(|| {
+            let _offset = offset;
+            offset += count;
+            _offset
+        });
+        let ddp_dv_dv_offset = second_order.then(|| {
+            let _offset = offset;
+            offset += count;
+            _offset
+        });
+        let ddp_du_dv_offset = second_order.then(|| {
+            let _offset = offset;
+            offset += count;
+            _offset
+        });
+
         Self {
-            count,
-            p: if origin_value {
-                Some(aligned_vector::<f32>(count as usize, 16))
-            } else {
-                None
-            },
-            dp_du: if first_order_derivative {
-                Some(aligned_vector::<f32>(count as usize, 16))
-            } else {
-                None
-            },
-            dp_dv: if first_order_derivative {
-                Some(aligned_vector::<f32>(count as usize, 16))
-            } else {
-                None
-            },
-            ddp_du_du: if second_order_derivative {
-                Some(aligned_vector::<f32>(count as usize, 16))
-            } else {
-                None
-            },
-            ddp_dv_dv: if second_order_derivative {
-                Some(aligned_vector::<f32>(count as usize, 16))
-            } else {
-                None
-            },
-            ddp_du_dv: if second_order_derivative {
-                Some(aligned_vector::<f32>(count as usize, 16))
-            } else {
-                None
-            },
+            buffer: vec![0.0; (offset + count) as usize],
+            count_per_attribute: count,
+            p_offset,
+            dp_du_offset,
+            dp_dv_offset,
+            ddp_du_du_offset,
+            ddp_dv_dv_offset,
+            ddp_du_dv_offset,
         }
     }
+
+    /// Returns the interpolated `p` attribute.
+    pub fn p(&self) -> Option<&[f32]> {
+        self.p_offset.map(|offset| {
+            &self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the mutable interpolated `p` attribute.
+    pub fn p_mut(&mut self) -> Option<&mut [f32]> {
+        self.p_offset.map(move |offset| {
+            &mut self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the interpolated `dp_du` attribute.
+    pub fn dp_du(&self) -> Option<&[f32]> {
+        self.dp_du_offset.map(|offset| {
+            &self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the mutable interpolated `dp_du` attribute.
+    pub fn dp_du_mut(&mut self) -> Option<&mut [f32]> {
+        self.dp_du_offset.map(|offset| {
+            &mut self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the interpolated `dp_dv` attribute.
+    pub fn dp_dv(&self) -> Option<&[f32]> {
+        self.dp_dv_offset.map(|offset| {
+            &self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the mutable interpolated `dp_dv` attribute.
+    pub fn dp_dv_mut(&mut self) -> Option<&mut [f32]> {
+        self.dp_dv_offset.map(|offset| {
+            &mut self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the interpolated `ddp_du_du` attribute.
+    pub fn ddp_du_du(&self) -> Option<&[f32]> {
+        self.ddp_du_du_offset.map(|offset| {
+            &self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the mutable interpolated `ddp_du_du` attribute.
+    pub fn ddp_du_du_mut(&mut self) -> Option<&mut [f32]> {
+        self.ddp_du_du_offset.map(|offset| {
+            &mut self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the interpolated `ddp_dv_dv` attribute.
+    pub fn ddp_dv_dv(&self) -> Option<&[f32]> {
+        self.ddp_dv_dv_offset.map(|offset| {
+            &self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the mutable interpolated `ddp_dv_dv` attribute.
+    pub fn ddp_dv_dv_mut(&mut self) -> Option<&mut [f32]> {
+        self.ddp_dv_dv_offset.map(move |offset| {
+            &mut self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the interpolated `ddp_du_dv` attribute.
+    pub fn ddp_du_dv(&self) -> Option<&[f32]> {
+        self.ddp_du_dv_offset.map(|offset| {
+            &self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the mutable interpolated `ddp_du_dv` attribute.
+    pub fn ddp_du_dv_mut(&mut self) -> Option<&mut [f32]> {
+        self.ddp_du_dv_offset.map(move |offset| {
+            &mut self.buffer[offset as usize..(offset + self.count_per_attribute) as usize]
+        })
+    }
+
+    /// Returns the number of values per attribute.
+    pub fn value_count(&self) -> u32 { self.count_per_attribute }
 }
 
 macro_rules! impl_geometry_type {
@@ -1970,15 +2089,79 @@ where
 }
 
 /// Struct holding data for a set of vertices in SoA layout.
-pub struct SoAVertices<'a> {
-    pub u: &'a [f32],
-    pub v: &'a [f32],
-    pub ng_x: &'a [f32],
-    pub ng_y: &'a [f32],
-    pub ng_z: &'a [f32],
-    pub p_x: &'a mut [f32],
-    pub p_y: &'a mut [f32],
-    pub p_z: &'a mut [f32],
+pub struct Vertices<'src> {
+    pub len: usize,
+    pub u: &'src [f32],
+    pub v: &'src [f32],
+    pub ng_x: &'src [f32],
+    pub ng_y: &'src [f32],
+    pub ng_z: &'src [f32],
+    pub p_x: &'src mut [f32],
+    pub p_y: &'src mut [f32],
+    pub p_z: &'src mut [f32],
+}
+
+impl<'src> Vertices<'src> {
+    pub fn into_iter_mut(self) -> VerticesIterMut<'src> {
+        VerticesIterMut {
+            u: self.u.as_ptr(),
+            v: self.v.as_ptr(),
+            ng_x: self.ng_x.as_ptr(),
+            ng_y: self.ng_y.as_ptr(),
+            ng_z: self.ng_z.as_ptr(),
+            p_x: self.p_x.as_mut_ptr(),
+            p_y: self.p_y.as_mut_ptr(),
+            p_z: self.p_z.as_mut_ptr(),
+            cur: 0,
+            len: self.len,
+            marker: Default::default(),
+        }
+    }
+}
+
+pub struct VerticesIterMut<'src> {
+    u: *const f32,
+    v: *const f32,
+    ng_x: *const f32,
+    ng_y: *const f32,
+    ng_z: *const f32,
+    p_x: *mut f32,
+    p_y: *mut f32,
+    p_z: *mut f32,
+    cur: usize,
+    len: usize,
+    marker: PhantomData<Vertices<'src>>,
+}
+
+impl<'src> Iterator for VerticesIterMut<'src> {
+    type Item = ([f32; 2], [f32; 3], [&'src mut f32; 3]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur < self.len {
+            unsafe {
+                let u = *self.u.add(self.cur);
+                let v = *self.v.add(self.cur);
+                let ng_x = *self.ng_x.add(self.cur);
+                let ng_y = *self.ng_y.add(self.cur);
+                let ng_z = *self.ng_z.add(self.cur);
+                let p_x = self.p_x.add(self.cur);
+                let p_y = self.p_y.add(self.cur);
+                let p_z = self.p_z.add(self.cur);
+                self.cur += 1;
+                Some((
+                    [u, v],
+                    [ng_x, ng_y, ng_z],
+                    [&mut *p_x, &mut *p_y, &mut *p_z],
+                ))
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl<'src> ExactSizeIterator for VerticesIterMut<'src> {
+    fn len(&self) -> usize { self.len - self.cur }
 }
 
 /// Helper function to convert a Rust closure to `RTCDisplacementFunctionN`
@@ -1986,12 +2169,12 @@ pub struct SoAVertices<'a> {
 fn displacement_function<F, D>(_f: &mut F) -> RTCDisplacementFunctionN
 where
     D: UserGeometryData,
-    F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, SoAVertices),
+    F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, Vertices),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCDisplacementFunctionNArguments)
     where
         D: UserGeometryData,
-        F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, SoAVertices),
+        F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, Vertices),
     {
         let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
             .subdivision_fns
@@ -2016,7 +2199,8 @@ where
                 }
             };
             let len = (*args).N as usize;
-            let vertices = SoAVertices {
+            let vertices = Vertices {
+                len,
                 u: std::slice::from_raw_parts((*args).u, len),
                 v: std::slice::from_raw_parts((*args).v, len),
                 ng_x: std::slice::from_raw_parts((*args).Ng_x, len),

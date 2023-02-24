@@ -195,7 +195,7 @@ impl Device {
     pub fn get_error(&self) -> RTCError { unsafe { rtcGetDeviceError(self.handle) } }
 
     /// Creates a new scene bound to the device.
-    pub fn create_scene(&self) -> Result<Scene, Error> { Scene::new(self.clone()) }
+    pub fn create_scene(&self) -> Result<Scene<'static>, Error> { Scene::new(self.clone()) }
 
     /// Creates a new scene bound to the device with the given configuration.
     /// It's the same as calling [`Device::create_scene`] and then

@@ -19,14 +19,14 @@ use crate::{
 
 /// A scene containing various geometries.
 #[derive(Debug)]
-pub struct Scene {
+pub struct Scene<'a> {
     pub(crate) handle: RTCScene,
     pub(crate) device: Device,
-    geometries: Arc<Mutex<HashMap<u32, Geometry<'static>>>>,
+    geometries: Arc<Mutex<HashMap<u32, Geometry<'a>>>>,
     point_query_user_data: Arc<Mutex<PointQueryUserData>>,
 }
 
-impl Clone for Scene {
+impl<'a> Clone for Scene<'a> {
     fn clone(&self) -> Self {
         unsafe { rtcRetainScene(self.handle) }
         Self {
@@ -38,7 +38,7 @@ impl Clone for Scene {
     }
 }
 
-impl Drop for Scene {
+impl<'a> Drop for Scene<'a> {
     fn drop(&mut self) {
         unsafe {
             rtcReleaseScene(self.handle);
@@ -46,9 +46,12 @@ impl Drop for Scene {
     }
 }
 
-impl Scene {
+unsafe impl<'a> Sync for Scene<'a> {}
+unsafe impl<'a> Send for Scene<'a> {}
+
+impl<'a> Scene<'a> {
     /// Creates a new scene with the given device.
-    pub(crate) fn new(device: Device) -> Result<Scene, Error> {
+    pub(crate) fn new(device: Device) -> Result<Self, Error> {
         let handle = unsafe { rtcNewScene(device.handle) };
         if handle.is_null() {
             Err(device.get_error())
@@ -63,7 +66,7 @@ impl Scene {
     }
 
     /// Creates a new scene with the given device and flags.
-    pub(crate) fn new_with_flags(device: Device, flags: SceneFlags) -> Result<Scene, Error> {
+    pub(crate) fn new_with_flags(device: Device, flags: SceneFlags) -> Result<Self, Error> {
         let scene = Self::new(device)?;
         scene.set_flags(flags);
         Ok(scene)
@@ -85,7 +88,7 @@ impl Scene {
     /// no geometries are detached from the scene. If geometries are detached
     /// from the scene, the implementation will reuse IDs in an implementation
     /// dependent way.
-    pub fn attach_geometry<'a>(&'a mut self, geometry: &'a Geometry<'static>) -> u32 {
+    pub fn attach_geometry(&mut self, geometry: &Geometry<'a>) -> u32 {
         let id = unsafe { rtcAttachGeometry(self.handle, geometry.handle) };
         self.geometries.lock().unwrap().insert(id, geometry.clone());
         id
@@ -103,7 +106,7 @@ impl Scene {
     ///
     /// This function is thread-safe, thus multiple threads can attach
     /// geometries to a scene at the same time.
-    pub fn attach_geometry_by_id<'a>(&'a mut self, geometry: &'a Geometry<'static>, id: u32) {
+    pub fn attach_geometry_by_id(&mut self, geometry: &Geometry<'a>, id: u32) {
         unsafe { rtcAttachGeometryByID(self.handle, geometry.handle, id) };
         self.geometries.lock().unwrap().insert(id, geometry.clone());
     }
@@ -127,7 +130,7 @@ impl Scene {
     /// handle from that representation directly.
     ///
     /// For a thread-safe version of this function, see [`Scene::get_geometry`].
-    pub fn get_geometry_unchecked(&self, id: u32) -> Option<Geometry<'static>> {
+    pub fn get_geometry_unchecked(&self, id: u32) -> Option<Geometry<'a>> {
         let raw = unsafe { rtcGetGeometry(self.handle, id) };
         if raw.is_null() {
             None

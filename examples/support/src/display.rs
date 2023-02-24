@@ -2,7 +2,7 @@ use core::num::NonZeroU32;
 use std::borrow::Cow;
 
 use arcball::ArcballCamera;
-use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
+use cgmath::{Vector2, Vector3};
 use clock_ticks;
 use futures;
 use image::RgbaImage;

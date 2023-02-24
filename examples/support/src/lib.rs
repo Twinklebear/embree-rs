@@ -12,7 +12,10 @@ type Vector3 = cgmath::Vector3<f32>;
 type Vector4 = cgmath::Vector4<f32>;
 
 pub mod camera;
+mod common;
 pub mod display;
+
+pub use common::*;
 
 pub use camera::Camera;
 pub use display::Display;
