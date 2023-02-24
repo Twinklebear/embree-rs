@@ -737,6 +737,13 @@ impl<'buf> Geometry<'buf> {
         }
     }
 
+    // TODO(yang): how to handle the closure? RTCPointQueryFunctionArguments has a
+    // user pointer but we can't set it here, instead we can only set it in the
+    // rtcPointQuery function which is attached to the scene. This requires the
+    // user to call [`Scene::point_query`] first and then call
+    // [`Geometry::set_point_query_function`] to set the closure. Or we can
+    // make the closure a member of the [`GeometryData`] and set it here.
+
     /// Sets the point query callback function for a geometry.
     ///
     /// Only a single callback function can be registered per geometry and
@@ -1437,24 +1444,14 @@ impl<'buf> Geometry<'buf> {
     /// The displacement function is called for each vertex of the subdivision
     /// geometry. The function is called with the following parameters:
     ///
-    /// * `geometry_user_data`: The user data pointer that was specified when
-    ///   the geometry was created.
     /// * `geometry`: The geometry handle.
+    /// * `geometry_user_data`: The user data.
     /// * `prim_id`: The ID of the primitive that contains the vertices to
     ///   displace.
     /// * `time_step`: The time step for which the displacement function is
     ///   evaluated. Important for time dependent displacement and motion blur.
-    /// * `us`: The u coordinates of points to displace.
-    /// * `vs`: The v coordinates of points to displace.
-    /// * `ng_xs`: The x components of normal of vertices to displace
-    ///   (normalized).
-    /// * `ng_ys`: The y component of normal of vertices to displace
-    ///   (normalized).
-    /// * `ng_zs`: The z component of normal of vertices to displace
-    ///   (normalized).
-    /// * `pxs`: The x components of points to displace.
-    /// * `pys`: The y components of points to displace.
-    /// * `pzs`: The z components of points to displace.
+    /// * `vertices`: The information about the vertices to displace. See
+    ///   [`Vertices`].
     ///
     /// # Safety
     ///
@@ -2089,64 +2086,54 @@ where
 }
 
 /// Struct holding data for a set of vertices in SoA layout.
-pub struct Vertices<'src> {
-    pub len: usize,
-    pub u: &'src [f32],
-    pub v: &'src [f32],
-    pub ng_x: &'src [f32],
-    pub ng_y: &'src [f32],
-    pub ng_z: &'src [f32],
-    pub p_x: &'src mut [f32],
-    pub p_y: &'src mut [f32],
-    pub p_z: &'src mut [f32],
+pub struct Vertices {
+    len: usize,
+    /// The u coordinates of points to displace.
+    u: *const f32,
+    /// The v coordinates of points to displace.
+    v: *const f32,
+    /// The x components of normal of vertices to displace (normalized).
+    ng_x: *const f32,
+    ///The y component of normal of vertices to displace (normalized).
+    ng_y: *const f32,
+    /// The z component of normal of vertices to displace (normalized).
+    ng_z: *const f32,
+    /// The x components of points to displace.
+    p_x: *mut f32,
+    /// The y components of points to displace.
+    p_y: *mut f32,
+    /// The z components of points to displace.
+    p_z: *mut f32,
 }
 
-impl<'src> Vertices<'src> {
-    pub fn into_iter_mut(self) -> VerticesIterMut<'src> {
+impl Vertices {
+    pub fn into_iter_mut(self) -> VerticesIterMut {
         VerticesIterMut {
-            u: self.u.as_ptr(),
-            v: self.v.as_ptr(),
-            ng_x: self.ng_x.as_ptr(),
-            ng_y: self.ng_y.as_ptr(),
-            ng_z: self.ng_z.as_ptr(),
-            p_x: self.p_x.as_mut_ptr(),
-            p_y: self.p_y.as_mut_ptr(),
-            p_z: self.p_z.as_mut_ptr(),
+            inner: self,
             cur: 0,
-            len: self.len,
-            marker: Default::default(),
         }
     }
 }
 
-pub struct VerticesIterMut<'src> {
-    u: *const f32,
-    v: *const f32,
-    ng_x: *const f32,
-    ng_y: *const f32,
-    ng_z: *const f32,
-    p_x: *mut f32,
-    p_y: *mut f32,
-    p_z: *mut f32,
+pub struct VerticesIterMut {
+    inner: Vertices,
     cur: usize,
-    len: usize,
-    marker: PhantomData<Vertices<'src>>,
 }
 
-impl<'src> Iterator for VerticesIterMut<'src> {
-    type Item = ([f32; 2], [f32; 3], [&'src mut f32; 3]);
+impl Iterator for VerticesIterMut {
+    type Item = ([f32; 2], [f32; 3], [&mut f32; 3]);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.cur < self.len {
+        if self.cur < self.inner.len {
             unsafe {
-                let u = *self.u.add(self.cur);
-                let v = *self.v.add(self.cur);
-                let ng_x = *self.ng_x.add(self.cur);
-                let ng_y = *self.ng_y.add(self.cur);
-                let ng_z = *self.ng_z.add(self.cur);
-                let p_x = self.p_x.add(self.cur);
-                let p_y = self.p_y.add(self.cur);
-                let p_z = self.p_z.add(self.cur);
+                let u = *self.inner.u.add(self.cur);
+                let v = *self.inner.v.add(self.cur);
+                let ng_x = *self.inner.ng_x.add(self.cur);
+                let ng_y = *self.inner.ng_y.add(self.cur);
+                let ng_z = *self.inner.ng_z.add(self.cur);
+                let p_x = self.inner.p_x.add(self.cur);
+                let p_y = self.inner.p_y.add(self.cur);
+                let p_z = self.inner.p_z.add(self.cur);
                 self.cur += 1;
                 Some((
                     [u, v],
@@ -2160,8 +2147,8 @@ impl<'src> Iterator for VerticesIterMut<'src> {
     }
 }
 
-impl<'src> ExactSizeIterator for VerticesIterMut<'src> {
-    fn len(&self) -> usize { self.len - self.cur }
+impl ExactSizeIterator for VerticesIterMut {
+    fn len(&self) -> usize { self.inner.len - self.cur }
 }
 
 /// Helper function to convert a Rust closure to `RTCDisplacementFunctionN`
@@ -2201,14 +2188,14 @@ where
             let len = (*args).N as usize;
             let vertices = Vertices {
                 len,
-                u: std::slice::from_raw_parts((*args).u, len),
-                v: std::slice::from_raw_parts((*args).v, len),
-                ng_x: std::slice::from_raw_parts((*args).Ng_x, len),
-                ng_y: std::slice::from_raw_parts((*args).Ng_y, len),
-                ng_z: std::slice::from_raw_parts((*args).Ng_z, len),
-                p_x: std::slice::from_raw_parts_mut((*args).P_x, len),
-                p_y: std::slice::from_raw_parts_mut((*args).P_y, len),
-                p_z: std::slice::from_raw_parts_mut((*args).P_z, len),
+                u: (*args).u,
+                v: (*args).v,
+                ng_x: (*args).Ng_x,
+                ng_y: (*args).Ng_y,
+                ng_z: (*args).Ng_z,
+                p_x: (*args).P_x,
+                p_y: (*args).P_y,
+                p_z: (*args).P_z,
             };
             cb(
                 (*args).geometry,
