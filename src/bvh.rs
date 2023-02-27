@@ -1,5 +1,8 @@
 use crate::{sys::*, BuildFlags, BuildPrimitive, BuildQuality, Device, Error};
 
+#[derive(Debug, Clone, Copy)]
+pub struct ThreadLocalAllocator(RTCThreadLocalAllocator);
+
 pub struct Bvh {
     handle: RTCBVH,
 }
@@ -28,17 +31,23 @@ impl Bvh {
     }
 }
 
-pub struct BvhBuilderUserData {
-    create_node_fn: *mut std::os::raw::c_void,
+pub trait Node {}
+
+pub trait LeafNode {}
+
+type CreateNodeFn<T> = fn(ThreadLocalAllocator, u32, &mut T) -> Box<dyn Node>;
+
+pub struct BvhBuilderUserData<'a, T> {
+    create_node_fn: CreateNodeFn<T>,
     set_node_children_fn: *mut std::os::raw::c_void,
     set_node_bounds_fn: *mut std::os::raw::c_void,
     create_leaf_fn: *mut std::os::raw::c_void,
     split_primitive_fn: *mut std::os::raw::c_void,
     progress_monitor_function: *mut std::os::raw::c_void,
+    user_data: &'a mut T,
 }
 
-pub struct BvhBuilder<'a> {
-    bvh: &'a Bvh,
+pub struct BvhBuilder<'a, T> {
     quality: Option<BuildQuality>,
     flags: Option<BuildFlags>,
     max_branching_factor: Option<u32>,
@@ -46,16 +55,17 @@ pub struct BvhBuilder<'a> {
     sah_block_size: Option<u32>,
     min_leaf_size: Option<u32>,
     max_leaf_size: Option<u32>,
-    traversal_cost: Option<u32>,
-    intersection_cost: Option<u32>,
+    traversal_cost: Option<f32>,
+    intersection_cost: Option<f32>,
     primitives: Option<Vec<BuildPrimitive>>,
+    // create_node_fn: Option<CreateNodeFn<T>>,
+    user_data: Option<&'a mut T>,
     ready: u32,
 }
 
-impl<'a> BvhBuilder<'a> {
-    pub fn new(bvh: &'a Bvh) -> Self {
+impl<'a, T> BvhBuilder<'a, T> {
+    pub fn new() -> Self {
         Self {
-            bvh,
             quality: None,
             flags: None,
             max_branching_factor: None,
@@ -66,6 +76,8 @@ impl<'a> BvhBuilder<'a> {
             traversal_cost: None,
             intersection_cost: None,
             primitives: None,
+            // create_node_fn: None,
+            user_data: None,
             ready: 0,
         }
     }
@@ -112,13 +124,13 @@ impl<'a> BvhBuilder<'a> {
         self
     }
 
-    pub fn traversal_cost(mut self, traversal_cost: u32) -> Self {
+    pub fn traversal_cost(mut self, traversal_cost: f32) -> Self {
         self.traversal_cost = Some(traversal_cost);
         self.ready |= 1 << 7;
         self
     }
 
-    pub fn intersection_cost(mut self, intersection_cost: u32) -> Self {
+    pub fn intersection_cost(mut self, intersection_cost: f32) -> Self {
         self.intersection_cost = Some(intersection_cost);
         self.ready |= 1 << 8;
         self
@@ -130,5 +142,34 @@ impl<'a> BvhBuilder<'a> {
         self
     }
 
-    // TODO: build
+    // pub fn create_node_fn(mut self, func: CreateNodeFn<T>) -> Self {
+    //     self.create_node_fn = Some(func);
+    //     self.ready |= 1 << 10;
+    //     self
+    // }
+    //
+    // pub fn set_node_children_fn(mut self, set_node_children_fn: *mut
+    // std::os::raw::c_void) -> Self {     self.ready |= 1 << 11;
+    //     self
+    // }
+    //
+    // pub fn set_node_bounds_fn(mut self, set_node_bounds_fn: *mut
+    // std::os::raw::c_void) -> Self {     self.ready |= 1 << 12;
+    //     self
+    // }
+    //
+    // pub fn create_leaf_fn(mut self, create_leaf_fn: *mut std::os::raw::c_void) ->
+    // Self {     self.ready |= 1 << 13;
+    //     self
+    // }
+    //
+    // pub fn split_primitive_fn(mut self, split_primitive_fn: *mut
+    // std::os::raw::c_void) -> Self {     self.ready |= 1 << 14;
+    //     self
+    // }
+    //
+    // pub fn progress_monitor_fn(mut self, progress_monitor_fn: *mut
+    // std::os::raw::c_void) -> Self {     self.ready |= 1 << 15;
+    //     self
+    // }
 }

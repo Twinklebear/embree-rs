@@ -1,6 +1,8 @@
 use crate::{
     sys, Hit, Ray, RayHit, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut,
+    INVALID_ID,
 };
+use std::marker::PhantomData;
 
 mod sealed {
     pub trait Sealed {}
@@ -84,11 +86,42 @@ macro_rules! impl_ray_packets {
     ($($t:ident, $n:expr);*) => {
         $(
             impl $t {
-                pub fn new(origin: [[f32; 3]; $n], dir: [[f32; 3]; $n]) -> $t {
+                pub const fn new(origin: [[f32; 3]; $n], dir: [[f32; 3]; $n]) -> $t {
                     $t::segment(origin, dir, [0.0; $n], [f32::INFINITY; $n])
                 }
 
-                pub fn empty() -> $t {
+                pub const fn segment(origin: [[f32; 3]; $n], dir: [[f32; 3]; $n], tnear: [f32; $n], tfar: [f32; $n]) -> $t {
+                    let [org_x, org_y, org_z, dir_x, dir_y, dir_z] = {
+                        let mut elems = [[0.0f32; $n]; 6];
+                        let mut i = 0;
+                        while i < $n {
+                            elems[0][i] = origin[i][0];
+                            elems[1][i] = origin[i][1];
+                            elems[2][i] = origin[i][2];
+                            elems[3][i] = dir[i][0];
+                            elems[4][i] = dir[i][1];
+                            elems[5][i] = dir[i][2];
+                            i += 1;
+                        }
+                        elems
+                    };
+                    Self {
+                        org_x,
+                        org_y,
+                        org_z,
+                        dir_x,
+                        dir_y,
+                        dir_z,
+                        tnear,
+                        tfar,
+                        time: [0.0; $n],
+                        mask: [u32::MAX; $n],
+                        id: [0; $n],
+                        flags: [0; $n],
+                    }
+                }
+
+                pub const fn empty() -> $t {
                     $t::segment(
                         [[0.0, 0.0, 0.0]; $n],
                         [[0.0, 0.0, 0.0]; $n],
@@ -101,261 +134,106 @@ macro_rules! impl_ray_packets {
 
                 pub fn iter_mut(&mut self) -> SoARayIterMut<$t> { SoARayIterMut::new(self, $n) }
             }
+
+            impl Default for $t {
+                fn default() -> Self { Self::empty() }
+            }
+
+            impl SoARay for $t {
+                fn org(&self, i: usize) -> [f32; 3] { [self.org_x[i], self.org_y[i], self.org_z[i]] }
+                fn set_org(&mut self, i: usize, o: [f32; 3]) {
+                    self.org_x[i] = o[0];
+                    self.org_y[i] = o[1];
+                    self.org_z[i] = o[2];
+                }
+
+                fn dir(&self, i: usize) -> [f32; 3] { [self.dir_x[i], self.dir_y[i], self.dir_z[i]] }
+                fn set_dir(&mut self, i: usize, d: [f32; 3]) {
+                    self.dir_x[i] = d[0];
+                    self.dir_y[i] = d[1];
+                    self.dir_z[i] = d[2];
+                }
+
+                fn tnear(&self, i: usize) -> f32 { self.tnear[i] }
+                fn set_tnear(&mut self, i: usize, t: f32) { self.tnear[i] = t }
+
+                fn tfar(&self, i: usize) -> f32 { self.tfar[i] }
+                fn set_tfar(&mut self, i: usize, t: f32) { self.tfar[i] = t}
+
+                fn time(&self, i: usize) -> f32 { self.time[i] }
+                fn set_time(&mut self, i: usize, t: f32) { self.time[i] = t }
+
+                fn mask(&self, i: usize) -> u32 { self.mask[i] }
+                fn set_mask(&mut self, i: usize, m: u32) { self.mask[i] = m }
+
+                fn id(&self, i: usize) -> u32 { self.id[i] }
+                fn set_id(&mut self, i: usize, id: u32) { self.id[i] = id }
+
+                fn flags(&self, i: usize) -> u32 { self.flags[i] }
+                fn set_flags(&mut self, i: usize, f: u32) { self.flags[i] = f }
+            }
         )*
     };
 }
 
-impl Ray4 {
-    pub fn segment(
-        origin: [[f32; 3]; 4],
-        dir: [[f32; 3]; 4],
-        tnear: [f32; 4],
-        tfar: [f32; 4],
-    ) -> Ray4 {
-        sys::RTCRay4 {
-            org_x: [origin[0][0], origin[1][0], origin[2][0], origin[3][0]],
-            org_y: [origin[0][1], origin[1][1], origin[2][1], origin[3][1]],
-            org_z: [origin[0][2], origin[1][2], origin[2][2], origin[3][2]],
-            dir_x: [dir[0][0], dir[1][0], dir[2][0], dir[3][0]],
-            dir_y: [dir[0][1], dir[1][1], dir[2][1], dir[3][1]],
-            dir_z: [dir[0][2], dir[1][2], dir[2][2], dir[3][2]],
-            tnear,
-            tfar,
-            time: [0.0; 4],
-            mask: [u32::MAX; 4],
-            id: [0; 4],
-            flags: [0; 4],
-        }
-    }
+impl_ray_packets!(Ray4, 4; Ray8, 8; Ray16, 16);
+
+macro_rules! impl_hit_packets {
+    ($($t:ident, $n:expr);*) => {
+        $(
+            impl $t {
+                pub fn new() -> $t {
+                    $t {
+                        Ng_x: [0.0; $n],
+                        Ng_y: [0.0; $n],
+                        Ng_z: [0.0; $n],
+                        u: [0.0; $n],
+                        v: [0.0; $n],
+                        primID: [INVALID_ID; $n],
+                        geomID: [INVALID_ID; $n],
+                        instID: [[INVALID_ID; $n]],
+                    }
+                }
+                pub fn any_hit(&self) -> bool { self.hits().any(|h| h) }
+                pub fn hits(&self) -> impl Iterator<Item = bool> + '_ {
+                    self.geomID.iter().map(|g| *g != INVALID_ID)
+                }
+                pub fn iter(&self) -> SoAHitIter<$t> { SoAHitIter::new(self, $n) }
+                pub fn iter_hits(&self) -> impl Iterator<Item = SoAHitRef<$t>> {
+                    SoAHitIter::new(self, 4).filter(|h| h.hit())
+                }
+            }
+
+            impl Default for $t {
+                fn default() -> Self { Self::new() }
+            }
+
+            impl SoAHit for $t {
+                fn normal(&self, i: usize) -> [f32; 3] { [self.Ng_x[i], self.Ng_y[i], self.Ng_z[i]] }
+                fn set_normal(&mut self, i: usize, n: [f32; 3]) {
+                    self.Ng_x[i] = n[0];
+                    self.Ng_y[i] = n[1];
+                    self.Ng_z[i] = n[2];
+                }
+
+                fn uv(&self, i: usize) -> (f32, f32) { (self.u[i], self.v[i]) }
+                fn set_u(&mut self, i: usize, u: f32) { self.u[i] = u; }
+                fn set_v(&mut self, i: usize, v: f32) { self.v[i] = v; }
+
+                fn prim_id(&self, i: usize) -> u32 { self.primID[i] }
+                fn set_prim_id(&mut self, i: usize, id: u32) { self.primID[i] = id; }
+
+                fn geom_id(&self, i: usize) -> u32 { self.geomID[i] }
+                fn set_geom_id(&mut self, i: usize, id: u32) { self.geomID[i] = id; }
+
+                fn inst_id(&self, i: usize) -> u32 { self.instID[0][i] }
+                fn set_inst_id(&mut self, i: usize, id: u32) { self.instID[0][i] = id; }
+            }
+        )*
+    };
 }
 
-impl Ray8 {
-    pub fn segment(
-        origin: [[f32; 3]; 8],
-        dir: [[f32; 3]; 8],
-        tnear: [f32; 8],
-        tfar: [f32; 8],
-    ) -> Ray8 {
-        Ray8 {
-            org_x: [
-                origin[0][0],
-                origin[1][0],
-                origin[2][0],
-                origin[3][0],
-                origin[4][0],
-                origin[5][0],
-                origin[6][0],
-                origin[7][0],
-            ],
-            org_y: [
-                origin[0][1],
-                origin[1][1],
-                origin[2][1],
-                origin[3][1],
-                origin[4][1],
-                origin[5][1],
-                origin[6][1],
-                origin[7][1],
-            ],
-            org_z: [
-                origin[0][2],
-                origin[1][2],
-                origin[2][2],
-                origin[3][2],
-                origin[4][2],
-                origin[5][2],
-                origin[6][2],
-                origin[7][2],
-            ],
-            dir_x: [
-                dir[0][0], dir[1][0], dir[2][0], dir[3][0], dir[4][0], dir[5][0], dir[6][0],
-                dir[7][0],
-            ],
-            dir_y: [
-                dir[0][1], dir[1][1], dir[2][1], dir[3][1], dir[4][1], dir[5][1], dir[6][1],
-                dir[7][1],
-            ],
-            dir_z: [
-                dir[0][2], dir[1][2], dir[2][2], dir[3][2], dir[4][2], dir[5][2], dir[6][2],
-                dir[7][2],
-            ],
-            tnear,
-            tfar,
-            time: [0.0; 8],
-            mask: [u32::MAX; 8],
-            id: [0; 8],
-            flags: [0; 8],
-        }
-    }
-}
-
-impl Ray16 {
-    pub fn segment(
-        origin: [[f32; 3]; 16],
-        dir: [[f32; 3]; 16],
-        tnear: [f32; 16],
-        tfar: [f32; 16],
-    ) -> Ray16 {
-        Ray16 {
-            org_x: [
-                origin[0][0],
-                origin[1][0],
-                origin[2][0],
-                origin[3][0],
-                origin[4][0],
-                origin[5][0],
-                origin[6][0],
-                origin[7][0],
-                origin[8][0],
-                origin[9][0],
-                origin[10][0],
-                origin[11][0],
-                origin[12][0],
-                origin[13][0],
-                origin[14][0],
-                origin[15][0],
-            ],
-            org_y: [
-                origin[0][1],
-                origin[1][1],
-                origin[2][1],
-                origin[3][1],
-                origin[4][1],
-                origin[5][1],
-                origin[6][1],
-                origin[7][1],
-                origin[8][1],
-                origin[9][1],
-                origin[10][1],
-                origin[11][1],
-                origin[12][1],
-                origin[13][1],
-                origin[14][1],
-                origin[15][1],
-            ],
-            org_z: [
-                origin[0][2],
-                origin[1][2],
-                origin[2][2],
-                origin[3][2],
-                origin[4][2],
-                origin[5][2],
-                origin[6][2],
-                origin[7][2],
-                origin[8][2],
-                origin[9][2],
-                origin[10][2],
-                origin[11][2],
-                origin[12][2],
-                origin[13][2],
-                origin[14][2],
-                origin[15][2],
-            ],
-            dir_x: [
-                dir[0][0], dir[1][0], dir[2][0], dir[3][0], dir[4][0], dir[5][0], dir[6][0],
-                dir[7][0], dir[8][0], dir[9][0], dir[10][0], dir[11][0], dir[12][0], dir[13][0],
-                dir[14][0], dir[15][0],
-            ],
-            dir_y: [
-                dir[0][1], dir[1][1], dir[2][1], dir[3][1], dir[4][1], dir[5][1], dir[6][1],
-                dir[7][1], dir[8][1], dir[9][1], dir[10][1], dir[11][1], dir[12][1], dir[13][1],
-                dir[14][1], dir[15][1],
-            ],
-            dir_z: [
-                dir[0][2], dir[1][2], dir[2][2], dir[3][2], dir[4][2], dir[5][2], dir[6][2],
-                dir[7][2], dir[8][2], dir[9][2], dir[10][2], dir[11][2], dir[12][2], dir[13][2],
-                dir[14][2], dir[15][2],
-            ],
-            tnear,
-            tfar,
-            time: [0.0; 16],
-            mask: [u32::MAX; 16],
-            id: [0; 16],
-            flags: [0; 16],
-        }
-    }
-}
-
-impl_ray_packets!(Ray4, 4);
-
-impl SoARay for Ray4 {
-    fn org(&self, i: usize) -> [f32; 3] { [self.org_x[i], self.org_y[i], self.org_z[i]] }
-    fn set_org(&mut self, i: usize, o: [f32; 3]) {
-        self.org_x[i] = o[0];
-        self.org_y[i] = o[1];
-        self.org_z[i] = o[2];
-    }
-
-    fn dir(&self, i: usize) -> [f32; 3] { [self.dir_x[i], self.dir_y[i], self.dir_z[i]] }
-    fn set_dir(&mut self, i: usize, d: [f32; 3]) {
-        self.dir_x[i] = d[0];
-        self.dir_y[i] = d[1];
-        self.dir_z[i] = d[2];
-    }
-
-    fn tnear(&self, i: usize) -> f32 { self.tnear[i] }
-    fn set_tnear(&mut self, i: usize, near: f32) { self.tnear[i] = near; }
-
-    fn tfar(&self, i: usize) -> f32 { self.tfar[i] }
-    fn set_tfar(&mut self, i: usize, far: f32) { self.tfar[i] = far; }
-
-    fn time(&self, i: usize) -> f32 { self.time[i] }
-    fn set_time(&mut self, i: usize, time: f32) { self.time[i] = time; }
-
-    fn mask(&self, i: usize) -> u32 { self.mask[i] }
-    fn set_mask(&mut self, i: usize, mask: u32) { self.mask[i] = mask; }
-
-    fn id(&self, i: usize) -> u32 { self.id[i] }
-    fn set_id(&mut self, i: usize, id: u32) { self.id[i] = id; }
-
-    fn flags(&self, i: usize) -> u32 { self.flags[i] }
-    fn set_flags(&mut self, i: usize, flags: u32) { self.flags[i] = flags; }
-}
-
-impl Hit4 {
-    pub fn new() -> Hit4 {
-        sys::RTCHit4 {
-            Ng_x: [0.0; 4],
-            Ng_y: [0.0; 4],
-            Ng_z: [0.0; 4],
-            u: [0.0; 4],
-            v: [0.0; 4],
-            primID: [u32::MAX; 4],
-            geomID: [u32::MAX; 4],
-            instID: [[u32::MAX; 4]],
-        }
-    }
-    pub fn any_hit(&self) -> bool { self.hits().any(|h| h) }
-    pub fn hits<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
-        self.geomID.iter().map(|g| *g != u32::MAX)
-    }
-    pub fn iter(&self) -> SoAHitIter<Hit4> { SoAHitIter::new(self, 4) }
-    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item = SoAHitRef<Hit4>> + 'a {
-        SoAHitIter::new(self, 4).filter(|h| h.hit())
-    }
-}
-
-impl SoAHit for Hit4 {
-    fn normal(&self, i: usize) -> [f32; 3] { [self.Ng_x[i], self.Ng_y[i], self.Ng_z[i]] }
-    fn set_normal(&mut self, i: usize, n: [f32; 3]) {
-        self.Ng_x[i] = n[0];
-        self.Ng_y[i] = n[1];
-        self.Ng_z[i] = n[2];
-    }
-
-    fn uv(&self, i: usize) -> (f32, f32) { (self.u[i], self.v[i]) }
-    fn set_u(&mut self, i: usize, u: f32) { self.u[i] = u; }
-    fn set_v(&mut self, i: usize, v: f32) { self.v[i] = v; }
-
-    fn prim_id(&self, i: usize) -> u32 { self.primID[i] }
-    fn set_prim_id(&mut self, i: usize, id: u32) { self.primID[i] = id; }
-
-    fn geom_id(&self, i: usize) -> u32 { self.geomID[i] }
-    fn set_geom_id(&mut self, i: usize, id: u32) { self.geomID[i] = id; }
-
-    fn inst_id(&self, i: usize) -> u32 { self.instID[0][i] }
-    fn set_inst_id(&mut self, i: usize, id: u32) { self.instID[0][i] = id; }
-}
+impl_hit_packets!(Hit4, 4; Hit8, 8; Hit16, 16);
 
 impl RayHit4 {
     pub fn new(ray: Ray4) -> RayHit4 {
@@ -374,70 +252,155 @@ impl RayHit4 {
 /// It is used to represent a packet of rays that is not known at compile
 /// time, generally used as an argument to callback functions. The size
 /// of the packet can only be either 1, 4, 8, or 16.
-pub struct RayN {
+pub struct RayN<'a> {
     pub(crate) ptr: *mut sys::RTCRayN,
     pub(crate) len: usize,
+    pub(crate) marker: PhantomData<&'a mut sys::RTCRayN>,
 }
 
-impl RayN {
-    pub fn org_x(&self, i: usize) -> f32 {
+impl<'a> RayN<'a> {
+    pub const fn org_x(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(i) }
     }
 
-    pub fn org_y(&self, i: usize) -> f32 {
+    pub fn set_org_x(&mut self, i: usize, x: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(i) = x;
+        }
+    }
+
+    pub const fn org_y(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(self.len + i) }
     }
 
-    pub fn org_z(&self, i: usize) -> f32 {
+    pub fn set_org_y(&mut self, i: usize, y: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(self.len + i) = y;
+        }
+    }
+
+    pub const fn org_z(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(2 * self.len + i) }
     }
 
-    pub fn tnear(&self, i: usize) -> f32 {
+    pub fn set_org_z(&mut self, i: usize, z: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(2 * self.len + i) = z;
+        }
+    }
+
+    pub const fn tnear(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(3 * self.len + i) }
     }
 
-    pub fn dir_x(&self, i: usize) -> f32 {
+    pub fn set_tnear(&mut self, i: usize, t: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(3 * self.len + i) = t;
+        }
+    }
+
+    pub const fn dir_x(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(4 * self.len + i) }
     }
 
-    pub fn dir_y(&self, i: usize) -> f32 {
+    pub fn set_dir_x(&mut self, i: usize, x: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(4 * self.len + i) = x;
+        }
+    }
+
+    pub const fn dir_y(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(5 * self.len + i) }
     }
 
-    pub fn dir_z(&self, i: usize) -> f32 {
+    pub fn set_dir_y(&mut self, i: usize, y: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(5 * self.len + i) = y;
+        }
+    }
+
+    pub const fn dir_z(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(6 * self.len + i) }
     }
 
-    pub fn time(&self, i: usize) -> f32 {
+    pub fn set_dir_z(&mut self, i: usize, z: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(6 * self.len + i) = z;
+        }
+    }
+
+    pub const fn time(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(7 * self.len + i) }
     }
 
-    pub fn tfar(&self, i: usize) -> f32 {
+    pub fn set_time(&mut self, i: usize, t: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(7 * self.len + i) = t;
+        }
+    }
+
+    pub const fn tfar(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(8 * self.len + i) }
     }
 
-    pub fn mask(&self, i: usize) -> u32 {
+    pub fn set_tfar(&mut self, i: usize, t: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(8 * self.len + i) = t;
+        }
+    }
+
+    pub const fn mask(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(9 * self.len + i) }
     }
 
-    pub fn id(&self, i: usize) -> u32 {
+    pub fn set_mask(&mut self, i: usize, m: u32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut u32).add(9 * self.len + i) = m;
+        }
+    }
+
+    pub const fn id(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(10 * self.len + i) }
     }
 
-    pub fn flags(&self, i: usize) -> u32 {
+    pub fn set_id(&mut self, i: usize, id: u32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut u32).add(10 * self.len + i) = id;
+        }
+    }
+
+    pub const fn flags(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(11 * self.len + i) }
+    }
+
+    pub fn set_flags(&mut self, i: usize, f: u32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut u32).add(11 * self.len + i) = f;
+        }
     }
 }
 
@@ -446,48 +409,49 @@ impl RayN {
 /// It is used to represent a packet of hits that is not known at compile
 /// time, generally used as an argument to callback functions. The size
 /// of the packet can only be either 1, 4, 8, or 16.
-pub struct HitN {
+pub struct HitN<'a> {
     pub(crate) ptr: *mut sys::RTCHitN,
     pub(crate) len: usize,
+    pub(crate) marker: PhantomData<&'a mut sys::RTCHitN>,
 }
 
-impl HitN {
-    pub fn ng_x(&self, i: usize) -> f32 {
+impl<'a> HitN<'a> {
+    pub const fn ng_x(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(i) }
     }
 
-    pub fn ng_y(&self, i: usize) -> f32 {
+    pub const fn ng_y(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(self.len + i) }
     }
 
-    pub fn ng_z(&self, i: usize) -> f32 {
+    pub const fn ng_z(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(2 * self.len + i) }
     }
 
-    pub fn u(&self, i: usize) -> f32 {
+    pub const fn u(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(3 * self.len + i) }
     }
 
-    pub fn v(&self, i: usize) -> f32 {
+    pub const fn v(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(4 * self.len + i) }
     }
 
-    pub fn prim_id(&self, i: usize) -> u32 {
+    pub const fn prim_id(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(5 * self.len + i) }
     }
 
-    pub fn geom_id(&self, i: usize) -> u32 {
+    pub const fn geom_id(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(6 * self.len + i) }
     }
 
-    pub fn inst_id(&self, i: usize) -> u32 {
+    pub const fn inst_id(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(7 * self.len + i) }
     }
@@ -496,25 +460,28 @@ impl HitN {
 /// Combined ray and hit packet of runtime size.
 ///
 /// The size of the packet can only be either 1, 4, 8, or 16.
-pub struct RayHitN {
+pub struct RayHitN<'a> {
     pub(crate) ptr: *mut sys::RTCRayHitN,
     pub(crate) len: usize,
+    pub(crate) marker: PhantomData<&'a mut sys::RTCRayHitN>,
 }
 
-impl RayHitN {
+impl<'a> RayHitN<'a> {
     /// Returns the ray packet.
-    pub fn ray_n(&self) -> RayN {
+    pub fn ray_n(&'a self) -> RayN<'a> {
         RayN {
             ptr: self.ptr as *mut sys::RTCRayN,
             len: self.len,
+            marker: PhantomData,
         }
     }
 
     /// Returns the hit packet.
-    pub fn hit_n(&self) -> HitN {
+    pub fn hit_n(&'a self) -> HitN<'a> {
         HitN {
             ptr: unsafe { (self.ptr as *const u32).add(12 * self.len) as *mut sys::RTCHitN },
             len: self.len,
+            marker: PhantomData,
         }
     }
 }

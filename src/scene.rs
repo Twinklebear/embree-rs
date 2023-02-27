@@ -1,6 +1,6 @@
 use crate::{
-    Bounds, Error, PointQuery, PointQueryContext, Ray16, Ray8, RayHit16, RayHit8, RayHitPacket,
-    RayHitStream, RayPacket, SceneFlags,
+    Bounds, Error, PointQuery, PointQueryContext, Ray16, Ray8, RayHit16, RayHit8, RayHitNp,
+    RayHitPacket, RayPacket, SceneFlags,
 };
 use std::{
     any::TypeId,
@@ -13,7 +13,7 @@ use crate::{
     context::IntersectContext,
     device::Device,
     geometry::Geometry,
-    ray::{Ray, Ray4, RayHit, RayHit4, RayStream},
+    ray::{Ray, Ray4, RayHit, RayHit4, RayNp},
     sys::*,
 };
 
@@ -808,7 +808,7 @@ impl<'a> Scene<'a> {
     ///
     /// A ray in a ray stream is considered inactive if its tnear value is
     /// larger than its tfar value.
-    pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitStream) {
+    pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitNp) {
         let n = rays.len();
         unsafe {
             let mut rayhit = rays.as_rayhitnp();
@@ -833,7 +833,7 @@ impl<'a> Scene<'a> {
     ///
     /// A ray in a ray stream is considered inactive if its tnear value is
     /// larger than its tfar value.
-    pub fn occluded_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayStream) {
+    pub fn occluded_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayNp) {
         let n = rays.len();
         unsafe {
             let mut r = rays.as_raynp();

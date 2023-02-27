@@ -1,7 +1,6 @@
 use std::{
     iter::{ExactSizeIterator, Iterator},
     marker::PhantomData,
-    u32,
 };
 
 pub trait SoARay {

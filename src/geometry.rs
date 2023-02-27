@@ -677,7 +677,7 @@ impl<'buf> Geometry<'buf> {
     pub fn set_intersect_filter_function<F, D>(&mut self, filter: F)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+        F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, &mut IntersectContext, RayN<'a>, HitN<'a>),
     {
         let mut geom_data = self.data.lock().unwrap();
         unsafe {
@@ -815,7 +815,7 @@ impl<'buf> Geometry<'buf> {
     /// rtcPointQuery is called. For a reference implementation of a closest
     /// point traversal of triangle meshes using instancing and user defined
     /// instancing see the tutorial [ClosestPoint].
-    pub unsafe fn set_point_query_function<F>(&mut self, query_fn: RTCPointQueryFunction) {
+    pub unsafe fn set_point_query_function(&mut self, query_fn: RTCPointQueryFunction) {
         rtcSetGeometryPointQueryFunction(self.handle, query_fn);
     }
 
@@ -1253,7 +1253,14 @@ impl<'buf> Geometry<'buf> {
     pub fn set_intersect_function<F, D>(&mut self, intersect: F)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayHitN),
+        F: for<'a> FnMut(
+            &'a mut [i32],
+            Option<&mut D>,
+            u32,
+            u32,
+            &mut IntersectContext,
+            RayHitN<'a>,
+        ),
     {
         match self.kind {
             GeometryKind::USER => unsafe {
@@ -1284,7 +1291,7 @@ impl<'buf> Geometry<'buf> {
     pub fn set_occluded_function<F, D>(&mut self, occluded: F)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN),
+        F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN<'a>),
     {
         match self.kind {
             GeometryKind::USER => {
@@ -1460,7 +1467,7 @@ impl<'buf> Geometry<'buf> {
     pub unsafe fn set_displacement_function<F, D>(&mut self, displacement: F)
     where
         D: UserGeometryData,
-        F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, Vertices),
+        F: for<'a> FnMut(RTCGeometry, Option<&mut D>, u32, u32, Vertices<'a>),
     {
         match self.kind {
             GeometryKind::SUBDIVISION => {
@@ -1850,12 +1857,12 @@ impl_geometry_type!(Instance, GeometryKind::INSTANCE,
 fn intersect_filter_function<F, D>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
-    F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+    F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, &mut IntersectContext, RayN<'a>, HitN<'a>),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+        F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, &mut IntersectContext, RayN<'a>, HitN<'a>),
     {
         let cb_ptr =
             (*((*args).geometryUserPtr as *mut GeometryData)).intersect_filter_fn as *mut F;
@@ -1880,10 +1887,12 @@ where
                 RayN {
                     ptr: &mut *(*args).ray,
                     len: (*args).N as usize,
+                    marker: PhantomData,
                 },
                 HitN {
                     ptr: &mut *(*args).hit,
                     len: (*args).N as usize,
+                    marker: PhantomData,
                 },
             );
         }
@@ -1926,10 +1935,12 @@ where
                 RayN {
                     ptr: &mut *(*args).ray,
                     len,
+                    marker: PhantomData,
                 },
                 HitN {
                     ptr: &mut *(*args).hit,
                     len,
+                    marker: PhantomData,
                 },
             );
         }
@@ -1988,12 +1999,19 @@ where
 fn intersect_function<F, D>(_f: &mut F) -> RTCIntersectFunctionN
 where
     D: UserGeometryData,
-    F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayHitN),
+    F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayHitN<'a>),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCIntersectFunctionNArguments)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayHitN),
+        F: for<'a> FnMut(
+            &'a mut [i32],
+            Option<&mut D>,
+            u32,
+            u32,
+            &mut IntersectContext,
+            RayHitN<'a>,
+        ),
     {
         let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
             .user_fns
@@ -2026,6 +2044,7 @@ where
                 RayHitN {
                     ptr: (*args).rayhit,
                     len: (*args).N as usize,
+                    marker: PhantomData,
                 },
             );
         }
@@ -2039,12 +2058,12 @@ where
 fn occluded_function<F, D>(_f: &mut F) -> RTCOccludedFunctionN
 where
     D: UserGeometryData,
-    F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN),
+    F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN<'a>),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCOccludedFunctionNArguments)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN),
+        F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, u32, u32, &mut IntersectContext, RayN<'a>),
     {
         let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
             .user_fns
@@ -2077,6 +2096,7 @@ where
                 RayN {
                     ptr: (*args).ray,
                     len: (*args).N as usize,
+                    marker: PhantomData,
                 },
             )
         }
@@ -2086,7 +2106,10 @@ where
 }
 
 /// Struct holding data for a set of vertices in SoA layout.
-pub struct Vertices {
+/// This is used as a parameter to the callback function set by
+/// [`Geometry::set_displacement_function`].
+pub struct Vertices<'a> {
+    /// The number of vertices.
     len: usize,
     /// The u coordinates of points to displace.
     u: *const f32,
@@ -2104,10 +2127,12 @@ pub struct Vertices {
     p_y: *mut f32,
     /// The z components of points to displace.
     p_z: *mut f32,
+    /// To make sure we don't outlive the lifetime of the pointers.
+    marker: PhantomData<&'a mut f32>,
 }
 
-impl Vertices {
-    pub fn into_iter_mut(self) -> VerticesIterMut {
+impl<'a> Vertices<'a> {
+    pub fn into_iter_mut(self) -> VerticesIterMut<'a> {
         VerticesIterMut {
             inner: self,
             cur: 0,
@@ -2115,13 +2140,13 @@ impl Vertices {
     }
 }
 
-pub struct VerticesIterMut {
-    inner: Vertices,
+pub struct VerticesIterMut<'a> {
+    inner: Vertices<'a>,
     cur: usize,
 }
 
-impl Iterator for VerticesIterMut {
-    type Item = ([f32; 2], [f32; 3], [&mut f32; 3]);
+impl<'a> Iterator for VerticesIterMut<'a> {
+    type Item = ([f32; 2], [f32; 3], [&'a mut f32; 3]);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.cur < self.inner.len {
@@ -2147,7 +2172,7 @@ impl Iterator for VerticesIterMut {
     }
 }
 
-impl ExactSizeIterator for VerticesIterMut {
+impl<'a> ExactSizeIterator for VerticesIterMut<'a> {
     fn len(&self) -> usize { self.inner.len - self.cur }
 }
 
@@ -2156,7 +2181,7 @@ impl ExactSizeIterator for VerticesIterMut {
 fn displacement_function<F, D>(_f: &mut F) -> RTCDisplacementFunctionN
 where
     D: UserGeometryData,
-    F: FnMut(RTCGeometry, Option<&mut D>, u32, u32, Vertices),
+    F: for<'a> FnMut(RTCGeometry, Option<&mut D>, u32, u32, Vertices<'a>),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCDisplacementFunctionNArguments)
     where
@@ -2196,6 +2221,7 @@ where
                 p_x: (*args).P_x,
                 p_y: (*args).P_y,
                 p_z: (*args).P_z,
+                marker: PhantomData,
             };
             cb(
                 (*args).geometry,

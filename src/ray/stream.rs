@@ -1,12 +1,36 @@
-use std::{f32, iter::Iterator, u32};
+use core::alloc;
+use std::{iter::Iterator, marker::PhantomData, ptr::NonNull};
 
 use crate::{
     aligned_vector, aligned_vector_init, sys, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter,
     SoARayIterMut,
 };
 
+// struct RayNp2 {
+//     ptr: NonNull<u8>,
+//     len: usize,
+//     marker: PhantomData<u8>,
+// }
+//
+// impl RayNp2 {
+//     pub fn new(n: usize) -> Self {
+//         unsafe {
+//             let layout = alloc::Layout::from_size_align(48 * n, 16).unwrap();
+//             let ptr = match NonNull::new(alloc::alloc_zeroed(layout) as *mut
+// u8) {                 Some(ptr) => ptr,
+//                 None => alloc::handle_alloc_error(layout),
+//             };
+//             RayNp2 {
+//                 ptr,
+//                 len: n,
+//                 marker: PhantomData,
+//             }
+//         }
+//     }
+// }
+
 /// A ray stream stored in SoA format
-pub struct RayStream {
+pub struct RayNp {
     org_x: Vec<f32>,
     org_y: Vec<f32>,
     org_z: Vec<f32>,
@@ -21,10 +45,10 @@ pub struct RayStream {
     flags: Vec<::std::os::raw::c_uint>,
 }
 
-impl RayStream {
+impl RayNp {
     /// Allocate a new Ray stream with room for `n` rays
-    pub fn new(n: usize) -> RayStream {
-        RayStream {
+    pub fn new(n: usize) -> RayNp {
+        RayNp {
             org_x: aligned_vector::<f32>(n, 16),
             org_y: aligned_vector::<f32>(n, 16),
             org_z: aligned_vector::<f32>(n, 16),
@@ -39,8 +63,8 @@ impl RayStream {
             flags: aligned_vector_init::<u32>(n, 16, 0),
         }
     }
-    pub fn iter(&self) -> SoARayIter<RayStream> { SoARayIter::new(self, self.len()) }
-    pub fn iter_mut(&mut self) -> SoARayIterMut<RayStream> {
+    pub fn iter(&self) -> SoARayIter<RayNp> { SoARayIter::new(self, self.len()) }
+    pub fn iter_mut(&mut self) -> SoARayIterMut<RayNp> {
         let n = self.len();
         SoARayIterMut::new(self, n)
     }
@@ -64,7 +88,7 @@ impl RayStream {
     }
 }
 
-impl SoARay for RayStream {
+impl SoARay for RayNp {
     fn org(&self, i: usize) -> [f32; 3] { [self.org_x[i], self.org_y[i], self.org_z[i]] }
     fn set_org(&mut self, i: usize, o: [f32; 3]) {
         self.org_x[i] = o[0];
@@ -98,7 +122,7 @@ impl SoARay for RayStream {
     fn set_flags(&mut self, i: usize, flags: u32) { self.flags[i] = flags; }
 }
 
-pub struct HitStream {
+pub struct HitNp {
     ng_x: Vec<f32>,
     ng_y: Vec<f32>,
     ng_z: Vec<f32>,
@@ -109,9 +133,9 @@ pub struct HitStream {
     inst_id: Vec<::std::os::raw::c_uint>,
 }
 
-impl HitStream {
-    pub fn new(n: usize) -> HitStream {
-        HitStream {
+impl HitNp {
+    pub fn new(n: usize) -> HitNp {
+        HitNp {
             ng_x: aligned_vector::<f32>(n, 16),
             ng_y: aligned_vector::<f32>(n, 16),
             ng_z: aligned_vector::<f32>(n, 16),
@@ -122,15 +146,16 @@ impl HitStream {
             inst_id: aligned_vector_init::<u32>(n, 16, u32::MAX),
         }
     }
-    pub fn any_hit(&self) -> bool { self.hits().fold(false, |acc, g| acc || g) }
-    pub fn hits<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
+    pub fn any_hit(&self) -> bool { self.hits().any(|g| g) }
+    pub fn hits(&self) -> impl Iterator<Item = bool> + '_ {
         self.geom_id.iter().map(|g| *g != u32::MAX)
     }
-    pub fn iter(&self) -> SoAHitIter<HitStream> { SoAHitIter::new(self, self.len()) }
-    pub fn iter_hits<'a>(&'a self) -> impl Iterator<Item = SoAHitRef<HitStream>> + 'a {
+    pub fn iter(&self) -> SoAHitIter<HitNp> { SoAHitIter::new(self, self.len()) }
+    pub fn iter_hits(&self) -> impl Iterator<Item = SoAHitRef<HitNp>> {
         SoAHitIter::new(self, self.len()).filter(|h| h.hit())
     }
     pub fn len(&self) -> usize { self.ng_x.len() }
+    pub fn empty(&self) -> bool { self.len() == 0 }
     pub unsafe fn as_hitnp(&mut self) -> sys::RTCHitNp {
         sys::RTCHitNp {
             Ng_x: self.ng_x.as_mut_ptr(),
@@ -145,7 +170,7 @@ impl HitStream {
     }
 }
 
-impl SoAHit for HitStream {
+impl SoAHit for HitNp {
     fn normal(&self, i: usize) -> [f32; 3] { [self.ng_x[i], self.ng_y[i], self.ng_z[i]] }
     fn set_normal(&mut self, i: usize, n: [f32; 3]) {
         self.ng_x[i] = n[0];
@@ -167,23 +192,24 @@ impl SoAHit for HitStream {
     fn set_inst_id(&mut self, i: usize, id: u32) { self.inst_id[i] = id; }
 }
 
-pub struct RayHitStream {
-    pub ray: RayStream,
-    pub hit: HitStream,
+pub struct RayHitNp {
+    pub ray: RayNp,
+    pub hit: HitNp,
 }
 
-impl RayHitStream {
-    pub fn new(ray: RayStream) -> RayHitStream {
+impl RayHitNp {
+    pub fn new(ray: RayNp) -> RayHitNp {
         let n = ray.len();
-        RayHitStream {
+        RayHitNp {
             ray,
-            hit: HitStream::new(n),
+            hit: HitNp::new(n),
         }
     }
-    pub fn iter(&self) -> std::iter::Zip<SoARayIter<RayStream>, SoAHitIter<HitStream>> {
+    pub fn iter(&self) -> std::iter::Zip<SoARayIter<RayNp>, SoAHitIter<HitNp>> {
         self.ray.iter().zip(self.hit.iter())
     }
     pub fn len(&self) -> usize { self.ray.len() }
+    pub fn empty(&self) -> bool { self.len() == 0 }
     pub unsafe fn as_rayhitnp(&mut self) -> sys::RTCRayHitNp {
         sys::RTCRayHitNp {
             ray: self.ray.as_raynp(),

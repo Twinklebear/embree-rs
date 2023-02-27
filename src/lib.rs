@@ -11,6 +11,8 @@
 //! See the [examples/](https://github.com/Twinklebear/embree-rs/tree/master/examples)
 //! for some example applications using the bindings.
 
+extern crate core;
+
 use std::{alloc, mem};
 
 mod buffer;
