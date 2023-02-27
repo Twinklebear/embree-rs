@@ -4,13 +4,15 @@ env:
     CARGO_TERM_COLOR: always
     EMBREE_VERSION: 3.13.5
 jobs:
-    format:
+    check_format:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v2
             - uses: actions-rs/toolchain@v1
               with:
                   toolchain: nightly
+                  override: true
+                  components: rustfmt
             - name: Format Core
               run: cargo fmt -- --check
             - name: Format Examples
