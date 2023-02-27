@@ -4,6 +4,17 @@ env:
     CARGO_TERM_COLOR: always
     EMBREE_VERSION: 3.13.5
 jobs:
+    format:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: nightly
+            - name: Format Core
+              run: cargo fmt -- --check
+            - name: Format Examples
+              run: scripts/check-examples-formatting.sh
     build_linux:
         runs-on: ubuntu-latest
         steps:
@@ -19,10 +30,6 @@ jobs:
             - run: cargo test
             - run: cargo doc
             - run: scripts/build-examples-linux-mac.sh
-            - name: Format Core
-              run: cargo fmt -- --check
-            - name: Format Examples
-              run: scripts/check-examples-formatting.sh
     build_mac:
         runs-on: macos-latest
         steps:
