@@ -104,13 +104,13 @@ impl Display {
         .expect("Failed to create device");
 
         Display {
-            window: window,
-            event_loop: event_loop,
-            instance: instance,
-            surface: surface,
-            adapter: adapter,
-            device: device,
-            queue: queue,
+            window,
+            event_loop,
+            instance,
+            surface,
+            adapter,
+            device,
+            queue,
         }
     }
 }

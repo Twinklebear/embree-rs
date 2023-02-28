@@ -252,6 +252,8 @@ impl RayHit4 {
 /// It is used to represent a packet of rays that is not known at compile
 /// time, generally used as an argument to callback functions. The size
 /// of the packet can only be either 1, 4, 8, or 16.
+///
+/// For ray streams, use [`RayNp`](`crate::ray::RayNp`).
 pub struct RayN<'a> {
     pub(crate) ptr: *mut sys::RTCRayN,
     pub(crate) len: usize,

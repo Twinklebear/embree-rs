@@ -31,11 +31,11 @@ impl Camera {
         let screen_dv = dy * dim_y;
         let dir_top_left = dz - 0.5 * screen_du - 0.5 * screen_dv;
         Camera {
-            pos: pos,
-            dir_top_left: dir_top_left,
-            screen_du: screen_du,
-            screen_dv: screen_dv,
-            img: img,
+            pos,
+            dir_top_left,
+            screen_du,
+            screen_dv,
+            img,
         }
     }
     pub fn look_at(

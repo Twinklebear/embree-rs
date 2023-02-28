@@ -20,6 +20,8 @@ pub use common::*;
 pub use camera::Camera;
 pub use display::Display;
 
+pub use image::{Rgba, RgbaImage};
+
 /// Clamp `x` to be between `min` and `max`
 pub fn clamp<T: PartialOrd>(x: T, min: T, max: T) -> T {
     if x < min {

@@ -1,3 +1,12 @@
+/// Size (horizontal) of a screen tile in pixels.
+pub const TILE_SIZE_X: u32 = 8;
+
+/// Size (vertical) of a screen tile in pixels.
+pub const TILE_SIZE_Y: u32 = 8;
+
+/// Size of a screen tile in pixels.
+pub const TILE_SIZE: u32 = TILE_SIZE_X * TILE_SIZE_Y;
+
 pub const PERMUTATIONS: [u32; 513] = [
     151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69,
     142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219,

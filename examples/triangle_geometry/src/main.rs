@@ -4,9 +4,11 @@ extern crate embree;
 extern crate support;
 
 use embree::{
-    BufferSlice, BufferUsage, Device, Format, IntersectContext, QuadMesh, Ray, TriangleMesh,
+    BufferSlice, BufferUsage, Device, Format, IntersectContext, QuadMesh, Ray, Scene, TriangleMesh,
+    INVALID_ID,
 };
-use support::Camera;
+use glam::Vec3;
+use support::{Camera, Rgba, RgbaImage, TILE_SIZE, TILE_SIZE_X, TILE_SIZE_Y};
 
 fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh<'static> {
     let mut mesh = TriangleMesh::new(device).unwrap();
@@ -88,6 +90,14 @@ fn make_ground_plane(device: &Device) -> QuadMesh<'static> {
     mesh
 }
 
+struct State {
+    ground_id: u32,
+    cube_id: u32,
+    face_colors: Vec<[f32; 3]>,
+    light_dir: Vec3,
+    scene: Scene<'static>,
+}
+
 fn main() {
     let display = support::Display::new(512, 512, "triangle geometry");
     let device = Device::new().unwrap();
@@ -105,37 +115,39 @@ fn main() {
         [1.0, 1.0, 1.0],
     ];
 
-    let face_colors = vec![
-        [1.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.5, 0.5, 0.5],
-        [0.5, 0.5, 0.5],
-        [1.0, 1.0, 1.0],
-        [1.0, 1.0, 1.0],
-        [0.0, 0.0, 1.0],
-        [0.0, 0.0, 1.0],
-        [1.0, 1.0, 0.0],
-        [1.0, 1.0, 0.0],
-    ];
+    let mut state = State {
+        face_colors: vec![
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.5, 0.5, 0.5],
+            [0.5, 0.5, 0.5],
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+        ],
+        ground_id: INVALID_ID,
+        cube_id: INVALID_ID,
+        light_dir: Vec3::new(1.0, 1.0, 1.0).normalize(),
+        scene: device.create_scene().unwrap(),
+    };
 
     let cube = make_cube(&device, &vertex_colors);
     let ground = make_ground_plane(&device);
+    state.cube_id = state.scene.attach_geometry(&cube);
+    state.ground_id = state.scene.attach_geometry(&ground);
+    state.scene.commit();
 
-    let mut scene = device.create_scene().unwrap();
-    let _ = scene.attach_geometry(&cube);
-    let ground_id = scene.attach_geometry(&ground);
-    scene.commit();
-
-    let mut intersection_ctx = IntersectContext::coherent();
-
-    let light_dir = glam::vec3(1.0, 1.0, 1.0).normalize();
-
-    support::display::run(display, move |image, camera_pose, _| {
+    let mut last_time = 0.0;
+    support::display::run(display, move |image, camera_pose, time| {
         for p in image.iter_mut() {
             *p = 0;
         }
+
         let img_dims = image.dimensions();
         let camera = Camera::look_dir(
             camera_pose.pos,
@@ -144,38 +156,101 @@ fn main() {
             75.0,
             img_dims,
         );
+
+        //render_frame(image, time, &camera, &state);
+
         // Render the scene
         for j in 0..img_dims.1 {
             for i in 0..img_dims.0 {
-                let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let ray_hit = scene.intersect(
-                    &mut intersection_ctx,
-                    Ray::new(camera.pos.into(), dir.into()),
-                );
-                if ray_hit.is_valid() {
-                    let p = image.get_pixel_mut(i, j);
-                    let diffuse = if ray_hit.hit.geomID == ground_id {
-                        glam::vec3(0.6, 0.6, 0.6)
-                    } else {
-                        glam::Vec3::from(face_colors[ray_hit.hit.primID as usize])
-                    };
-
-                    let mut shadow_ray =
-                        Ray::segment(ray_hit.hit_point(), light_dir.into(), 0.001, f32::INFINITY);
-
-                    // Check if the shadow ray is occluded.
-                    let color = if !scene.occluded(&mut intersection_ctx, &mut shadow_ray) {
-                        diffuse
-                    } else {
-                        diffuse * 0.5
-                    };
-
-                    // Write the color to the image.
-                    p[0] = (color.x * 255.0) as u8;
-                    p[1] = (color.y * 255.0) as u8;
-                    p[2] = (color.z * 255.0) as u8;
-                }
+                render_pixel(i, j, &mut image.get_pixel_mut(i, j), time, &camera, &state);
             }
         }
+
+        let elapsed = time - last_time;
+        last_time = time;
+        let fps = 1.0 / elapsed;
+        eprint!("\r{} fps", fps);
+    });
+}
+
+// Task that renders a single pixel.
+fn render_pixel(x: u32, y: u32, pixel: &mut Rgba<u8>, _time: f32, camera: &Camera, state: &State) {
+    let mut ctx = IntersectContext::coherent();
+    let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
+    let ray_hit = state
+        .scene
+        .intersect(&mut ctx, Ray::new(camera.pos.into(), dir.into()));
+    if ray_hit.is_valid() {
+        let diffuse = if ray_hit.hit.geomID == state.ground_id {
+            glam::vec3(0.6, 0.6, 0.6)
+        } else {
+            glam::Vec3::from(state.face_colors[ray_hit.hit.primID as usize])
+        };
+
+        let mut shadow_ray = Ray::segment(
+            ray_hit.hit_point(),
+            state.light_dir.into(),
+            0.001,
+            f32::INFINITY,
+        );
+
+        // Check if the shadow ray is occluded.
+        let color = if !state.scene.occluded(&mut ctx, &mut shadow_ray) {
+            diffuse
+        } else {
+            diffuse * 0.5
+        };
+
+        // Write the color to the image.
+        pixel[0] = (color.x * 255.0) as u8;
+        pixel[1] = (color.y * 255.0) as u8;
+        pixel[2] = (color.z * 255.0) as u8;
+    }
+}
+
+fn render_tile(
+    tile_idx: u32,
+    num_tiles_x: u32,
+    num_tiles_y: u32,
+    width: u32,
+    height: u32,
+    time: f32,
+    camera: &Camera,
+    state: &State,
+    image: &mut RgbaImage,
+) {
+    let title_y = tile_idx / num_tiles_x;
+    let tile_x = tile_idx % num_tiles_x;
+    let x0 = tile_x * TILE_SIZE_X;
+    let y0 = title_y * TILE_SIZE_Y;
+    let x1 = (x0 + TILE_SIZE_X).min(width);
+    let y1 = (y0 + TILE_SIZE_Y).min(height);
+
+    for y in y0..y1 {
+        for x in x0..x1 {
+            render_pixel(x, y, &mut image.get_pixel_mut(x, y), time, &camera, &state);
+        }
+    }
+}
+
+fn render_frame(image: &mut RgbaImage, time: f32, camera: &Camera, state: &State) {
+    use rayon::prelude::*;
+    let img_dims = image.dimensions();
+    let num_tiles_x = (img_dims.0 + TILE_SIZE_X - 1) / TILE_SIZE_X;
+    let num_tiles_y = (img_dims.1 + TILE_SIZE_Y - 1) / TILE_SIZE_Y;
+    let num_tiles = num_tiles_x * num_tiles_y;
+
+    (0..num_tiles).into_par_iter().for_each(|tile_idx| {
+        render_tile(
+            tile_idx,
+            num_tiles_x,
+            num_tiles_y,
+            img_dims.0,
+            img_dims.1,
+            time,
+            camera,
+            state,
+            image,
+        );
     });
 }
