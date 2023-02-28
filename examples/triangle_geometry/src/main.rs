@@ -148,13 +148,12 @@ fn main() {
     let mut tiled = TiledImage::new(DISPLAY_WIDTH, DISPLAY_HEIGHT, TILE_SIZE_X, TILE_SIZE_Y);
     let mut last_time = 0.0;
     display::run(display, move |image, camera_pose, time| {
-        let img_dims = image.dimensions();
         let camera = Camera::look_dir(
             camera_pose.pos,
             camera_pose.dir,
             camera_pose.up,
             75.0,
-            img_dims,
+            image.dimensions(),
         );
 
         render_frame(&mut tiled, image, time, &camera, &state);
@@ -167,12 +166,13 @@ fn main() {
 }
 
 // Task that renders a single pixel.
-fn render_pixel(x: u32, y: u32, pixel: &mut u32, _time: f32, camera: &Camera, state: &State) {
+fn render_pixel(x: u32, y: u32, _time: f32, camera: &Camera, state: &State) -> u32 {
     let mut ctx = IntersectContext::coherent();
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
     let ray_hit = state
         .scene
         .intersect(&mut ctx, Ray::new(camera.pos.into(), dir.into()));
+    let mut pixel = 0;
     if ray_hit.is_valid() {
         let diffuse = if ray_hit.hit.geomID == state.ground_id {
             glam::vec3(0.6, 0.6, 0.6)
@@ -194,13 +194,14 @@ fn render_pixel(x: u32, y: u32, pixel: &mut u32, _time: f32, camera: &Camera, st
             diffuse * 0.5
         };
 
-        *pixel = rgba_to_u32(
+        pixel = rgba_to_u32(
             (color.x * 255.0) as u8,
             (color.y * 255.0) as u8,
             (color.z * 255.0) as u8,
             255,
         );
     }
+    pixel
 }
 
 fn render_frame(
@@ -215,7 +216,7 @@ fn render_frame(
         tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
             let x = tile.x + (i % tile.w as usize) as u32;
             let y = tile.y + (i / tile.w as usize) as u32;
-            render_pixel(x, y, pixel, time, camera, state);
+            *pixel = render_pixel(x, y, time, camera, state);
         });
     });
     tiled.write_to_image(frame);
