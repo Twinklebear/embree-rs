@@ -1,3 +1,6 @@
+pub const DEFAULT_DISPLAY_WIDTH: u32 = 512;
+pub const DEFAULT_DISPLAY_HEIGHT: u32 = 512;
+
 /// Size (horizontal) of a screen tile in pixels.
 pub const TILE_SIZE_X: u32 = 8;
 
@@ -562,9 +565,7 @@ pub fn fade(t: f32) -> f32 { (t * t * t) * (t * (t * 6.0 - 15.0) + 10.0) }
 #[inline(always)]
 pub fn grad3(hash: u32, x: f32, y: f32, z: f32) -> f32 {
     let h = hash & 127;
-    x * G3[h as usize * 4] as f32
-        + y * G3[h as usize * 4 + 1] as f32
-        + z * G3[h as usize * 4 + 2] as f32
+    x * G3[h as usize * 4] + y * G3[h as usize * 4 + 1] + z * G3[h as usize * 4 + 2]
 }
 
 pub fn noise(pos: [f32; 3]) -> f32 {

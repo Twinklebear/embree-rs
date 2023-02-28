@@ -1,5 +1,4 @@
-use core::alloc;
-use std::{iter::Iterator, marker::PhantomData, ptr::NonNull};
+use std::iter::Iterator;
 
 use crate::{
     aligned_vector, aligned_vector_init, sys, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter,

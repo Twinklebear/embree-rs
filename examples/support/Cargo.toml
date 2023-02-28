@@ -12,4 +12,5 @@ clock_ticks = "0.1.1"
 wgpu = "0.12"
 winit = "0.26"
 futures = {version = "0.3", features = ["executor"]}
+rayon = "1.5"
 

@@ -3,19 +3,22 @@
 use embree::{
     BufferUsage, BuildQuality, Device, Format, Geometry, IntersectContext, Ray, Scene, SceneFlags,
 };
-use glam::{vec3, Vec3};
-use support::Camera;
+use glam::Vec3;
+use support::{
+    rgba_to_u32, Camera, IndexedParallelIterator, ParallelIterator, ParallelSliceMut, RgbaImage,
+    TiledImage, DEFAULT_DISPLAY_HEIGHT, DEFAULT_DISPLAY_WIDTH, TILE_SIZE_X, TILE_SIZE_Y,
+};
 
 const NUM_SPHERES: usize = 20;
 const NUM_PHI: usize = 120;
 const NUM_THETA: usize = 2 * NUM_PHI;
 
-fn create_sphere<'a, 'b>(
-    device: &'a Device,
+fn create_sphere<'a>(
+    device: &Device,
     quality: BuildQuality,
     pos: Vec3,
     radius: f32,
-) -> Geometry<'b> {
+) -> Geometry<'a> {
     // Create a triangulated sphere
     let mut geometry = device
         .create_geometry(embree::GeometryKind::TRIANGLE)
@@ -85,7 +88,7 @@ fn create_sphere<'a, 'b>(
     geometry
 }
 
-fn create_ground_plane<'a, 'b>(device: &'a Device) -> Geometry<'b> {
+fn create_ground_plane<'a>(device: &Device) -> Geometry<'a> {
     let mut geometry = Geometry::new(device, embree::GeometryKind::TRIANGLE).unwrap();
     {
         geometry
@@ -121,38 +124,23 @@ fn animate_sphere(scene: &Scene, id: u32, pos: Vec3, radius: f32, time: f32) {
     let num_phi_rcp = 1.0 / NUM_PHI as f32;
     let f = 2.0 * (1.0 + 0.5 * time.sin());
 
-    #[cfg(feature = "rayon")]
-    {
-        use rayon::prelude::*;
-        vertices
-            .par_chunks_mut(NUM_THETA)
-            .enumerate()
-            .for_each(|(phi_idx, chunk)| {
-                let phi = phi_idx as f32 * num_phi_rcp * std::f32::consts::PI;
-                for (theta_idx, v) in chunk.iter_mut().enumerate() {
-                    let theta = theta_idx as f32 * num_theta_rcp * 2.0 * std::f32::consts::PI;
-                    v[0] = pos.x + radius * (f * phi).sin() * theta.sin();
-                    v[1] = pos.y + radius * phi.cos();
-                    v[2] = pos.z + radius * (f * phi).sin() * theta.cos();
-                }
-            });
-    }
-    #[cfg(not(feature = "rayon"))]
-    {
-        for phi_idx in 0..NUM_PHI {
-            for theta_idx in 0..NUM_THETA {
-                let phi = phi_idx as f32 * num_phi_rcp * std::f32::consts::PI;
+    vertices
+        .par_chunks_mut(NUM_THETA)
+        .enumerate()
+        .for_each(|(phi_idx, chunk)| {
+            let phi = phi_idx as f32 * num_phi_rcp * std::f32::consts::PI;
+            for (theta_idx, v) in chunk.iter_mut().enumerate() {
                 let theta = theta_idx as f32 * num_theta_rcp * 2.0 * std::f32::consts::PI;
-                let mut v = vertices[phi_idx * NUM_THETA + theta_idx];
                 v[0] = pos.x + radius * (f * phi).sin() * theta.sin();
                 v[1] = pos.y + radius * phi.cos();
                 v[2] = pos.z + radius * (f * phi).sin() * theta.cos();
             }
-        }
-    }
+        });
     geometry.update_buffer(BufferUsage::VERTEX, 0);
     geometry.commit();
 }
+
+const LIGHT_DIR: [f32; 3] = [0.58, 0.58, 0.58];
 
 fn main() {
     let device = Device::new().unwrap();
@@ -191,8 +179,14 @@ fn main() {
     colors[id as usize] = Vec3::new(1.0, 1.0, 1.0);
     scene.commit();
 
+    let mut last_time = 0.0;
     let display = support::Display::new(512, 512, "Dynamic Scene");
-    let light_dir = vec3(1.0, 1.0, 1.0).normalize();
+    let mut tiled = TiledImage::new(
+        DEFAULT_DISPLAY_WIDTH,
+        DEFAULT_DISPLAY_HEIGHT,
+        TILE_SIZE_X,
+        TILE_SIZE_Y,
+    );
     support::display::run(display, move |image, camera_pose, time| {
         for p in image.iter_mut() {
             *p = 0;
@@ -211,36 +205,67 @@ fn main() {
         }
         scene.commit();
 
-        // Render the scene
-        for j in 0..img_dims.1 {
-            for i in 0..img_dims.0 {
-                let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let mut intersection_ctx = IntersectContext::coherent();
-                let ray_hit = scene.intersect(
-                    &mut intersection_ctx,
-                    Ray::new(camera.pos.into(), dir.into()),
-                );
+        render_frame(&mut tiled, image, time, &scene, &camera, &colors);
 
-                if ray_hit.is_valid() {
-                    let p = image.get_pixel_mut(i, j);
-                    let diffuse = colors[ray_hit.hit.geomID as usize];
-
-                    let mut shadow_ray =
-                        Ray::segment(ray_hit.hit_point(), light_dir.into(), 0.001, f32::INFINITY);
-
-                    // Check if the shadow ray is occluded.
-                    let color = if !scene.occluded(&mut intersection_ctx, &mut shadow_ray) {
-                        diffuse
-                    } else {
-                        diffuse * 0.5
-                    };
-
-                    // Write the color to the image.
-                    p[0] = (color.x * 255.0) as u8;
-                    p[1] = (color.y * 255.0) as u8;
-                    p[2] = (color.z * 255.0) as u8;
-                }
-            }
-        }
+        let elapsed = time - last_time;
+        last_time = time;
+        let fps = 1.0 / elapsed;
+        eprint!("\r{} fps", fps);
     });
+}
+
+fn render_pixel(
+    x: u32,
+    y: u32,
+    pixel: &mut u32,
+    _time: f32,
+    scene: &Scene,
+    camera: &Camera,
+    colors: &[Vec3],
+) {
+    let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
+    let mut intersection_ctx = IntersectContext::coherent();
+    let ray_hit = scene.intersect(
+        &mut intersection_ctx,
+        Ray::new(camera.pos.into(), dir.into()),
+    );
+
+    if ray_hit.is_valid() {
+        let diffuse = colors[ray_hit.hit.geomID as usize];
+
+        let mut shadow_ray = Ray::segment(ray_hit.hit_point(), LIGHT_DIR, 0.001, f32::INFINITY);
+
+        // Check if the shadow ray is occluded.
+        let color = if !scene.occluded(&mut intersection_ctx, &mut shadow_ray) {
+            diffuse
+        } else {
+            diffuse * 0.5
+        };
+
+        *pixel = rgba_to_u32(
+            (color.x * 255.0) as u8,
+            (color.y * 255.0) as u8,
+            (color.z * 255.0) as u8,
+            255,
+        );
+    }
+}
+
+fn render_frame(
+    tiled: &mut TiledImage,
+    frame: &mut RgbaImage,
+    time: f32,
+    scene: &Scene,
+    camera: &Camera,
+    colors: &[Vec3],
+) {
+    tiled.reset_pixels();
+    tiled.par_tiles_mut().for_each(|tile| {
+        tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
+            let x = tile.x + (i % tile.w as usize) as u32;
+            let y = tile.y + (i / tile.w as usize) as u32;
+            render_pixel(x, y, pixel, time, scene, camera, colors);
+        });
+    });
+    tiled.write_to_image(frame);
 }

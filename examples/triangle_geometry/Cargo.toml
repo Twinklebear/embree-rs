@@ -5,8 +5,9 @@ authors = ["Will Usher <will@willusher.io>"]
 edition = "2021"
 
 [dependencies]
-glam = "0.22.0"
+glam = "0.23.0"
 embree = { path = "../.." }
 support = { path = "../support" }
-rayon = "1.5"
 
+[profile.release]
+debug = 1

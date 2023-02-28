@@ -8,7 +8,10 @@ use embree::{
     INVALID_ID,
 };
 use glam::Vec3;
-use support::{Camera, Rgba, RgbaImage, TILE_SIZE, TILE_SIZE_X, TILE_SIZE_Y};
+use support::*;
+
+const DISPLAY_WIDTH: u32 = 512;
+const DISPLAY_HEIGHT: u32 = 512;
 
 fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh<'static> {
     let mut mesh = TriangleMesh::new(device).unwrap();
@@ -99,7 +102,7 @@ struct State {
 }
 
 fn main() {
-    let display = support::Display::new(512, 512, "triangle geometry");
+    let display = Display::new(DISPLAY_WIDTH, DISPLAY_HEIGHT, "triangle geometry");
     let device = Device::new().unwrap();
     device.set_error_function(|err, msg| {
         println!("{}: {}", err, msg);
@@ -142,12 +145,9 @@ fn main() {
     state.ground_id = state.scene.attach_geometry(&ground);
     state.scene.commit();
 
+    let mut tiled = TiledImage::new(DISPLAY_WIDTH, DISPLAY_HEIGHT, TILE_SIZE_X, TILE_SIZE_Y);
     let mut last_time = 0.0;
-    support::display::run(display, move |image, camera_pose, time| {
-        for p in image.iter_mut() {
-            *p = 0;
-        }
-
+    display::run(display, move |image, camera_pose, time| {
         let img_dims = image.dimensions();
         let camera = Camera::look_dir(
             camera_pose.pos,
@@ -157,14 +157,7 @@ fn main() {
             img_dims,
         );
 
-        //render_frame(image, time, &camera, &state);
-
-        // Render the scene
-        for j in 0..img_dims.1 {
-            for i in 0..img_dims.0 {
-                render_pixel(i, j, &mut image.get_pixel_mut(i, j), time, &camera, &state);
-            }
-        }
+        render_frame(&mut tiled, image, time, &camera, &state);
 
         let elapsed = time - last_time;
         last_time = time;
@@ -174,7 +167,7 @@ fn main() {
 }
 
 // Task that renders a single pixel.
-fn render_pixel(x: u32, y: u32, pixel: &mut Rgba<u8>, _time: f32, camera: &Camera, state: &State) {
+fn render_pixel(x: u32, y: u32, pixel: &mut u32, _time: f32, camera: &Camera, state: &State) {
     let mut ctx = IntersectContext::coherent();
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
     let ray_hit = state
@@ -201,56 +194,29 @@ fn render_pixel(x: u32, y: u32, pixel: &mut Rgba<u8>, _time: f32, camera: &Camer
             diffuse * 0.5
         };
 
-        // Write the color to the image.
-        pixel[0] = (color.x * 255.0) as u8;
-        pixel[1] = (color.y * 255.0) as u8;
-        pixel[2] = (color.z * 255.0) as u8;
+        *pixel = rgba_to_u32(
+            (color.x * 255.0) as u8,
+            (color.y * 255.0) as u8,
+            (color.z * 255.0) as u8,
+            255,
+        );
     }
 }
 
-fn render_tile(
-    tile_idx: u32,
-    num_tiles_x: u32,
-    num_tiles_y: u32,
-    width: u32,
-    height: u32,
+fn render_frame(
+    tiled: &mut TiledImage,
+    frame: &mut RgbaImage,
     time: f32,
     camera: &Camera,
     state: &State,
-    image: &mut RgbaImage,
 ) {
-    let title_y = tile_idx / num_tiles_x;
-    let tile_x = tile_idx % num_tiles_x;
-    let x0 = tile_x * TILE_SIZE_X;
-    let y0 = title_y * TILE_SIZE_Y;
-    let x1 = (x0 + TILE_SIZE_X).min(width);
-    let y1 = (y0 + TILE_SIZE_Y).min(height);
-
-    for y in y0..y1 {
-        for x in x0..x1 {
-            render_pixel(x, y, &mut image.get_pixel_mut(x, y), time, &camera, &state);
-        }
-    }
-}
-
-fn render_frame(image: &mut RgbaImage, time: f32, camera: &Camera, state: &State) {
-    use rayon::prelude::*;
-    let img_dims = image.dimensions();
-    let num_tiles_x = (img_dims.0 + TILE_SIZE_X - 1) / TILE_SIZE_X;
-    let num_tiles_y = (img_dims.1 + TILE_SIZE_Y - 1) / TILE_SIZE_Y;
-    let num_tiles = num_tiles_x * num_tiles_y;
-
-    (0..num_tiles).into_par_iter().for_each(|tile_idx| {
-        render_tile(
-            tile_idx,
-            num_tiles_x,
-            num_tiles_y,
-            img_dims.0,
-            img_dims.1,
-            time,
-            camera,
-            state,
-            image,
-        );
+    tiled.reset_pixels();
+    tiled.par_tiles_mut().for_each(|tile| {
+        tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
+            let x = tile.x + (i % tile.w as usize) as u32;
+            let y = tile.y + (i / tile.w as usize) as u32;
+            render_pixel(x, y, pixel, time, camera, state);
+        });
     });
+    tiled.write_to_image(frame);
 }
