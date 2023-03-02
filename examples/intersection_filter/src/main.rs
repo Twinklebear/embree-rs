@@ -10,11 +10,10 @@
 //! occluder is hit.
 
 use embree::{
-    AsRay, AsRayHit, BufferSlice, BufferUsage, BuildQuality, Device, Format, Geometry,
-    GeometryKind, HitN, IntersectContext, IntersectContextExt, Ray, RayExt, RayHit, RayHitExt,
-    RayN, Scene, ValidMasks,
+    BufferSlice, BufferUsage, BuildQuality, Device, Format, Geometry, GeometryKind, HitN,
+    IntersectContext, IntersectContextExt, Ray, RayHit, RayN, Scene, ValidMasks,
 };
-use glam::{vec3, Mat3, Vec3};
+use glam::{vec3, Mat3, Mat4, Vec3, Vec4};
 use support::{
     rgba_to_u32, Align16Array, Camera, Mode, ParallelIterator, RgbaImage, Tile, TiledImage,
     DEFAULT_DISPLAY_HEIGHT, DEFAULT_DISPLAY_WIDTH, TILE_SIZE_X, TILE_SIZE_Y,
@@ -44,14 +43,14 @@ const COLORS: [[f32; 3]; 12] = [
 const MODE: Mode = Mode::Normal;
 
 const CUBE_VERTICES: Align16Array<[f32; 4], CUBE_NUM_VERTICES> = Align16Array([
-    [-1.0, -1.0, -1.0, 0.0],
-    [1.0, -1.0, -1.0, 0.0],
-    [1.0, -1.0, 1.0, 0.0],
-    [-1.0, -1.0, 1.0, 0.0],
-    [-1.0, 1.0, -1.0, 0.0],
-    [1.0, 1.0, -1.0, 0.0],
-    [1.0, 1.0, 1.0, 0.0],
-    [-1.0, 1.0, 1.0, 0.0],
+    [-1.0, -1.0, -1.0, 1.0],
+    [-1.0, -1.0, 1.0, 1.0],
+    [-1.0, 1.0, -1.0, 1.0],
+    [-1.0, 1.0, 1.0, 1.0],
+    [1.0, -1.0, -1.0, 1.0],
+    [1.0, -1.0, 1.0, 1.0],
+    [1.0, 1.0, -1.0, 1.0],
+    [1.0, 1.0, 1.0, 1.0],
 ]);
 
 const CUBE_QUAD_INDICES: Align16Array<u32, CUBE_NUM_QUAD_INDICES> = Align16Array([
@@ -82,7 +81,7 @@ const CUBE_QUAD_FACES: [u32; CUBE_NUM_QUAD_FACES] = [4; 6];
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-struct ExtraData {
+struct RayExtra {
     transparency: f32, // accumulated transparency
     first_hit: u32,    // index of first hit
     last_hit: u32,     // index of last hit
@@ -90,9 +89,9 @@ struct ExtraData {
     hit_prim_ids: [u32; HIT_LIST_LEN],
 }
 
-impl Default for ExtraData {
+impl Default for RayExtra {
     fn default() -> Self {
-        ExtraData {
+        RayExtra {
             transparency: 1.0,
             first_hit: 0,
             last_hit: 0,
@@ -102,66 +101,63 @@ impl Default for ExtraData {
     }
 }
 
-type Ray2 = RayHitExt<ExtraData>;
-
 fn transparency_function(h: Vec3) -> f32 {
     let v = ((4.0 * h.x).sin() * (4.0 * h.y).cos() * (4.0 * h.z).sin()).abs();
     ((v - 0.1) * 3.0).clamp(0.0, 1.0)
 }
 
-type IntersectContext2<'a> = IntersectContextExt<&'a mut Ray2>;
+type IntersectContext2 = IntersectContextExt<RayExtra>;
 
 fn render_pixel(x: u32, y: u32, camera: &Camera, scene: &Scene) -> u32 {
     let mut weight = 1.0;
     let mut color = Vec3::ZERO;
-    let mut primary = Ray2::new_with_ray(
-        Ray::new_with_id(
-            camera.pos.into(),
-            camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5)).into(),
-            0, // needs to encode rayID for filter function
-        ),
-        ExtraData::default(),
-    );
-    let mut ctx = IntersectContext2::coherent(&mut primary);
+    let mut primary = RayHit::from_ray(Ray::new_with_id(
+        camera.pos.into(),
+        camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5)).into(),
+        0, // needs to encode rayID for filter function
+    ));
+    let mut primary_extra = RayExtra {
+        transparency: 0.0,
+        ..Default::default()
+    };
+    let mut primary_ctx = IntersectContext2::coherent(primary_extra);
+
+    let shadow_extra = RayExtra::default();
+    let mut ctx_shadow = IntersectContext2::coherent(shadow_extra);
 
     loop {
-        scene.intersect(&mut ctx.context, ctx.extra);
-        if !ctx.extra.ray.is_valid() {
+        scene.intersect(&mut primary_ctx, &mut primary);
+
+        if !primary.is_valid() {
             break;
         }
 
-        let opacity = 1.0 - ctx.extra.ext.transparency;
-        let diffuse = Vec3::from(COLORS[ctx.extra.ray.hit.primID as usize]);
+        let opacity = 1.0 - primary_ctx.ext.transparency;
+        let diffuse = Vec3::from(COLORS[primary.hit.primID as usize]);
         let la = diffuse * 0.5;
         color += weight * opacity * la;
         let light_dir = vec3(0.57, 0.57, 0.57);
-        // initialize shadow ray
-        let mut shadow_ray = Ray2::new_with_ray(
-            Ray::segment(
-                ctx.extra.ray.hit_point(),
-                light_dir.into(),
-                0.001,
-                f32::INFINITY,
-            ),
-            ExtraData::default(),
-        );
-        ctx.extra = &mut shadow_ray;
 
-        if !scene.occluded(&mut ctx.context, ctx.extra) {
+        // initialize shadow ray
+        let mut shadow_ray =
+            Ray::segment(primary.hit_point(), light_dir.into(), 0.001, f32::INFINITY);
+        shadow_ray.id = 0;
+
+        if !scene.occluded(&mut ctx_shadow, &mut shadow_ray) {
             let ll = diffuse
-                * ctx.extra.ext.transparency
+                * shadow_extra.transparency
                 * light_dir
-                    .dot(ctx.extra.ray.hit.normal_normalized().into()) //
+                    .dot(primary.hit.normal_normalized().into()) //
                     .clamp(0.0, 1.0);
             color += weight * opacity * ll;
         }
 
-        weight *= ctx.extra.ext.transparency;
-        ctx.extra.ray.ray.tnear = 1.001 * ctx.extra.ray.ray.tfar;
-        ctx.extra.ray.ray.tfar = f32::INFINITY;
-        ctx.extra.ray.hit.geomID = embree::INVALID_ID;
-        ctx.extra.ray.hit.primID = embree::INVALID_ID;
-        ctx.extra.ext.transparency = 0.0;
+        weight *= primary_extra.transparency;
+        primary.ray.tnear = 1.001 * primary.ray.tfar;
+        primary.ray.tfar = f32::INFINITY;
+        primary.hit.geomID = embree::INVALID_ID;
+        primary.hit.primID = embree::INVALID_ID;
+        primary_extra.transparency = 0.0;
     }
 
     rgba_to_u32(
@@ -203,7 +199,7 @@ fn intersect_filter<'a>(
     rays: RayN<'a>,
     hits: HitN<'a>,
     mut valid: ValidMasks<'a>,
-    ctx: &mut IntersectContextExt<&mut Ray2>,
+    ctx: &mut IntersectContext2,
     _user_data: Option<&mut ()>,
 ) {
     assert_eq!(rays.len(), 1);
@@ -222,7 +218,7 @@ fn intersect_filter<'a>(
         valid[0] = 0;
     } else {
         // otherwise accept hit and remember transparency
-        ctx.extra.ext.transparency = t;
+        ctx.ext.transparency = t;
     }
 }
 
@@ -230,7 +226,7 @@ fn occlusion_filter<'a>(
     rays: RayN<'a>,
     hits: HitN<'a>,
     mut valid: ValidMasks<'a>,
-    context: &mut IntersectContextExt<&mut Ray2>,
+    context: &mut IntersectContext2,
     _user_data: Option<&mut ()>,
 ) {
     assert_eq!(rays.len(), 1);
@@ -239,10 +235,10 @@ fn occlusion_filter<'a>(
         return;
     }
 
-    for i in context.extra.ext.first_hit..context.extra.ext.last_hit {
+    for i in context.ext.first_hit..context.ext.last_hit {
         let slot = i as usize % HIT_LIST_LEN;
-        if context.extra.ext.hit_geom_ids[slot] == hits.geom_id(0)
-            && context.extra.ext.hit_prim_ids[slot] == hits.prim_id(0)
+        if context.ext.hit_geom_ids[slot] == hits.geom_id(0)
+            && context.ext.hit_prim_ids[slot] == hits.prim_id(0)
         {
             valid[0] = 0; // ignore duplicate intersections
             return;
@@ -250,24 +246,19 @@ fn occlusion_filter<'a>(
     }
 
     // store hit in hit list
-    let slot = context.extra.ext.last_hit % HIT_LIST_LEN as u32;
-    context.extra.ext.hit_geom_ids[slot as usize] = hits.geom_id(0);
-    context.extra.ext.hit_prim_ids[slot as usize] = hits.prim_id(0);
-    context.extra.ext.last_hit += 1;
+    let slot = context.ext.last_hit % HIT_LIST_LEN as u32;
+    context.ext.hit_geom_ids[slot as usize] = hits.geom_id(0);
+    context.ext.hit_prim_ids[slot as usize] = hits.prim_id(0);
+    context.ext.last_hit += 1;
 
-    eprintln!(
-        "{} {}",
-        context.extra.ext.first_hit, context.extra.ext.last_hit
-    );
-
-    if context.extra.ext.last_hit - context.extra.ext.first_hit > HIT_LIST_LEN as u32 {
-        context.extra.ext.first_hit += 1;
+    if context.ext.last_hit - context.ext.first_hit > HIT_LIST_LEN as u32 {
+        context.ext.first_hit += 1;
     }
 
     let h = Vec3::from(rays.org(0)) + Vec3::from(rays.dir(0)) * rays.tfar(0);
 
     let t = transparency_function(h);
-    context.extra.ext.transparency *= t;
+    context.ext.transparency *= t;
     if t != 0.0 {
         valid[0] = 0;
     }
@@ -300,15 +291,23 @@ fn create_cube<'a>(device: &Device, offset: Vec3, scale: Vec3, rotation: f32) ->
     // create a triangulated cube with 12 triangles and 8 vertices
     let mut geom = device.create_geometry(GeometryKind::TRIANGLE).unwrap();
     let rotated = CUBE_VERTICES.map(|v| {
-        let vtx = Vec3::new(v[0], v[1], v[2]);
-        let vtx = offset + Mat3::from_axis_angle(Vec3::Y, rotation) * scale * vtx;
-        [vtx.x, vtx.y, vtx.z, 0.0]
+        (Mat4::from_translation(offset)
+            * Mat4::from_axis_angle(Vec3::Y, rotation)
+            * Mat4::from_scale(scale)
+            * Vec4::from(v))
+        .into()
     });
-    geom.set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 8)
-        .unwrap()
-        .view_mut::<[f32; 4]>()
-        .unwrap()
-        .copy_from_slice(&rotated);
+    geom.set_new_buffer(
+        BufferUsage::VERTEX,
+        0,
+        Format::FLOAT3,
+        16,
+        CUBE_NUM_VERTICES,
+    )
+    .unwrap()
+    .view_mut::<[f32; 4]>()
+    .unwrap()
+    .copy_from_slice(&rotated);
     geom.set_buffer(
         BufferUsage::INDEX,
         0,

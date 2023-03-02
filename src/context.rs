@@ -1,5 +1,14 @@
 use crate::sys::*;
 
+/// Trait for extended intersection context enabling passing of additional
+/// ray-query specific data.
+///
+/// # Safety
+///
+/// Structs that implement this trait must guarantee that they are
+/// layout-compatible with [`IntersectContext`] (i.e. pointer casts between the
+/// two types are valid). The corresponding pattern in C is called poor man's
+/// inheritance. See [`IntersectContextExt`] for an example of how to do this
 pub unsafe trait AsIntersectContext {
     type Ext;
 
@@ -82,15 +91,32 @@ unsafe impl AsIntersectContext for IntersectContext {
     fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext> { None }
 }
 
+/// As Embree 3 does not support placing additional data at the end of the ray
+/// structure, and accessing that data inside user geometry callbacks and filter
+/// callback functions, we have to attach the data to the ray query context.
 #[repr(C)]
 #[derive(Debug)]
 pub struct IntersectContextExt<E>
 where
     E: Sized,
 {
-    pub context: IntersectContext,
-    pub extra: E,
+    pub ctx: IntersectContext,
+    pub ext: E,
 }
+
+impl<E> Clone for IntersectContextExt<E>
+where
+    E: Sized + Clone,
+{
+    fn clone(&self) -> Self {
+        IntersectContextExt {
+            ctx: self.ctx,
+            ext: self.ext.clone(),
+        }
+    }
+}
+
+impl<E> Copy for IntersectContextExt<E> where E: Sized + Copy {}
 
 unsafe impl<E> AsIntersectContext for IntersectContextExt<E>
 where
@@ -98,13 +124,13 @@ where
 {
     type Ext = E;
 
-    fn as_intersect_context(&self) -> &IntersectContext { &self.context }
+    fn as_intersect_context(&self) -> &IntersectContext { &self.ctx }
 
-    fn as_intersect_context_mut(&mut self) -> &mut IntersectContext { &mut self.context }
+    fn as_intersect_context_mut(&mut self) -> &mut IntersectContext { &mut self.ctx }
 
-    fn as_intersect_context_ext(&self) -> Option<&Self::Ext> { Some(&self.extra) }
+    fn as_intersect_context_ext(&self) -> Option<&Self::Ext> { Some(&self.ext) }
 
-    fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext> { Some(&mut self.extra) }
+    fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext> { Some(&mut self.ext) }
 }
 
 impl<E> IntersectContextExt<E>
@@ -113,22 +139,22 @@ where
 {
     pub fn new(flags: RTCIntersectContextFlags, extra: E) -> IntersectContextExt<E> {
         IntersectContextExt {
-            context: IntersectContext::new(flags),
-            extra,
+            ctx: IntersectContext::new(flags),
+            ext: extra,
         }
     }
 
     pub fn coherent(extra: E) -> IntersectContextExt<E> {
         IntersectContextExt {
-            context: IntersectContext::coherent(),
-            extra,
+            ctx: IntersectContext::coherent(),
+            ext: extra,
         }
     }
 
     pub fn incoherent(extra: E) -> IntersectContextExt<E> {
         IntersectContextExt {
-            context: IntersectContext::incoherent(),
-            extra,
+            ctx: IntersectContext::incoherent(),
+            ext: extra,
         }
     }
 }
