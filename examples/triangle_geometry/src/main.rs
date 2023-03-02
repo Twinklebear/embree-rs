@@ -4,8 +4,8 @@ extern crate embree;
 extern crate support;
 
 use embree::{
-    BufferSlice, BufferUsage, Device, Format, IntersectContext, QuadMesh, Ray, Scene, TriangleMesh,
-    INVALID_ID,
+    BufferSlice, BufferUsage, Device, Format, IntersectContext, QuadMesh, Ray, RayHit, Scene,
+    TriangleMesh, INVALID_ID,
 };
 use glam::Vec3;
 use support::*;
@@ -169,9 +169,8 @@ fn main() {
 fn render_pixel(x: u32, y: u32, _time: f32, camera: &Camera, state: &State) -> u32 {
     let mut ctx = IntersectContext::coherent();
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
-    let ray_hit = state
-        .scene
-        .intersect(&mut ctx, Ray::new(camera.pos.into(), dir.into()));
+    let mut ray_hit = RayHit::new(Ray::new(camera.pos.into(), dir.into()));
+    state.scene.intersect(&mut ctx, &mut ray_hit);
     let mut pixel = 0;
     if ray_hit.is_valid() {
         let diffuse = if ray_hit.hit.geomID == state.ground_id {

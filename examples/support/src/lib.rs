@@ -13,6 +13,14 @@ pub mod math {
     pub use cgmath::*;
 }
 
+/// The type of ray used for rendering with Embree.
+pub enum Mode {
+    /// A single ray.
+    Normal,
+    /// A stream of rays.
+    Stream,
+}
+
 /// An image that is tiled into smaller tiles for parallel rendering.
 pub struct TiledImage {
     pub width: u32,

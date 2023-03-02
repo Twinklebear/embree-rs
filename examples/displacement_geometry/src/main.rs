@@ -1,8 +1,8 @@
 use embree::{
     BufferSlice, BufferUsage, Device, Format, Geometry, GeometryKind, InterpolateInput,
-    InterpolateOutput, IntersectContext, Ray, Scene, SceneFlags,
+    InterpolateOutput, IntersectContext, Ray, RayHit, Scene, SceneFlags,
 };
-use glam::vec3;
+use glam::{vec3, Vec3};
 use support::{
     noise, rgba_to_u32, Align16Array, Camera, ParallelIterator, RgbaImage, TiledImage,
     DEFAULT_DISPLAY_HEIGHT, DEFAULT_DISPLAY_WIDTH, TILE_SIZE_X, TILE_SIZE_Y,
@@ -46,6 +46,11 @@ fn displacement(p: [f32; 3]) -> f32 {
         freq *= 2.0;
     }
     dn
+}
+
+fn displacement_du_or_dv(p: Vec3, dp_du_or_dp_dv: Vec3) -> f32 {
+    let du_or_dv = 0.001;
+    (displacement((p + du_or_dv * dp_du_or_dp_dv).into()) - displacement(p.into())) / du_or_dv
 }
 
 fn create_cube(device: &Device) -> Geometry<'static> {
@@ -92,7 +97,7 @@ fn create_cube(device: &Device) -> Geometry<'static> {
     unsafe {
         geom.set_displacement_function(
             |raw_geom, user_data: Option<&mut ()>, prim_id, _, vertices| {
-                for (uv, ng, p) in vertices.into_iter_mut() {
+                for (_, ng, p) in vertices.into_iter_mut() {
                     let disp = displacement([*p[0], *p[1], *p[2]]);
                     let dp = [disp * ng[0], disp * ng[1], disp * ng[2]];
                     *p[0] += dp[0];
@@ -188,7 +193,8 @@ fn render_pixel(
 ) -> u32 {
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
     let mut ctx = IntersectContext::coherent();
-    let ray_hit = scene.intersect(&mut ctx, Ray::new(camera.pos.into(), dir.into()));
+    let mut ray_hit = RayHit::new(Ray::new(camera.pos.into(), dir.into()));
+    scene.intersect(&mut ctx, &mut ray_hit);
 
     let mut color = vec3(0.0, 0.0, 0.0);
     if ray_hit.is_valid() {
@@ -220,8 +226,8 @@ fn render_pixel(
                 let mut dp_du = glam::Vec3::from_slice(output.dp_du().as_ref().unwrap());
                 let mut dp_dv = glam::Vec3::from_slice(output.dp_dv().as_ref().unwrap());
                 let ng = dp_du.cross(dp_dv).normalize();
-                dp_du += ng * displacement([hit_point.x, hit_point.y, hit_point.z]);
-                dp_dv += ng * displacement([hit_point.x, hit_point.y, hit_point.z]);
+                dp_du += ng * displacement_du_or_dv(hit_point, dp_du);
+                dp_dv += ng * displacement_du_or_dv(hit_point, dp_dv);
                 normal = dp_du.cross(dp_dv).normalize();
             }
         }

@@ -1,7 +1,8 @@
 //! This example show how to create a dynamic scene.
 
 use embree::{
-    BufferUsage, BuildQuality, Device, Format, Geometry, IntersectContext, Ray, Scene, SceneFlags,
+    BufferUsage, BuildQuality, Device, Format, Geometry, IntersectContext, Ray, RayHit, Scene,
+    SceneFlags,
 };
 use glam::Vec3;
 use support::{
@@ -225,10 +226,8 @@ fn render_pixel(
 ) {
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
     let mut intersection_ctx = IntersectContext::coherent();
-    let ray_hit = scene.intersect(
-        &mut intersection_ctx,
-        Ray::new(camera.pos.into(), dir.into()),
-    );
+    let mut ray_hit = RayHit::new(Ray::new(camera.pos.into(), dir.into()));
+    scene.intersect(&mut intersection_ctx, &mut ray_hit);
 
     if ray_hit.is_valid() {
         let diffuse = colors[ray_hit.hit.geomID as usize];

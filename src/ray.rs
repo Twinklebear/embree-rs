@@ -8,6 +8,42 @@ pub use packet::*;
 pub use soa::*;
 pub use stream::*;
 
+/// Trait for types that can be converted to a [`Ray`].
+///
+/// Structs that implement this trait must guarantee that they are
+/// layout-compatible with [`Ray`] (i.e. pointer casts between the two types are
+/// valid). Make the [`Ray`] type the first field of the struct.
+pub unsafe trait AsRay: Sized {
+    type RayExt: Sized;
+
+    fn as_ray(&self) -> &Ray;
+    fn as_ray_mut(&mut self) -> &mut Ray;
+    fn as_ext(&self) -> Option<&Self::RayExt>;
+    fn as_ext_mut(&mut self) -> Option<&mut Self::RayExt>;
+
+    fn as_ray_mut_ptr(&mut self) -> *mut Ray { self.as_ray_mut() as *mut Ray }
+
+    fn as_ray_ptr(&self) -> *const Ray { self.as_ray() as *const Ray }
+}
+
+/// Trait for types that can be converted to a [`Ray`].
+///
+/// Structs that implement this trait must guarantee that
+/// they are layout-compatible with [`Ray`] (i.e. pointer
+/// casts between the two types are valid).
+pub unsafe trait AsRayHit: AsRay {
+    type RayHitExt: Sized;
+
+    fn as_ray_hit(&self) -> &RayHit;
+    fn as_ray_hit_mut(&mut self) -> &mut RayHit;
+    fn as_ext(&self) -> Option<&Self::RayHitExt>;
+    fn as_ext_mut(&mut self) -> Option<&mut Self::RayHitExt>;
+
+    fn as_ray_hit_mut_ptr(&mut self) -> *mut RayHit { self.as_ray_hit_mut() as *mut RayHit }
+
+    fn as_ray_hit_ptr(&self) -> *const RayHit { self.as_ray_hit() as *const RayHit }
+}
+
 /// New type alias for [`sys::RTCRay`] that provides some convenience
 /// methods.
 ///
@@ -41,6 +77,23 @@ impl Ray {
     /// Creates a new ray starting at `origin` and heading in direction `dir`
     pub fn new(origin: [f32; 3], direction: [f32; 3]) -> Ray {
         Ray::segment(origin, direction, 0.0, f32::INFINITY)
+    }
+
+    pub fn new_with_id(origin: [f32; 3], direction: [f32; 3], id: u32) -> Ray {
+        Ray {
+            org_x: origin[0],
+            org_y: origin[1],
+            org_z: origin[2],
+            tnear: 0.0,
+            dir_x: direction[0],
+            dir_y: direction[1],
+            dir_z: direction[2],
+            tfar: f32::INFINITY,
+            time: 0.0,
+            mask: u32::MAX,
+            id,
+            flags: 0,
+        }
     }
 
     /// Creates a new ray starting at `origin` and heading in direction `dir`
@@ -78,6 +131,33 @@ impl Ray {
         let len = len.sqrt();
         [dir[0] / len, dir[1] / len, dir[2] / len]
     }
+}
+
+unsafe impl AsRay for Ray {
+    type RayExt = ();
+
+    fn as_ray(&self) -> &Ray { self }
+    fn as_ray_mut(&mut self) -> &mut Ray { self }
+    fn as_ext(&self) -> Option<&()> { None }
+    fn as_ext_mut(&mut self) -> Option<&mut ()> { None }
+}
+
+/// Extended ray type that contains an additional data field.
+///
+/// For the reason that the ray passed to the filter callback functions
+/// and user geometry callback functions is guaranteed to be the same
+/// ray pointer initially provided to the ray query function by the user,
+/// it is SAFE to extend the ray by additional data and access this data
+/// inside the filter callback functions (e.g. to accumulate opacity) and
+/// user geometry callback functions (e.g. to accumulate color).
+pub struct RayExt<E: Sized> {
+    pub ray: Ray,
+    pub ext: E,
+}
+
+pub struct RayHitExt<E: Sized> {
+    pub ray: RayHit,
+    pub ext: E,
 }
 
 /// New type alias for [`sys::RTCHit`] that provides some convenience
@@ -172,4 +252,28 @@ impl RayHit {
             self.ray.org_z + self.ray.dir_z * t,
         ]
     }
+}
+
+unsafe impl AsRay for RayHit {
+    type RayExt = Hit;
+
+    fn as_ray(&self) -> &Ray { &self.ray }
+
+    fn as_ray_mut(&mut self) -> &mut Ray { &mut self.ray }
+
+    fn as_ext(&self) -> Option<&Self::RayExt> { Some(&self.hit) }
+
+    fn as_ext_mut(&mut self) -> Option<&mut Self::RayExt> { Some(&mut self.hit) }
+}
+
+unsafe impl AsRayHit for RayHit {
+    type RayHitExt = ();
+
+    fn as_ray_hit(&self) -> &RayHit { self }
+
+    fn as_ray_hit_mut(&mut self) -> &mut RayHit { self }
+
+    fn as_ext(&self) -> Option<&Self::RayHitExt> { None }
+
+    fn as_ext_mut(&mut self) -> Option<&mut Self::RayHitExt> { None }
 }

@@ -261,6 +261,18 @@ pub struct RayN<'a> {
 }
 
 impl<'a> RayN<'a> {
+    pub const fn org(&self, i: usize) -> [f32; 3] {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            let ptr = self.ptr as *const f32;
+            [
+                *ptr.add(i),
+                *ptr.add(self.len + i),
+                *ptr.add(2 * self.len + i),
+            ]
+        }
+    }
+
     pub const fn org_x(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(i) }
@@ -306,6 +318,18 @@ impl<'a> RayN<'a> {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
             *(self.ptr as *mut f32).add(3 * self.len + i) = t;
+        }
+    }
+
+    pub const fn dir(&self, i: usize) -> [f32; 3] {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            let ptr = self.ptr as *const f32;
+            [
+                *ptr.add(4 * self.len + i),
+                *ptr.add(5 * self.len + i),
+                *ptr.add(6 * self.len + i),
+            ]
         }
     }
 
@@ -404,6 +428,8 @@ impl<'a> RayN<'a> {
             *(self.ptr as *mut u32).add(11 * self.len + i) = f;
         }
     }
+
+    pub const fn len(&self) -> usize { self.len }
 }
 
 /// Hit packet of runtime size.
@@ -457,6 +483,8 @@ impl<'a> HitN<'a> {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(7 * self.len + i) }
     }
+
+    pub const fn len(&self) -> usize { self.len }
 }
 
 /// Combined ray and hit packet of runtime size.

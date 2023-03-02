@@ -9,7 +9,7 @@ use crate::{
 
 use std::{
     borrow::Cow,
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Index, IndexMut},
     sync::Arc,
 };
 
@@ -677,7 +677,7 @@ impl<'buf> Geometry<'buf> {
     pub fn set_intersect_filter_function<F, D>(&mut self, filter: F)
     where
         D: UserGeometryData,
-        F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, &mut IntersectContext, RayN<'a>, HitN<'a>),
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
     {
         let mut geom_data = self.data.lock().unwrap();
         unsafe {
@@ -717,7 +717,7 @@ impl<'buf> Geometry<'buf> {
     pub fn set_occluded_filter_function<F, D>(&mut self, filter: F)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
     {
         let mut geom_data = self.data.lock().unwrap();
         unsafe {
@@ -1857,12 +1857,12 @@ impl_geometry_type!(Instance, GeometryKind::INSTANCE,
 fn intersect_filter_function<F, D>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
-    F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, &mut IntersectContext, RayN<'a>, HitN<'a>),
+    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
-        F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, &mut IntersectContext, RayN<'a>, HitN<'a>),
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
     {
         let cb_ptr =
             (*((*args).geometryUserPtr as *mut GeometryData)).intersect_filter_fn as *mut F;
@@ -1880,20 +1880,25 @@ where
                     None => None,
                 }
             };
+            let len = (*args).N as usize;
             cb(
-                std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
-                user_data,
-                &mut *(*args).context,
                 RayN {
                     ptr: &mut *(*args).ray,
-                    len: (*args).N as usize,
+                    len,
                     marker: PhantomData,
                 },
                 HitN {
                     ptr: &mut *(*args).hit,
-                    len: (*args).N as usize,
+                    len,
                     marker: PhantomData,
                 },
+                ValidMasks {
+                    ptr: &mut *(*args).valid,
+                    len,
+                    marker: PhantomData,
+                },
+                &mut *(*args).context,
+                user_data,
             );
         }
     }
@@ -1905,12 +1910,12 @@ where
 fn occluded_filter_function<F, D>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
-    F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
 {
     unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
-        F: FnMut(&mut [i32], Option<&mut D>, &mut IntersectContext, RayN, HitN),
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
     {
         let len = (*args).N as usize;
         let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData)).occluded_filter_fn as *mut F;
@@ -1929,9 +1934,6 @@ where
                 }
             };
             cb(
-                std::slice::from_raw_parts_mut((*args).valid, len),
-                user_data,
-                &mut *(*args).context,
                 RayN {
                     ptr: &mut *(*args).ray,
                     len,
@@ -1942,6 +1944,13 @@ where
                     len,
                     marker: PhantomData,
                 },
+                ValidMasks {
+                    ptr: &mut *(*args).valid,
+                    len,
+                    marker: PhantomData,
+                },
+                &mut *(*args).context,
+                user_data,
             );
         }
     }
@@ -2234,4 +2243,88 @@ where
     }
 
     Some(inner::<F, D>)
+}
+
+/// Struct holding data for valid masks used in the callback function set by
+/// [`Geometry::set_intersection_filter_function`],
+/// [`Geometry::set_occlusion_filter_function`].
+pub struct ValidMasks<'a> {
+    ptr: *const i32,
+    len: usize,
+    marker: PhantomData<&'a [i32]>,
+}
+
+pub struct ValidMasksIter<'a, 'b> {
+    inner: &'b ValidMasks<'a>,
+    cur: usize,
+}
+
+impl<'a> ValidMasks<'a> {
+    pub fn iter<'b>(&'b self) -> ValidMasksIter<'a, 'b> {
+        ValidMasksIter {
+            inner: self,
+            cur: 0,
+        }
+    }
+
+    pub fn iter_mut<'b>(&'b mut self) -> ValidMasksIterMut<'a, 'b> {
+        ValidMasksIterMut {
+            inner: self,
+            cur: 0,
+        }
+    }
+
+    pub const fn len(&self) -> usize { self.len }
+}
+
+impl<'a> Index<usize> for ValidMasks<'a> {
+    type Output = i32;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        debug_assert!(index < self.len, "index out of bounds");
+        unsafe { &*self.ptr.add(index) }
+    }
+}
+
+impl<'a> IndexMut<usize> for ValidMasks<'a> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        unsafe { &mut *(self.ptr.add(index) as *mut i32) }
+    }
+}
+
+impl<'a, 'b> Iterator for ValidMasksIter<'a, 'b> {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur < self.inner.len {
+            unsafe {
+                let valid = *self.inner.ptr.add(self.cur);
+                self.cur += 1;
+                Some(valid)
+            }
+        } else {
+            None
+        }
+    }
+}
+
+pub struct ValidMasksIterMut<'a, 'b> {
+    inner: &'b mut ValidMasks<'a>,
+    cur: usize,
+}
+
+impl<'a, 'b> Iterator for ValidMasksIterMut<'a, 'b> {
+    type Item = &'a mut i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur < self.inner.len {
+            unsafe {
+                let valid = self.inner.ptr.add(self.cur);
+                self.cur += 1;
+                Some(&mut *(valid as *mut i32))
+            }
+        } else {
+            None
+        }
+    }
 }
