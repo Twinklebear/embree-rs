@@ -3,8 +3,9 @@ use std::{
 };
 
 use crate::{
-    sys::*, Bounds, BufferSlice, BufferUsage, BuildQuality, Device, Error, Format, GeometryKind,
-    HitN, IntersectContext, QuaternionDecomposition, RayHitN, RayN, Scene, SubdivisionMode,
+    sys::*, AsIntersectContext, Bounds, BufferSlice, BufferUsage, BuildQuality, Device, Error,
+    Format, GeometryKind, HitN, IntersectContext, QuaternionDecomposition, RayHitN, RayN, Scene,
+    SubdivisionMode,
 };
 
 use std::{
@@ -674,10 +675,11 @@ impl<'buf> Geometry<'buf> {
     /// algorithms that need to extend the ray with additional data must use
     /// the rayID component of the ray to identify the original ray to
     /// access the per-ray data.
-    pub fn set_intersect_filter_function<F, D>(&mut self, filter: F)
+    pub fn set_intersect_filter_function<F, D, C>(&mut self, filter: F)
     where
         D: UserGeometryData,
-        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
+        C: AsIntersectContext,
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
     {
         let mut geom_data = self.data.lock().unwrap();
         unsafe {
@@ -714,10 +716,11 @@ impl<'buf> Geometry<'buf> {
     /// inside or outside the leaf. Please see the description of the
     /// [`Geometry::set_intersect_filter_function`] for a description of the
     /// filter callback function.
-    pub fn set_occluded_filter_function<F, D>(&mut self, filter: F)
+    pub fn set_occluded_filter_function<F, D, C>(&mut self, filter: F)
     where
         D: UserGeometryData,
-        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
+        C: AsIntersectContext,
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
     {
         let mut geom_data = self.data.lock().unwrap();
         unsafe {
@@ -1854,15 +1857,17 @@ impl_geometry_type!(Instance, GeometryKind::INSTANCE,
 
 /// Helper function to convert a Rust closure to `RTCFilterFunctionN` callback
 /// for intersect.
-fn intersect_filter_function<F, D>(_f: &mut F) -> RTCFilterFunctionN
+fn intersect_filter_function<F, D, C>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
-    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
+    C: AsIntersectContext,
+    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
 {
-    unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
+    unsafe extern "C" fn inner<F, D, C>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
-        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
+        C: AsIntersectContext,
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
     {
         let cb_ptr =
             (*((*args).geometryUserPtr as *mut GeometryData)).intersect_filter_fn as *mut F;
@@ -1897,25 +1902,27 @@ where
                     len,
                     marker: PhantomData,
                 },
-                &mut *(*args).context,
+                &mut *((*args).context as *mut _ as *mut C),
                 user_data,
             );
         }
     }
-    Some(inner::<F, D>)
+    Some(inner::<F, D, C>)
 }
 
 /// Helper function to convert a Rust closure to `RTCFilterFunctionN` callback
 /// for occluded.
-fn occluded_filter_function<F, D>(_f: &mut F) -> RTCFilterFunctionN
+fn occluded_filter_function<F, D, C>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
-    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
+    C: AsIntersectContext,
+    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
 {
-    unsafe extern "C" fn inner<F, D>(args: *const RTCFilterFunctionNArguments)
+    unsafe extern "C" fn inner<F, D, C>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
-        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut IntersectContext, Option<&mut D>),
+        C: AsIntersectContext,
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
     {
         let len = (*args).N as usize;
         let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData)).occluded_filter_fn as *mut F;
@@ -1949,13 +1956,13 @@ where
                     len,
                     marker: PhantomData,
                 },
-                &mut *(*args).context,
+                &mut *((*args).context as *mut _ as *mut C),
                 user_data,
             );
         }
     }
 
-    Some(inner::<F, D>)
+    Some(inner::<F, D, C>)
 }
 
 /// Helper function to convert a Rust closure to `RTCBoundsFunction` callback.

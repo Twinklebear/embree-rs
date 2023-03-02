@@ -1,6 +1,6 @@
 //! This example shows how to intersect a ray with a single triangle.
 
-use embree::{BufferUsage, Device, Format, GeometryKind, IntersectContext, Ray, Scene};
+use embree::{BufferUsage, Device, Format, GeometryKind, IntersectContext, Ray, RayHit, Scene};
 
 /// Casts a single ray with the given origin and direction.
 fn cast_ray(scene: &Scene, origin: [f32; 3], direction: [f32; 3]) {
@@ -11,7 +11,8 @@ fn cast_ray(scene: &Scene, origin: [f32; 3], direction: [f32; 3]) {
     let mut context = IntersectContext::coherent();
 
     // Intersect a single ray with the scene.
-    let ray_hit = scene.intersect(&mut context, ray);
+    let mut ray_hit = RayHit::from(ray);
+    scene.intersect(&mut context, &mut ray_hit);
 
     print!("{origin:?} ");
 

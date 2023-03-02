@@ -1,5 +1,23 @@
 use crate::sys::*;
 
+pub unsafe trait AsIntersectContext {
+    type Ext;
+
+    fn as_intersect_context(&self) -> &IntersectContext;
+    fn as_intersect_context_mut(&mut self) -> &mut IntersectContext;
+
+    fn as_intersect_context_ptr(&self) -> *const IntersectContext {
+        self.as_intersect_context() as *const IntersectContext
+    }
+
+    fn as_intersect_context_mut_ptr(&mut self) -> *mut IntersectContext {
+        self.as_intersect_context_mut() as *mut IntersectContext
+    }
+
+    fn as_intersect_context_ext(&self) -> Option<&Self::Ext>;
+    fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext>;
+}
+
 /// Per ray-query intersection context.
 ///
 /// This is used to configure intersection flags, specify a filter callback
@@ -48,6 +66,69 @@ impl IntersectContext {
             flags,
             filter: None,
             instID: [u32::MAX; 1],
+        }
+    }
+}
+
+unsafe impl AsIntersectContext for IntersectContext {
+    type Ext = ();
+
+    fn as_intersect_context(&self) -> &IntersectContext { self }
+
+    fn as_intersect_context_mut(&mut self) -> &mut IntersectContext { self }
+
+    fn as_intersect_context_ext(&self) -> Option<&Self::Ext> { None }
+
+    fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext> { None }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct IntersectContextExt<E>
+where
+    E: Sized,
+{
+    pub context: IntersectContext,
+    pub extra: E,
+}
+
+unsafe impl<E> AsIntersectContext for IntersectContextExt<E>
+where
+    E: Sized,
+{
+    type Ext = E;
+
+    fn as_intersect_context(&self) -> &IntersectContext { &self.context }
+
+    fn as_intersect_context_mut(&mut self) -> &mut IntersectContext { &mut self.context }
+
+    fn as_intersect_context_ext(&self) -> Option<&Self::Ext> { Some(&self.extra) }
+
+    fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext> { Some(&mut self.extra) }
+}
+
+impl<E> IntersectContextExt<E>
+where
+    E: Sized,
+{
+    pub fn new(flags: RTCIntersectContextFlags, extra: E) -> IntersectContextExt<E> {
+        IntersectContextExt {
+            context: IntersectContext::new(flags),
+            extra,
+        }
+    }
+
+    pub fn coherent(extra: E) -> IntersectContextExt<E> {
+        IntersectContextExt {
+            context: IntersectContext::coherent(),
+            extra,
+        }
+    }
+
+    pub fn incoherent(extra: E) -> IntersectContextExt<E> {
+        IntersectContextExt {
+            context: IntersectContext::incoherent(),
+            extra,
         }
     }
 }

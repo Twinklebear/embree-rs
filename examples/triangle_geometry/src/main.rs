@@ -169,7 +169,7 @@ fn main() {
 fn render_pixel(x: u32, y: u32, _time: f32, camera: &Camera, state: &State) -> u32 {
     let mut ctx = IntersectContext::coherent();
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
-    let mut ray_hit = RayHit::new(Ray::new(camera.pos.into(), dir.into()));
+    let mut ray_hit = RayHit::from_ray(Ray::new(camera.pos.into(), dir.into()));
     state.scene.intersect(&mut ctx, &mut ray_hit);
     let mut pixel = 0;
     if ray_hit.is_valid() {

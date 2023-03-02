@@ -104,7 +104,7 @@ impl<'embree> AOIntegrator<'embree> {
     pub fn render(&self, i: u32, j: u32, u: Point2<f32>) -> f32 {
         let dir = self.camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
         let ray = Ray::new(self.camera.pos, dir);
-        let mut ray_hit = RayHit::new(ray);
+        let mut ray_hit = RayHit::from_ray(ray);
 
         let mut intersection_ctx = IntersectContext::coherent();
         self.rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
@@ -169,7 +169,7 @@ impl<'embree> AOIntegrator<'embree> {
 
             // Launch a second ray from the intersection point
             let ray = Ray::new(p, dir);
-            let mut ray_hit = RayHit::new(ray);
+            let mut ray_hit = RayHit::from_ray(ray);
             ray_hit.ray.tnear = 0.00001; // Avoid self intersection
             let mut intersection_ctx = IntersectContext::incoherent();
             self.rtscene.intersect(&mut intersection_ctx, &mut ray_hit);

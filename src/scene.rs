@@ -1,6 +1,6 @@
 use crate::{
-    AsRay, AsRayHit, Bounds, Error, PointQuery, PointQueryContext, Ray16, Ray8, RayHit16, RayHit8,
-    RayHitNp, RayHitPacket, RayPacket, SceneFlags,
+    AsIntersectContext, AsRay, AsRayHit, Bounds, Error, PointQuery, PointQueryContext, Ray16, Ray8,
+    RayHit16, RayHit8, RayHitNp, RayHitPacket, RayPacket, SceneFlags,
 };
 use std::{
     any::TypeId,
@@ -13,7 +13,7 @@ use crate::{
     context::IntersectContext,
     device::Device,
     geometry::Geometry,
-    ray::{Ray, Ray4, RayHit, RayHit4, RayNp},
+    ray::{Ray4, RayHit4, RayNp},
     sys::*,
 };
 
@@ -444,11 +444,11 @@ impl<'a> Scene<'a> {
     ///   during traversal and can thus be used to extend the ray with
     ///   additional data. See [`IntersectContext`] for more information.
     /// * `ray` - The ray to intersect with the scene.
-    pub fn intersect<R: AsRayHit>(&self, ctx: &mut IntersectContext, ray: &mut R) {
+    pub fn intersect<C: AsIntersectContext, R: AsRayHit>(&self, ctx: &mut C, ray: &mut R) {
         unsafe {
             rtcIntersect1(
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_intersect_context_mut_ptr(),
                 ray.as_ray_hit_mut_ptr(),
             );
         }
@@ -571,13 +571,13 @@ impl<'a> Scene<'a> {
     ///   additional data. See [`IntersectContext`] for more information.
     ///
     /// * `ray` - The ray to intersect with the scene.
-    pub fn occluded<R: AsRay>(&self, ctx: &mut IntersectContext, ray: &mut R) -> bool {
-        let mut ray = ray.as_ray_mut();
+    pub fn occluded<C: AsIntersectContext, R: AsRay>(&self, ctx: &mut C, ray: &mut R) -> bool {
+        let ray = ray.as_ray_mut();
         unsafe {
             rtcOccluded1(
                 self.handle,
-                ctx as *mut RTCIntersectContext,
-                ray as *mut RTCRay,
+                ctx.as_intersect_context_mut_ptr(),
+                ray.as_ray_mut_ptr(),
             );
         }
         ray.tfar == -f32::INFINITY

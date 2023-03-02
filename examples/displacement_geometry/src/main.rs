@@ -193,7 +193,7 @@ fn render_pixel(
 ) -> u32 {
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
     let mut ctx = IntersectContext::coherent();
-    let mut ray_hit = RayHit::new(Ray::new(camera.pos.into(), dir.into()));
+    let mut ray_hit = RayHit::from_ray(Ray::new(camera.pos.into(), dir.into()));
     scene.intersect(&mut ctx, &mut ray_hit);
 
     let mut color = vec3(0.0, 0.0, 0.0);

@@ -1,4 +1,5 @@
 use crate::{sys, INVALID_ID};
+use std::fmt::{Debug, Formatter};
 
 mod packet;
 mod soa;
@@ -10,38 +11,51 @@ pub use stream::*;
 
 /// Trait for types that can be converted to a [`Ray`].
 ///
+/// Embree uses poor man's inheritance to make it possible to extend the [`Ray`]
+/// and [`RayHit`] types with additional data. This trait provides a way to
+/// convert between the base types and the extended types. See also the
+/// [`AsRayHit`]
+///
+/// # Safety
+///
 /// Structs that implement this trait must guarantee that they are
 /// layout-compatible with [`Ray`] (i.e. pointer casts between the two types are
-/// valid). Make the [`Ray`] type the first field of the struct.
+/// valid). The corresponding pattern in C is called poor man's inheritance. See
+/// [`RayExt`] for an example of how to do this.
 pub unsafe trait AsRay: Sized {
     type RayExt: Sized;
 
     fn as_ray(&self) -> &Ray;
     fn as_ray_mut(&mut self) -> &mut Ray;
-    fn as_ext(&self) -> Option<&Self::RayExt>;
-    fn as_ext_mut(&mut self) -> Option<&mut Self::RayExt>;
-
-    fn as_ray_mut_ptr(&mut self) -> *mut Ray { self.as_ray_mut() as *mut Ray }
+    fn as_ray_ext(&self) -> Option<&Self::RayExt>;
+    fn as_ray_ext_mut(&mut self) -> Option<&mut Self::RayExt>;
 
     fn as_ray_ptr(&self) -> *const Ray { self.as_ray() as *const Ray }
+    fn as_ray_mut_ptr(&mut self) -> *mut Ray { self.as_ray_mut() as *mut Ray }
 }
 
 /// Trait for types that can be converted to a [`Ray`].
 ///
-/// Structs that implement this trait must guarantee that
-/// they are layout-compatible with [`Ray`] (i.e. pointer
-/// casts between the two types are valid).
+/// Embree uses poor man's inheritance to make it possible to extend the [`Ray`]
+/// and [`RayHit`] types with additional data. This trait provides a way to
+/// convert between the base types and the extended types. See also the
+/// [`AsRay`]
+///
+/// # Safety
+///
+/// Structs that implement this trait must guarantee that they are layout
+/// compatible with [`Ray`] (i.e. pointer casts between the two types are
+/// valid).
 pub unsafe trait AsRayHit: AsRay {
     type RayHitExt: Sized;
 
     fn as_ray_hit(&self) -> &RayHit;
     fn as_ray_hit_mut(&mut self) -> &mut RayHit;
-    fn as_ext(&self) -> Option<&Self::RayHitExt>;
-    fn as_ext_mut(&mut self) -> Option<&mut Self::RayHitExt>;
-
-    fn as_ray_hit_mut_ptr(&mut self) -> *mut RayHit { self.as_ray_hit_mut() as *mut RayHit }
+    fn as_ray_hit_ext(&self) -> Option<&Self::RayHitExt>;
+    fn as_ray_hit_ext_mut(&mut self) -> Option<&mut Self::RayHitExt>;
 
     fn as_ray_hit_ptr(&self) -> *const RayHit { self.as_ray_hit() as *const RayHit }
+    fn as_ray_hit_mut_ptr(&mut self) -> *mut RayHit { self.as_ray_hit_mut() as *mut RayHit }
 }
 
 /// New type alias for [`sys::RTCRay`] that provides some convenience
@@ -138,8 +152,8 @@ unsafe impl AsRay for Ray {
 
     fn as_ray(&self) -> &Ray { self }
     fn as_ray_mut(&mut self) -> &mut Ray { self }
-    fn as_ext(&self) -> Option<&()> { None }
-    fn as_ext_mut(&mut self) -> Option<&mut ()> { None }
+    fn as_ray_ext(&self) -> Option<&()> { None }
+    fn as_ray_ext_mut(&mut self) -> Option<&mut ()> { None }
 }
 
 /// Extended ray type that contains an additional data field.
@@ -150,14 +164,72 @@ unsafe impl AsRay for Ray {
 /// it is SAFE to extend the ray by additional data and access this data
 /// inside the filter callback functions (e.g. to accumulate opacity) and
 /// user geometry callback functions (e.g. to accumulate color).
-pub struct RayExt<E: Sized> {
+///
+/// To make sure that the extended ray type is layout-compatible with
+/// the ray type, the additional data field must be `#[repr(C)]`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RayExt<E: Sized + Clone + Copy> {
     pub ray: Ray,
     pub ext: E,
 }
 
-pub struct RayHitExt<E: Sized> {
-    pub ray: RayHit,
-    pub ext: E,
+impl<E> Debug for RayExt<E>
+where
+    E: Debug + Sized + Clone + Copy,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RayExt")
+            .field("ray", &self.ray)
+            .field("ext", &self.ext)
+            .finish()
+    }
+}
+
+impl<E> RayExt<E>
+where
+    E: Sized + Copy + Clone,
+{
+    pub fn new(ray: Ray, ext: E) -> Self { Self { ray, ext } }
+}
+
+#[test]
+fn test_ray_ext_pointer_compatability_with_ray_pointer() {
+    let ray = RayExt {
+        ray: Ray::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
+        ext: 10u32,
+    };
+    assert_eq!(
+        &ray as *const RayExt<u32> as *const Ray,
+        &ray.ray as *const Ray
+    );
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug)]
+    struct Extra {
+        a: u32,
+        b: u32,
+        c: f32,
+        d: f32,
+    }
+
+    let mut ray2 = RayExt::<Extra> {
+        ray: Ray::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
+        ext: Extra {
+            a: 1,
+            b: 2,
+            c: 3.0,
+            d: 4.0,
+        },
+    };
+
+    let ray_ptr = &mut ray2 as *mut RayExt<Extra> as *mut Ray;
+    let ray_ext = unsafe { &mut *(ray_ptr as *mut RayExt<Extra>) };
+    ray_ext.ext.a = 10;
+    ray_ext.ext.d = 40.0;
+
+    assert_eq!(ray2.ext.a, 10);
+    assert_eq!(ray2.ext.d, 40.0);
 }
 
 /// New type alias for [`sys::RTCHit`] that provides some convenience
@@ -233,7 +305,7 @@ pub type RayHit = sys::RTCRayHit;
 
 impl RayHit {
     /// Creates a new [`RayHit`] ready to be used in an intersection query.
-    pub fn new(ray: Ray) -> RayHit {
+    pub fn from_ray(ray: Ray) -> RayHit {
         RayHit {
             ray,
             hit: Hit::default(),
@@ -254,6 +326,10 @@ impl RayHit {
     }
 }
 
+impl From<Ray> for RayHit {
+    fn from(value: Ray) -> Self { RayHit::from_ray(value) }
+}
+
 unsafe impl AsRay for RayHit {
     type RayExt = Hit;
 
@@ -261,9 +337,9 @@ unsafe impl AsRay for RayHit {
 
     fn as_ray_mut(&mut self) -> &mut Ray { &mut self.ray }
 
-    fn as_ext(&self) -> Option<&Self::RayExt> { Some(&self.hit) }
+    fn as_ray_ext(&self) -> Option<&Self::RayExt> { Some(&self.hit) }
 
-    fn as_ext_mut(&mut self) -> Option<&mut Self::RayExt> { Some(&mut self.hit) }
+    fn as_ray_ext_mut(&mut self) -> Option<&mut Self::RayExt> { Some(&mut self.hit) }
 }
 
 unsafe impl AsRayHit for RayHit {
@@ -273,7 +349,188 @@ unsafe impl AsRayHit for RayHit {
 
     fn as_ray_hit_mut(&mut self) -> &mut RayHit { self }
 
-    fn as_ext(&self) -> Option<&Self::RayHitExt> { None }
+    fn as_ray_hit_ext(&self) -> Option<&Self::RayHitExt> { None }
 
-    fn as_ext_mut(&mut self) -> Option<&mut Self::RayHitExt> { None }
+    fn as_ray_hit_ext_mut(&mut self) -> Option<&mut Self::RayHitExt> { None }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RayHitAsRayExtra<E: Sized + Copy + Clone> {
+    pub hit: Hit,
+    pub ext: E,
+}
+
+impl<E> Debug for RayHitAsRayExtra<E>
+where
+    E: Debug + Sized + Copy + Clone,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RayHitExtra")
+            .field("hit", &self.hit)
+            .field("ext", &self.ext)
+            .finish()
+    }
+}
+
+/// Extended ray type that contains an additional data field.
+///
+/// To make sure that the extended ray type is layout-compatible with
+/// the ray type, the additional data field must be `#[repr(C)]`.
+#[repr(C)]
+#[repr(align(16))]
+#[derive(Clone, Copy)]
+pub struct RayHitExt<E: Sized + Clone + Copy> {
+    pub ray: RayHit,
+    pub ext: E,
+}
+
+impl<E> Debug for RayHitExt<E>
+where
+    E: Debug + Sized + Clone + Copy,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RayHitExt")
+            .field("ray", &self.ray)
+            .field("ext", &self.ext)
+            .finish()
+    }
+}
+
+impl<E> RayHitExt<E>
+where
+    E: Sized + Clone + Copy,
+{
+    pub fn new(ray_hit: RayHit, ext: E) -> Self { Self { ray: ray_hit, ext } }
+
+    pub fn new_with_ray(ray: Ray, ext: E) -> Self {
+        Self {
+            ray: RayHit::from_ray(ray),
+            ext,
+        }
+    }
+}
+
+unsafe impl<E> AsRay for RayHitExt<E>
+where
+    E: Sized + Clone + Copy,
+{
+    type RayExt = RayHitAsRayExtra<E>;
+
+    fn as_ray(&self) -> &Ray { &self.ray.ray }
+
+    fn as_ray_mut(&mut self) -> &mut Ray { &mut self.ray.ray }
+
+    fn as_ray_ext(&self) -> Option<&Self::RayExt> {
+        Some(unsafe { &*(&self.ray.hit as *const Hit as *const Self::RayExt) })
+    }
+
+    fn as_ray_ext_mut(&mut self) -> Option<&mut Self::RayExt> {
+        Some(unsafe { &mut *(&mut self.ray.hit as *mut Hit as *mut Self::RayExt) })
+    }
+}
+
+unsafe impl<E> AsRayHit for RayHitExt<E>
+where
+    E: Sized + Copy + Clone,
+{
+    type RayHitExt = E;
+
+    fn as_ray_hit(&self) -> &RayHit { &self.ray }
+
+    fn as_ray_hit_mut(&mut self) -> &mut RayHit { &mut self.ray }
+
+    fn as_ray_hit_ext(&self) -> Option<&Self::RayHitExt> { Some(&self.ext) }
+
+    fn as_ray_hit_ext_mut(&mut self) -> Option<&mut Self::RayHitExt> { Some(&mut self.ext) }
+}
+
+#[test]
+fn test_ray_hit_ext_pointer_compatability_with_ray_hit() {
+    let ray = RayHitExt {
+        ray: RayHit::from_ray(Ray::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0])),
+        ext: [0.0f32, 0.0, 0.0, 0.0],
+    };
+    assert_eq!(
+        &ray as *const RayHitExt<[f32; 4]> as *const RayHit,
+        &ray.ray as *const RayHit
+    );
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Extra {
+        a: i32,
+        b: u64,
+        c: f32,
+        d: [u8; 4],
+    }
+
+    let mut ray = RayHitExt::<Extra> {
+        ray: RayHit::from_ray(Ray::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0])),
+        ext: Extra {
+            a: 1,
+            b: 2,
+            c: 3.0,
+            d: [4, 5, 6, 7],
+        },
+    };
+
+    let ray_ptr = &mut ray as *mut RayHitExt<Extra> as *mut RayHit;
+    let ray_ext = unsafe { &mut *(ray_ptr as *mut RayHitExt<Extra>) };
+    ray_ext.ext.a = 10;
+    ray_ext.ext.d = [30, 31, 32, 33];
+
+    assert_eq!(ray.ext.a, 10);
+    assert_eq!(ray.ext.d, [30, 31, 32, 33]);
+
+    ray.as_ray_hit_ext_mut().unwrap().a = 20;
+
+    assert_eq!(ray.ext.a, 20);
+}
+
+#[test]
+fn test_ray_hit_ext_pointer_compatability_with_ray() {
+    let ray = RayHitExt {
+        ray: RayHit::from_ray(Ray::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0])),
+        ext: [0.0f32, 0.0, 0.0, 0.0],
+    };
+    assert_eq!(
+        &ray as *const RayHitExt<[f32; 4]> as *const RayHit,
+        &ray.ray as *const RayHit
+    );
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Extra {
+        a: i32,
+        b: u64,
+        d: [u8; 4],
+    }
+
+    let mut ray = RayHitExt::<Extra> {
+        ray: RayHit::from_ray(Ray::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0])),
+        ext: Extra {
+            a: 1,
+            b: 2,
+            d: [4, 5, 6, 7],
+        },
+    };
+
+    ray.as_ray_mut().org_x = 10.0;
+    ray.as_ray_mut().dir_x = 20.0;
+
+    match ray.as_ray_ext_mut() {
+        None => {}
+        Some(ray_ext) => {
+            ray_ext.hit.geomID = 30;
+            ray_ext.hit.primID = 40;
+            ray_ext.ext.d = [50, 51, 52, 53];
+        }
+    }
+
+    assert_eq!(ray.ray.ray.org(), [10.0, 0.0, 0.0]);
+    assert_eq!(ray.ray.ray.dir(), [20.0, 0.0, 0.0]);
+    assert_eq!(ray.ext.d, [50, 51, 52, 53]);
+    assert_eq!(ray.ray.hit.geomID, 30);
+    assert_eq!(ray.ray.hit.primID, 40);
 }
