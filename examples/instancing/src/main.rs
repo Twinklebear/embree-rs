@@ -4,7 +4,7 @@ extern crate support;
 
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Vector3, Vector4};
 use embree::{
-    BufferUsage, BuildQuality, Device, Format, Geometry, Instance, IntersectContext, Ray,
+    BufferUsage, BuildQuality, Device, Format, Geometry, Instance, IntersectContext, Ray, RayHit,
     SceneFlags, INVALID_ID,
 };
 use support::Camera;
@@ -228,10 +228,8 @@ fn main() {
         for j in 0..img_dims.1 {
             for i in 0..img_dims.0 {
                 let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let ray_hit = scene.intersect(
-                    &mut intersection_ctx,
-                    Ray::new(camera.pos.into(), dir.into()),
-                );
+                let mut ray_hit = RayHit::from_ray(Ray::new(camera.pos.into(), dir.into()));
+                scene.intersect(&mut intersection_ctx, &mut ray_hit);
 
                 if ray_hit.is_valid() {
                     // Transform the normals of the instances into world space with the
