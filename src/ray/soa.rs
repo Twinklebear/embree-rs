@@ -1,3 +1,4 @@
+use crate::INVALID_ID;
 use std::{
     iter::{ExactSizeIterator, Iterator},
     marker::PhantomData,
@@ -31,9 +32,10 @@ pub trait SoARay {
 
 pub trait SoAHit {
     fn normal(&self, i: usize) -> [f32; 3];
+    fn unit_normal(&self, i: usize) -> [f32; 3];
     fn set_normal(&mut self, i: usize, n: [f32; 3]);
 
-    fn uv(&self, i: usize) -> (f32, f32);
+    fn uv(&self, i: usize) -> [f32; 2];
     fn set_u(&mut self, i: usize, u: f32);
     fn set_v(&mut self, i: usize, v: f32);
 
@@ -46,7 +48,7 @@ pub trait SoAHit {
     fn inst_id(&self, i: usize) -> u32;
     fn set_inst_id(&mut self, i: usize, id: u32);
 
-    fn hit(&self, i: usize) -> bool { self.geom_id(i) != u32::MAX }
+    fn is_valid(&self, i: usize) -> bool { self.geom_id(i) != INVALID_ID }
 }
 
 pub struct SoARayRef<'a, T> {
@@ -202,11 +204,12 @@ pub struct SoAHitRef<'a, T> {
 
 impl<'a, T: SoAHit + 'a> SoAHitRef<'a, T> {
     pub fn normal(&self) -> [f32; 3] { self.hit.normal(self.idx) }
-    pub fn uv(&self) -> (f32, f32) { self.hit.uv(self.idx) }
+    pub fn unit_normal(&self) -> [f32; 3] { self.hit.unit_normal(self.idx) }
+    pub fn uv(&self) -> [f32; 2] { self.hit.uv(self.idx) }
     pub fn prim_id(&self) -> u32 { self.hit.prim_id(self.idx) }
     pub fn geom_id(&self) -> u32 { self.hit.geom_id(self.idx) }
     pub fn inst_id(&self) -> u32 { self.hit.inst_id(self.idx) }
-    pub fn hit(&self) -> bool { self.hit.hit(self.idx) }
+    pub fn hit(&self) -> bool { self.hit.is_valid(self.idx) }
 }
 
 pub struct SoAHitIter<'a, T> {
@@ -251,11 +254,15 @@ impl<'a, T: SoAHit + 'a> SoAHitRefMut<'a, T> {
         let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
         hit.normal(self.idx)
     }
+    pub fn unit_normal(&self) -> [f32; 3] {
+        let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
+        hit.unit_normal(self.idx)
+    }
     pub fn set_normal(&mut self, n: [f32; 3]) {
         let hit = unsafe { self.hit.as_mut().expect("should never be null!") };
         hit.set_normal(self.idx, n)
     }
-    pub fn uv(&self) -> (f32, f32) {
+    pub fn uv(&self) -> [f32; 2] {
         let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
         hit.uv(self.idx)
     }
@@ -293,7 +300,7 @@ impl<'a, T: SoAHit + 'a> SoAHitRefMut<'a, T> {
     }
     pub fn hit(&self) -> bool {
         let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
-        hit.hit(self.idx)
+        hit.is_valid(self.idx)
     }
 }
 

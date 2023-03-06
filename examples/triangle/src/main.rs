@@ -60,8 +60,8 @@ fn main() {
             for (i, hit) in ray_hit.hit.iter().enumerate().filter(|(_i, h)| h.hit()) {
                 let p = image.get_pixel_mut(i as u32, j);
                 let uv = hit.uv();
-                p[0] = (uv.0 * 255.0) as u8;
-                p[1] = (uv.1 * 255.0) as u8;
+                p[0] = (uv[0] * 255.0) as u8;
+                p[1] = (uv[1] * 255.0) as u8;
                 p[2] = 0;
             }
         }

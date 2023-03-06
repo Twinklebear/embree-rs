@@ -9,14 +9,15 @@ fi
 
 # build the examples
 cd examples
-#for d in `ls ./`; do
-for d in ./triangle ./minimal ./dynamic_triangle; do
-	cd $d
-	pwd
-	cargo build
-	if [[ "$?" != "0" ]]; then
-		exit 1
+for dir in */; do
+	if [[ -d "$dir" && "$dir" != "todos/" ]]; then
+	  cd $dir
+	  pwd
+	  cargo build
+	  if [[ "$?" != "0" ]]; then
+	    exit 1
+	  fi
+	  cd ../
 	fi
-	cd ../
 done
 

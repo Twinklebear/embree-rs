@@ -1,8 +1,10 @@
+//! Ray stream types in SOA layout.
+
 use std::iter::Iterator;
 
 use crate::{
-    aligned_vector, aligned_vector_init, sys, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter,
-    SoARayIterMut,
+    aligned_vector, aligned_vector_init, normalise_vector3, sys, SoAHit, SoAHitIter, SoAHitRef,
+    SoARay, SoARayIter, SoARayIterMut,
 };
 
 // struct RayNp2 {
@@ -154,7 +156,7 @@ impl HitNp {
         SoAHitIter::new(self, self.len()).filter(|h| h.hit())
     }
     pub fn len(&self) -> usize { self.ng_x.len() }
-    pub fn empty(&self) -> bool { self.len() == 0 }
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
     pub unsafe fn as_hitnp(&mut self) -> sys::RTCHitNp {
         sys::RTCHitNp {
             Ng_x: self.ng_x.as_mut_ptr(),
@@ -171,13 +173,16 @@ impl HitNp {
 
 impl SoAHit for HitNp {
     fn normal(&self, i: usize) -> [f32; 3] { [self.ng_x[i], self.ng_y[i], self.ng_z[i]] }
+
+    fn unit_normal(&self, i: usize) -> [f32; 3] { normalise_vector3(self.normal(i)) }
+
     fn set_normal(&mut self, i: usize, n: [f32; 3]) {
         self.ng_x[i] = n[0];
         self.ng_y[i] = n[1];
         self.ng_z[i] = n[2];
     }
 
-    fn uv(&self, i: usize) -> (f32, f32) { (self.u[i], self.v[i]) }
+    fn uv(&self, i: usize) -> [f32; 2] { [self.u[i], self.v[i]] }
     fn set_u(&mut self, i: usize, u: f32) { self.u[i] = u; }
     fn set_v(&mut self, i: usize, v: f32) { self.v[i] = v; }
 
@@ -208,7 +213,7 @@ impl RayHitNp {
         self.ray.iter().zip(self.hit.iter())
     }
     pub fn len(&self) -> usize { self.ray.len() }
-    pub fn empty(&self) -> bool { self.len() == 0 }
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
     pub unsafe fn as_rayhitnp(&mut self) -> sys::RTCRayHitNp {
         sys::RTCRayHitNp {
             ray: self.ray.as_raynp(),

@@ -226,13 +226,18 @@ fn render_pixel(
 ) {
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
     let mut intersection_ctx = IntersectContext::coherent();
-    let mut ray_hit = RayHit::from_ray(Ray::new(camera.pos.into(), dir.into()));
+    let mut ray_hit = RayHit::from_ray(Ray::segment(
+        camera.pos.into(),
+        dir.into(),
+        0.001,
+        f32::INFINITY,
+    ));
     scene.intersect(&mut intersection_ctx, &mut ray_hit);
 
-    if ray_hit.is_valid() {
+    if ray_hit.hit.is_valid() {
         let diffuse = colors[ray_hit.hit.geomID as usize];
 
-        let mut shadow_ray = Ray::segment(ray_hit.hit_point(), LIGHT_DIR, 0.001, f32::INFINITY);
+        let mut shadow_ray = Ray::segment(ray_hit.ray.hit_point(), LIGHT_DIR, 0.001, f32::INFINITY);
 
         // Check if the shadow ray is occluded.
         let color = if !scene.occluded(&mut intersection_ctx, &mut shadow_ray) {

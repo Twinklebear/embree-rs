@@ -51,7 +51,7 @@ pub type Bounds = sys::RTCBounds;
 ///
 /// The [`BufferUsage::VERTEX_ATTRIBUTE`] slot can get used to assign
 /// arbitrary additional vertex data which can get interpolated using the
-/// [`rtcInterpolate`] API call.
+/// [`Geometry::interpolate`] and [`Geometry::interpolate_n`] API calls.
 ///
 /// The [`BufferUsage::NORMAL`], [`BufferUsage::TANGENT`], and
 /// [`BufferUsage::NORMAL_DERIVATIVE`] are special buffers required to assign
@@ -88,7 +88,7 @@ pub type GeometryKind = sys::RTCGeometryType;
 ///
 /// 1. A upper triangular scaling/skew/shift matrix
 ///
-///   ```ignore
+///   ```text
 ///   | scale_x  skew_xy  skew_xz  shift_x |
 ///   |   0      scale_y  skew_yz  shift_y |
 ///   |   0         0     scale_z  shitf_z |
@@ -96,7 +96,7 @@ pub type GeometryKind = sys::RTCGeometryType;
 ///   ```
 ///
 /// 2. A translation matrix
-///   ```ignore
+///   ```text
 ///   | 1   0   0 translation_x |
 ///   | 0   1   0 translation_y |
 ///   | 0   0   1 translation_z |
@@ -104,14 +104,16 @@ pub type GeometryKind = sys::RTCGeometryType;
 ///   ```
 ///
 /// 3. A rotation matrix R, represented as a quaternion
-///   ```quaternion_r + i * quaternion_i + j * quaternion_j + k *
-/// quaternion_k```   where i, j, k are the imaginary unit vectors. The passed
-/// quaternion will   be normalized internally.
+///   ```text
+///   quaternion_r + i * quaternion_i + j * quaternion_j + k * quaternion_k
+///   ```
+///   where i, j, k are the imaginary unit vectors. The passed quaternion will
+///   be normalized internally.
 ///
 /// The affine transformation matrix corresponding to a quaternion decomposition
 /// is TRS and a point `p = (x, y, z, 1)^T` is transformed as follows:
 ///
-/// ```
+/// ```text
 /// p' = T * R * S * p
 /// ```
 pub type QuaternionDecomposition = sys::RTCQuaternionDecomposition;
@@ -264,4 +266,33 @@ fn test_aligned_vector_alloc() {
     for x in v.iter() {
         assert_eq!(*x, 1.0);
     }
+}
+
+fn normalise_vector3(v: [f32; 3]) -> [f32; 3] {
+    let len_sq = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+    let len_inv = if len_sq.is_finite() && len_sq != 0.0 {
+        len_sq.sqrt().recip()
+    } else {
+        0.0
+    };
+
+    [v[0] * len_inv, v[1] * len_inv, v[2] * len_inv]
+}
+
+#[test]
+fn test_normalise_vector3() {
+    let v = normalise_vector3([1.0, 2.0, 3.0]);
+    assert_eq!(v[0], 0.26726124);
+    assert_eq!(v[1], 0.5345225);
+    assert_eq!(v[2], 0.8017837);
+
+    let v = normalise_vector3([0.0, 0.0, 0.0]);
+    assert_eq!(v[0], 0.0);
+    assert_eq!(v[1], 0.0);
+    assert_eq!(v[2], 0.0);
+
+    let v = normalise_vector3([1.0, 0.0, 0.0]);
+    assert_eq!(v[0], 1.0);
+    assert_eq!(v[1], 0.0);
+    assert_eq!(v[2], 0.0);
 }

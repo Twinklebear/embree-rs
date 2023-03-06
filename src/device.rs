@@ -1,4 +1,7 @@
-use crate::{sys::*, Buffer, BufferSize, Bvh, Error, Geometry, GeometryKind, Scene};
+use crate::{
+    sys::*, Buffer, BufferSize, Bvh, DeviceProperty, Error, Geometry, GeometryKind, Scene,
+    SceneFlags,
+};
 use std::{
     ffi::CString,
     fmt::{self, Display, Formatter},
@@ -171,7 +174,7 @@ impl Device {
     /// # Returns
     ///
     /// An integer of type `isize`.
-    pub fn get_property(&self, prop: RTCDeviceProperty) -> Result<isize, Error> {
+    pub fn get_property(&self, prop: DeviceProperty) -> Result<isize, Error> {
         let ret = unsafe { rtcGetDeviceProperty(self.handle, prop) };
         if ret == 0 {
             Err(self.get_error())
@@ -200,8 +203,9 @@ impl Device {
     /// Creates a new scene bound to the device with the given configuration.
     /// It's the same as calling [`Device::create_scene`] and then
     /// [`Scene::set_flags`].
-    /// See [`SceneConfig`] for possible values.
-    pub fn create_scene_with_flags(&self, flags: RTCSceneFlags) -> Result<Scene, Error> {
+    ///
+    /// See [`SceneFlags`] for possible values.
+    pub fn create_scene_with_flags(&self, flags: SceneFlags) -> Result<Scene, Error> {
         Scene::new_with_flags(self.clone(), flags)
     }
 
@@ -361,7 +365,7 @@ impl Default for Config {
 }
 
 /// Set the flush zero and denormals modes from Embrees's perf. recommendations
-/// https://embree.github.io/api.html#performance-recommendations
+/// `<https://embree.github.io/api.html#performance-recommendations>`.
 pub fn enable_ftz_and_daz() {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {

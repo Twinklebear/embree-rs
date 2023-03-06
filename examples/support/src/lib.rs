@@ -14,6 +14,7 @@ pub mod math {
 }
 
 /// The type of ray used for rendering with Embree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mode {
     /// A single ray.
     Normal,
@@ -22,6 +23,8 @@ pub enum Mode {
 }
 
 /// An image that is tiled into smaller tiles for parallel rendering.
+///
+/// Tiles and pixels inside tiles are stored in a flat array in row-major order.
 pub struct TiledImage {
     pub width: u32,
     pub height: u32,
@@ -69,6 +72,40 @@ impl TiledImage {
                 image.put_pixel(i, j, Rgba(u32_to_rgba(pixel)));
             }
         }
+    }
+
+    pub fn tile_mut(&mut self, index: usize) -> Tile<'_> {
+        let idx = index as u32;
+        let x = (idx % self.num_tiles_x) * self.tile_width;
+        let y = (idx / self.num_tiles_x) * self.tile_height;
+        let offset = (idx * self.tile_size) as usize;
+        Tile {
+            idx,
+            x,
+            y,
+            w: self.tile_width,
+            h: self.tile_height,
+            pixels: &mut self.pixels[offset..offset + self.tile_size as usize],
+        }
+    }
+
+    pub fn tiles_mut(&mut self) -> impl Iterator<Item = Tile<'_>> {
+        self.pixels
+            .chunks_mut(self.tile_size as usize)
+            .enumerate()
+            .map(|(i, pixels)| {
+                let idx = i as u32;
+                let x = (idx % self.num_tiles_x) * self.tile_width;
+                let y = (idx / self.num_tiles_x) * self.tile_height;
+                Tile {
+                    idx,
+                    x,
+                    y,
+                    w: self.tile_width,
+                    h: self.tile_height,
+                    pixels,
+                }
+            })
     }
 
     /// Iterate over the tiles of the tiled image.

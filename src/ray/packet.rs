@@ -1,12 +1,10 @@
+//! Ray packet types and traits.
+
 use crate::{
-    sys, Hit, Ray, RayHit, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut,
-    INVALID_ID,
+    normalise_vector3, sys, Hit, Ray, RayHit, SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter,
+    SoARayIterMut, INVALID_ID,
 };
 use std::marker::PhantomData;
-
-mod sealed {
-    pub trait Sealed {}
-}
 
 /// A ray packet of size 4.
 pub type Ray4 = sys::RTCRay4;
@@ -38,16 +36,19 @@ pub type RayHit16 = sys::RTCRayHit16;
 /// Represents a packet of rays.
 ///
 /// Used as a trait bound for functions that operate on ray packets.
-/// See [`Scene::occluded_stream_aos`] and [`Scene::intersect_stream_aos`].
-pub trait RayPacket: Sized + sealed::Sealed {
+/// See [`occluded_stream_aos`](`crate::Scene::occluded_stream_aos`) and
+/// [`intersect_stream_aos`](`crate::Scene::intersect_stream_aos`).
+pub trait RayPacket: Sized {
     const LEN: usize;
 }
 
-pub trait HitPacket: Sized + sealed::Sealed {
+/// Represents a packet of hits.
+pub trait HitPacket: Sized {
     const LEN: usize;
 }
 
-pub trait RayHitPacket: Sized + sealed::Sealed {
+/// Represents a packet of ray/hit pairs.
+pub trait RayHitPacket: Sized {
     type Ray: RayPacket;
     type Hit: HitPacket;
     const LEN: usize = Self::Ray::LEN;
@@ -56,17 +57,14 @@ pub trait RayHitPacket: Sized + sealed::Sealed {
 macro_rules! impl_packet_traits {
     ($($ray:ident, $hit:ident, $rayhit:ident, $n:expr);*) => {
         $(
-            impl sealed::Sealed for $ray {}
             impl RayPacket for $ray {
                 const LEN: usize = $n;
             }
 
-            impl sealed::Sealed for $hit {}
             impl HitPacket for $hit {
                 const LEN: usize = $n;
             }
 
-            impl sealed::Sealed for $rayhit {}
             impl RayHitPacket for $rayhit {
                 type Ray = $ray;
                 type Hit = $hit;
@@ -194,8 +192,8 @@ macro_rules! impl_hit_packets {
                         instID: [[INVALID_ID; $n]],
                     }
                 }
-                pub fn any_hit(&self) -> bool { self.hits().any(|h| h) }
-                pub fn hits(&self) -> impl Iterator<Item = bool> + '_ {
+                pub fn any_hit(&self) -> bool { self.iter_validity().any(|h| h) }
+                pub fn iter_validity(&self) -> impl Iterator<Item = bool> + '_ {
                     self.geomID.iter().map(|g| *g != INVALID_ID)
                 }
                 pub fn iter(&self) -> SoAHitIter<$t> { SoAHitIter::new(self, $n) }
@@ -210,13 +208,23 @@ macro_rules! impl_hit_packets {
 
             impl SoAHit for $t {
                 fn normal(&self, i: usize) -> [f32; 3] { [self.Ng_x[i], self.Ng_y[i], self.Ng_z[i]] }
+                fn unit_normal(&self, i: usize) -> [f32; 3] {
+                    let n = self.normal(i);
+                    let len = n[0] * n[0] + n[1] * n[1] + n[2] * n[2];
+                    if len > 0.0 {
+                        let inv_len = 1.0 / len.sqrt();
+                        [n[0] * inv_len, n[1] * inv_len, n[2] * inv_len]
+                    } else {
+                        [0.0, 0.0, 0.0]
+                    }
+                }
                 fn set_normal(&mut self, i: usize, n: [f32; 3]) {
                     self.Ng_x[i] = n[0];
                     self.Ng_y[i] = n[1];
                     self.Ng_z[i] = n[2];
                 }
 
-                fn uv(&self, i: usize) -> (f32, f32) { (self.u[i], self.v[i]) }
+                fn uv(&self, i: usize) -> [f32; 2] { [self.u[i], self.v[i]] }
                 fn set_u(&mut self, i: usize, u: f32) { self.u[i] = u; }
                 fn set_v(&mut self, i: usize, v: f32) { self.v[i] = v; }
 
@@ -261,7 +269,29 @@ pub struct RayN<'a> {
 }
 
 impl<'a> RayN<'a> {
-    pub const fn org(&self, i: usize) -> [f32; 3] {
+    /// Returns the number of rays in the packet.
+    ///
+    /// Can be either 1, 4, 8, or 16.
+    pub fn len(&self) -> usize { self.len }
+
+    /// Returns true if the packet is empty.
+    pub fn is_empty(&self) -> bool { self.len == 0 }
+
+    /// Returns the hit point of the `i`th ray.
+    pub fn hit_point(&self, i: usize) -> [f32; 3] {
+        debug_assert!(i < self.len, "index out of bounds");
+        let mut p = self.org(i);
+        let d = self.dir(i);
+        let t = self.tfar(i);
+        p[0] += d[0] * t;
+        p[1] += d[1] * t;
+        p[2] += d[2] * t;
+        p
+    }
+}
+
+impl<'a> SoARay for RayN<'a> {
+    fn org(&self, i: usize) -> [f32; 3] {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
             let ptr = self.ptr as *const f32;
@@ -273,55 +303,17 @@ impl<'a> RayN<'a> {
         }
     }
 
-    pub const fn org_x(&self, i: usize) -> f32 {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(i) }
-    }
-
-    pub fn set_org_x(&mut self, i: usize, x: f32) {
+    fn set_org(&mut self, i: usize, o: [f32; 3]) {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
-            *(self.ptr as *mut f32).add(i) = x;
+            let ptr = self.ptr as *mut f32;
+            *ptr.add(i) = o[0];
+            *ptr.add(self.len + i) = o[1];
+            *ptr.add(2 * self.len + i) = o[2];
         }
     }
 
-    pub const fn org_y(&self, i: usize) -> f32 {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(self.len + i) }
-    }
-
-    pub fn set_org_y(&mut self, i: usize, y: f32) {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe {
-            *(self.ptr as *mut f32).add(self.len + i) = y;
-        }
-    }
-
-    pub const fn org_z(&self, i: usize) -> f32 {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(2 * self.len + i) }
-    }
-
-    pub fn set_org_z(&mut self, i: usize, z: f32) {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe {
-            *(self.ptr as *mut f32).add(2 * self.len + i) = z;
-        }
-    }
-
-    pub const fn tnear(&self, i: usize) -> f32 {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(3 * self.len + i) }
-    }
-
-    pub fn set_tnear(&mut self, i: usize, t: f32) {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe {
-            *(self.ptr as *mut f32).add(3 * self.len + i) = t;
-        }
-    }
-
-    pub const fn dir(&self, i: usize) -> [f32; 3] {
+    fn dir(&self, i: usize) -> [f32; 3] {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
             let ptr = self.ptr as *const f32;
@@ -333,103 +325,87 @@ impl<'a> RayN<'a> {
         }
     }
 
-    pub const fn dir_x(&self, i: usize) -> f32 {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(4 * self.len + i) }
-    }
-
-    pub fn set_dir_x(&mut self, i: usize, x: f32) {
+    fn set_dir(&mut self, i: usize, d: [f32; 3]) {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
-            *(self.ptr as *mut f32).add(4 * self.len + i) = x;
+            let ptr = self.ptr as *mut f32;
+            *ptr.add(4 * self.len + i) = d[0];
+            *ptr.add(5 * self.len + i) = d[1];
+            *ptr.add(6 * self.len + i) = d[2];
         }
     }
 
-    pub const fn dir_y(&self, i: usize) -> f32 {
+    fn tnear(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(5 * self.len + i) }
+        unsafe { *(self.ptr as *const f32).add(3 * self.len + i) }
     }
 
-    pub fn set_dir_y(&mut self, i: usize, y: f32) {
+    fn set_tnear(&mut self, i: usize, t: f32) {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
-            *(self.ptr as *mut f32).add(5 * self.len + i) = y;
+            *(self.ptr as *mut f32).add(3 * self.len + i) = t;
         }
     }
 
-    pub const fn dir_z(&self, i: usize) -> f32 {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(6 * self.len + i) }
-    }
-
-    pub fn set_dir_z(&mut self, i: usize, z: f32) {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe {
-            *(self.ptr as *mut f32).add(6 * self.len + i) = z;
-        }
-    }
-
-    pub const fn time(&self, i: usize) -> f32 {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(7 * self.len + i) }
-    }
-
-    pub fn set_time(&mut self, i: usize, t: f32) {
-        debug_assert!(i < self.len, "index out of bounds");
-        unsafe {
-            *(self.ptr as *mut f32).add(7 * self.len + i) = t;
-        }
-    }
-
-    pub const fn tfar(&self, i: usize) -> f32 {
+    fn tfar(&self, i: usize) -> f32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const f32).add(8 * self.len + i) }
     }
 
-    pub fn set_tfar(&mut self, i: usize, t: f32) {
+    fn set_tfar(&mut self, i: usize, t: f32) {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
             *(self.ptr as *mut f32).add(8 * self.len + i) = t;
         }
     }
 
-    pub const fn mask(&self, i: usize) -> u32 {
+    fn time(&self, i: usize) -> f32 {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe { *(self.ptr as *const f32).add(7 * self.len + i) }
+    }
+
+    fn set_time(&mut self, i: usize, t: f32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut f32).add(7 * self.len + i) = t;
+        }
+    }
+
+    fn mask(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(9 * self.len + i) }
     }
 
-    pub fn set_mask(&mut self, i: usize, m: u32) {
+    fn set_mask(&mut self, i: usize, m: u32) {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
             *(self.ptr as *mut u32).add(9 * self.len + i) = m;
         }
     }
 
-    pub const fn id(&self, i: usize) -> u32 {
+    fn id(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(10 * self.len + i) }
     }
 
-    pub fn set_id(&mut self, i: usize, id: u32) {
+    fn set_id(&mut self, i: usize, id: u32) {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
             *(self.ptr as *mut u32).add(10 * self.len + i) = id;
         }
     }
 
-    pub const fn flags(&self, i: usize) -> u32 {
+    fn flags(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(11 * self.len + i) }
     }
 
-    pub fn set_flags(&mut self, i: usize, f: u32) {
+    fn set_flags(&mut self, i: usize, f: u32) {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe {
             *(self.ptr as *mut u32).add(11 * self.len + i) = f;
         }
     }
-
-    pub const fn len(&self) -> usize { self.len }
 }
 
 /// Hit packet of runtime size.
@@ -443,48 +419,97 @@ pub struct HitN<'a> {
     pub(crate) marker: PhantomData<&'a mut sys::RTCHitN>,
 }
 
-impl<'a> HitN<'a> {
-    pub const fn ng_x(&self, i: usize) -> f32 {
+impl<'a> SoAHit for HitN<'a> {
+    fn normal(&self, i: usize) -> [f32; 3] {
         debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(i) }
+        unsafe {
+            [
+                *(self.ptr as *const f32).add(i),
+                *(self.ptr as *const f32).add(self.len + i),
+                *(self.ptr as *const f32).add(2 * self.len + i),
+            ]
+        }
     }
 
-    pub const fn ng_y(&self, i: usize) -> f32 {
+    fn unit_normal(&self, i: usize) -> [f32; 3] { normalise_vector3(self.normal(i)) }
+
+    fn set_normal(&mut self, i: usize, n: [f32; 3]) {
         debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(self.len + i) }
+        unsafe {
+            let ptr = self.ptr as *mut f32;
+            *(ptr).add(i) = n[0];
+            *(ptr).add(self.len + i) = n[1];
+            *(ptr).add(2 * self.len + i) = n[2];
+        }
     }
 
-    pub const fn ng_z(&self, i: usize) -> f32 {
+    fn uv(&self, i: usize) -> [f32; 2] {
         debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(2 * self.len + i) }
+        unsafe {
+            [
+                *(self.ptr as *const f32).add(3 * self.len + i),
+                *(self.ptr as *const f32).add(4 * self.len + i),
+            ]
+        }
     }
 
-    pub const fn u(&self, i: usize) -> f32 {
+    fn set_u(&mut self, i: usize, u: f32) {
         debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(3 * self.len + i) }
+        unsafe {
+            *(self.ptr as *mut f32).add(3 * self.len + i) = u;
+        }
     }
 
-    pub const fn v(&self, i: usize) -> f32 {
+    fn set_v(&mut self, i: usize, v: f32) {
         debug_assert!(i < self.len, "index out of bounds");
-        unsafe { *(self.ptr as *const f32).add(4 * self.len + i) }
+        unsafe {
+            *(self.ptr as *mut f32).add(4 * self.len + i) = v;
+        }
     }
 
-    pub const fn prim_id(&self, i: usize) -> u32 {
+    fn prim_id(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(5 * self.len + i) }
     }
 
-    pub const fn geom_id(&self, i: usize) -> u32 {
+    fn set_prim_id(&mut self, i: usize, id: u32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut u32).add(5 * self.len + i) = id;
+        }
+    }
+
+    fn geom_id(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(6 * self.len + i) }
     }
 
-    pub const fn inst_id(&self, i: usize) -> u32 {
+    fn set_geom_id(&mut self, i: usize, id: u32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut u32).add(6 * self.len + i) = id;
+        }
+    }
+
+    fn inst_id(&self, i: usize) -> u32 {
         debug_assert!(i < self.len, "index out of bounds");
         unsafe { *(self.ptr as *const u32).add(7 * self.len + i) }
     }
 
+    fn set_inst_id(&mut self, i: usize, id: u32) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            *(self.ptr as *mut u32).add(7 * self.len + i) = id;
+        }
+    }
+}
+
+impl<'a> HitN<'a> {
+    /// Returns the number of hits in the packet.
     pub const fn len(&self) -> usize { self.len }
+
+    /// Returns true if the packet is empty.
+    pub const fn is_empty(&self) -> bool { self.len == 0 }
 }
 
 /// Combined ray and hit packet of runtime size.

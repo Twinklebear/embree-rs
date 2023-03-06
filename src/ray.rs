@@ -1,9 +1,8 @@
-use crate::{sys, INVALID_ID};
-use std::fmt::{Debug, Formatter};
+use crate::{normalise_vector3, sys, INVALID_ID};
 
-mod packet;
+pub mod packet;
 mod soa;
-mod stream;
+pub mod stream;
 
 pub use packet::*;
 pub use soa::*;
@@ -22,7 +21,7 @@ pub use stream::*;
 /// [`tnear`](`sys::RTCRay::tnear`) and [`tfar`](`sys::RTCRay::tfar`) is
 /// considered valid.
 ///
-/// The ray segment must be in the range [0, \inf], thus ranges start
+/// The ray segment must be in the range \[0, \inf\], thus ranges start
 /// behind the ray origin are not allowed, but ranges can reach to infinity.
 /// For rays inside a ray stream, `tfar` < `tnear` identifies an *inactive*
 /// ray.
@@ -31,53 +30,58 @@ pub use stream::*;
 /// event if the order of rays inside a ray packet or stream has changed.
 ///
 /// [`packet`](`crate::ray::packet`) defines types in SOA (structure of array)
-/// layout for ray packets of size 4 (RTCRay4 type), size 8 (RTCRay8 type),
-/// and size 16 (RTCRay16 type). A const-generic type [`RayNt`] is
-/// defined for ray packets of arbitrary size N at compile time.
+/// layout for ray packets of size 4 ([`Ray4`]), size 8 ([`Ray8`]),
+/// and size 16 ([`Ray16`]).
 ///
 /// See [`sys::RTCRay`] for more details.
 pub type Ray = sys::RTCRay;
 
 impl Ray {
-    /// Creates a new ray starting at `origin` and heading in direction `dir`
-    pub fn new(origin: [f32; 3], direction: [f32; 3]) -> Ray {
-        Ray::segment(origin, direction, 0.0, f32::INFINITY)
-    }
-
-    pub fn new_with_id(origin: [f32; 3], direction: [f32; 3], id: u32) -> Ray {
+    /// Creates a new ray.
+    ///
+    /// Basic constructor that initializes all fields of the ray.
+    pub fn new(
+        origin: [f32; 3],
+        direction: [f32; 3],
+        near: f32,
+        far: f32,
+        time: f32,
+        mask: u32,
+        id: u32,
+    ) -> Ray {
         Ray {
             org_x: origin[0],
             org_y: origin[1],
             org_z: origin[2],
-            tnear: 0.0,
+            tnear: near,
             dir_x: direction[0],
             dir_y: direction[1],
             dir_z: direction[2],
-            tfar: f32::INFINITY,
-            time: 0.0,
-            mask: u32::MAX,
+            tfar: far,
+            time,
+            mask,
             id,
             flags: 0,
         }
     }
 
-    /// Creates a new ray starting at `origin` and heading in direction `dir`
+    /// Creates a new ray segment.
+    ///
+    /// The ray starting at `origin` and heading in direction `dir`
     /// with a segment starting at `tnear` and ending at `tfar`.
     pub fn segment(origin: [f32; 3], direction: [f32; 3], tnear: f32, tfar: f32) -> Ray {
-        Ray {
-            org_x: origin[0],
-            org_y: origin[1],
-            org_z: origin[2],
-            tnear,
-            dir_x: direction[0],
-            dir_y: direction[1],
-            dir_z: direction[2],
-            tfar,
-            time: 0.0,
-            mask: u32::MAX,
-            id: 0,
-            flags: 0,
-        }
+        Self::new(origin, direction, tnear, tfar, 0.0, u32::MAX, 0)
+    }
+
+    /// Creates a new segment of ray with an ID.
+    pub fn segment_with_id(
+        origin: [f32; 3],
+        direction: [f32; 3],
+        tnear: f32,
+        tfar: f32,
+        id: u32,
+    ) -> Ray {
+        Self::new(origin, direction, tnear, tfar, 0.0, u32::MAX, id)
     }
 
     /// Returns the origin of the ray.
@@ -88,13 +92,36 @@ impl Ray {
 
     /// Returns the normalized direction of the ray.
     ///
-    /// The direction is normalized by dividing it by its length, which
-    /// may produce a NaN if the direction is zero.
-    pub fn dir_normalized(&self) -> [f32; 3] {
-        let dir = self.dir();
-        let len = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
-        let len = len.sqrt();
-        [dir[0] / len, dir[1] / len, dir[2] / len]
+    /// Do not use this method to calculate the hit point, use [`dir`] instead.
+    pub fn unit_dir(&self) -> [f32; 3] { normalise_vector3(self.dir()) }
+
+    /// Calculates the hit point from the ray and the hit distance.
+    pub fn hit_point(&self) -> [f32; 3] {
+        let t = self.tfar;
+        [
+            self.org_x + self.dir_x * t,
+            self.org_y + self.dir_y * t,
+            self.org_z + self.dir_z * t,
+        ]
+    }
+}
+
+impl Default for Ray {
+    fn default() -> Self {
+        Ray {
+            org_x: 0.0,
+            org_y: 0.0,
+            org_z: 0.0,
+            tnear: 0.0,
+            dir_x: 0.0,
+            dir_y: 0.0,
+            dir_z: 0.0,
+            tfar: f32::INFINITY,
+            time: 0.0,
+            mask: u32::MAX,
+            id: 0,
+            flags: 0,
+        }
     }
 }
 
@@ -108,17 +135,13 @@ impl Ray {
 /// the barycentric u/v coordinates of the hit ([`u`]([`sys::RTCHit::u`]) and
 /// [`v`]([`sys::RTCHit::v`]) members), as well as the primitive ID
 /// ([`primID`]([`sys::RTCHit::primID`]) member), geometry ID
-/// ([`geomID`](([`sys::RTCHit::geomID`]) member), and instance ID
-/// stack ([`instID`]([`sys::RTCHit::instID`]) member) of the hit.
+/// (`geomID`, [`sys::RTCHit::geomID`] member), and instance ID
+/// stack (`instID`, [`sys::RTCHit::instID`] member) of the hit.
 /// The parametric intersection distance is not stored inside the hit,
-/// but stored inside the [`tfar`]([`sys::RTCRay::tfar`]) member of the ray.
+/// but stored inside the `tfar`([`sys::RTCRay::tfar`]) member of the ray.
 ///
 /// There exists structures in SOA (structure of array) layout for hit packets
-/// of size 4 (RTCHit4 type), size 8 (RTCHit8 type), and size 16 (RTCHit16
-/// type).
-///
-/// [`HitNt`] defines the type for hit packets of arbitrary size N at
-/// compile time.
+/// of size 4 ([`Hit4`]), size 8 ([`Hit8`]), and size 16 ([`Hit16`]).
 ///
 /// See [`sys::RTCHit`] for more details.
 pub type Hit = sys::RTCHit;
@@ -143,15 +166,13 @@ impl Hit {
     pub fn normal(&self) -> [f32; 3] { [self.Ng_x, self.Ng_y, self.Ng_z] }
 
     /// Returns the normalized normal at the hit point.
-    pub fn normal_normalized(&self) -> [f32; 3] {
-        let normal = self.normal();
-        let len = normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2];
-        let len = len.sqrt();
-        [normal[0] / len, normal[1] / len, normal[2] / len]
-    }
+    pub fn unit_normal(&self) -> [f32; 3] { normalise_vector3(self.normal()) }
 
     /// Returns the barycentric u/v coordinates of the hit.
     pub fn barycentric(&self) -> [f32; 2] { [self.u, self.v] }
+
+    /// Returns if the hit is valid, i.e. the ray hit something.
+    pub fn is_valid(&self) -> bool { self.geomID != INVALID_ID }
 }
 
 /// New type alias for [`sys::RTCRayHit`] that provides some convenience
@@ -162,9 +183,8 @@ impl Hit {
 /// and some hit fields that hold the intersection result afterwards.
 ///
 /// [`packet`](`crate::ray::packet`) defines types in SOA (structure of array)
-/// layout for ray/hit packets of size 4 (RTCRayHit4 type), size 8 (RTCRayHit8
-/// type), and size 16 (RTCRayHit16 type). A const-generic type [`RayHitNt`]
-/// is defined for ray/hit packets of arbitrary size N at compile time.
+/// layout for ray/hit packets of size 4 [`RayHit4`], size 8 [`RayHit8`], and
+/// size 16 [`RayHit16`].
 ///
 /// See [`sys::RTCRayHit`] for more details.
 pub type RayHit = sys::RTCRayHit;
@@ -177,18 +197,14 @@ impl RayHit {
             hit: Hit::default(),
         }
     }
+}
 
-    /// Returns true if the hit is valid (i.e. the ray hit something).
-    pub fn is_valid(&self) -> bool { self.hit.geomID != INVALID_ID }
-
-    /// Calculates the hit point from the ray and the hit distance.
-    pub fn hit_point(&self) -> [f32; 3] {
-        let t = self.ray.tfar;
-        [
-            self.ray.org_x + self.ray.dir_x * t,
-            self.ray.org_y + self.ray.dir_y * t,
-            self.ray.org_z + self.ray.dir_z * t,
-        ]
+impl Default for RayHit {
+    fn default() -> Self {
+        RayHit {
+            ray: Ray::default(),
+            hit: Hit::default(),
+        }
     }
 }
 

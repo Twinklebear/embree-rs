@@ -1,6 +1,6 @@
 use crate::{
-    AsIntersectContext, Bounds, Error, PointQuery, PointQueryContext, Ray, Ray16, Ray8, RayHit,
-    RayHit16, RayHit8, RayHitNp, RayHitPacket, RayPacket, SceneFlags,
+    AsIntersectContext, Bounds, BuildQuality, Error, PointQuery, PointQueryContext, Ray, Ray16,
+    Ray8, RayHit, RayHit16, RayHit8, RayHitNp, RayHitPacket, RayPacket, SceneFlags,
 };
 use std::{
     any::TypeId,
@@ -10,7 +10,6 @@ use std::{
 };
 
 use crate::{
-    context::IntersectContext,
     device::Device,
     geometry::Geometry,
     ray::{Ray4, RayHit4, RayNp},
@@ -140,7 +139,20 @@ impl<'a> Scene<'a> {
         }
     }
 
-    // TODO: add get_geometry with rtcGetGeometryThreadSafe
+    /// Returns the geometry bound to the specified geometry ID.
+    ///
+    /// This function is thread safe and should **NOT** get used during
+    /// rendering. If you need a fast non-thread safe version during
+    /// rendering please use the [`Scene::get_geometry_unchecked`] function.
+    pub fn get_geometry(&self, id: u32) -> Option<Geometry<'a>> {
+        let raw = unsafe { rtcGetGeometryThreadSafe(self.handle, id) };
+        if raw.is_null() {
+            None
+        } else {
+            let geometries = self.geometries.lock().unwrap();
+            geometries.get(&id).cloned()
+        }
+    }
 
     /// Returns the raw underlying handle to the scene, e.g. for passing it to
     /// native code or ISPC kernels.
@@ -202,7 +214,7 @@ impl<'a> Scene<'a> {
     }
 
     /// Set the scene flags. Multiple flags can be enabled using an OR
-    /// operation. See [`RTCSceneFlags`] for all possible flags.
+    /// operation. See [`SceneFlags`] for all possible flags.
     /// On failure an error code is set that can be queried using
     /// [`rtcGetDeviceError`].
     ///
@@ -218,7 +230,7 @@ impl<'a> Scene<'a> {
     ///   edges of neighboring primitives.
     /// - CONTEXT_FILTER_FUNCTION: Enables support for a filter function inside
     ///   the intersection context for this scene.
-    pub fn set_flags(&self, flags: RTCSceneFlags) {
+    pub fn set_flags(&self, flags: SceneFlags) {
         unsafe {
             rtcSetSceneFlags(self.handle, flags);
         }
@@ -235,7 +247,7 @@ impl<'a> Scene<'a> {
     /// let flags = scene.get_flags();
     /// scene.set_flags(flags | SceneFlags::ROBUST);
     /// ```
-    pub fn get_flags(&self) -> RTCSceneFlags { unsafe { rtcGetSceneFlags(self.handle) } }
+    pub fn get_flags(&self) -> SceneFlags { unsafe { rtcGetSceneFlags(self.handle) } }
 
     /// Traverses the BVH with a point query object.
     ///
@@ -294,9 +306,7 @@ impl<'a> Scene<'a> {
     /// The point query structure must be aligned to 16 bytes.
     ///
     /// Currently, all primitive types are supported by the point query API
-    /// except of points (see [`GeometryKind::POINT`]), curves (see
-    /// [`GeometryKind::CURVE`]) and subdivision surfaces (see
-    /// [`GeometryKind::SUBDIVISION]).
+    /// except of points, curves and subdivision surfaces.
     ///
     /// See **closet_point** in examples folder for an example of this.
     pub fn point_query<F, D>(
@@ -342,7 +352,7 @@ impl<'a> Scene<'a> {
         }
     }
 
-    /// Set the build quality of the scene. See [`RTCBuildQuality`] for all
+    /// Set the build quality of the scene. See [`BuildQuality`] for all
     /// possible values.
     ///
     /// The per-geometry build quality is only a hint and may be ignored. Embree
@@ -365,7 +375,7 @@ impl<'a> Scene<'a> {
     ///
     /// - [`BuildQuality::REFIT`]: Uses a BVH refitting approach when changing
     ///   only the vertex buffer.
-    pub fn set_build_quality(&self, quality: RTCBuildQuality) {
+    pub fn set_build_quality(&self, quality: BuildQuality) {
         unsafe {
             rtcSetSceneBuildQuality(self.handle, quality);
         }
@@ -410,7 +420,7 @@ impl<'a> Scene<'a> {
 
     /// Finds the closest hit of a single ray with the scene.
     ///
-    /// Analogous to [`sys::rtcIntersect1`].
+    /// Analogous to [`rtcIntersect1`].
     ///
     /// The user has to initialize the ray origin, ray direction, ray segment
     /// (`tnear`, `tfar` ray members), and set the ray flags to 0 (`flags` ray
@@ -448,7 +458,7 @@ impl<'a> Scene<'a> {
         unsafe {
             rtcIntersect1(
                 self.handle,
-                ctx.as_intersect_context_mut_ptr(),
+                ctx.as_mut_context_ptr(),
                 ray as *mut _ as *mut _,
             );
         }
@@ -477,12 +487,17 @@ impl<'a> Scene<'a> {
     ///
     /// Only active rays are processed, and hit data of inactive rays is not
     /// changed.
-    pub fn intersect4(&self, ctx: &mut IntersectContext, ray: &mut RayHit4, valid: &[i32; 4]) {
+    pub fn intersect4<C: AsIntersectContext>(
+        &self,
+        ctx: &mut C,
+        ray: &mut RayHit4,
+        valid: &[i32; 4],
+    ) {
         unsafe {
             rtcIntersect4(
                 valid.as_ptr(),
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_mut_context_ptr(),
                 ray as *mut RTCRayHit4,
             );
         }
@@ -511,12 +526,17 @@ impl<'a> Scene<'a> {
     ///
     /// Only active rays are processed, and hit data of inactive rays is not
     /// changed.
-    pub fn intersect8(&self, ctx: &mut IntersectContext, ray: &mut RayHit8, valid: &[i32; 8]) {
+    pub fn intersect8<C: AsIntersectContext>(
+        &self,
+        ctx: &mut C,
+        ray: &mut RayHit8,
+        valid: &[i32; 8],
+    ) {
         unsafe {
             rtcIntersect8(
                 valid.as_ptr(),
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_mut_context_ptr(),
                 ray as *mut RTCRayHit8,
             );
         }
@@ -545,12 +565,17 @@ impl<'a> Scene<'a> {
     ///
     /// Only active rays are processed, and hit data of inactive rays is not
     /// changed.
-    pub fn intersect16(&self, ctx: &mut IntersectContext, ray: &mut RayHit16, valid: &[i32; 16]) {
+    pub fn intersect16<C: AsIntersectContext>(
+        &self,
+        ctx: &mut C,
+        ray: &mut RayHit16,
+        valid: &[i32; 16],
+    ) {
         unsafe {
             rtcIntersect16(
                 valid.as_ptr(),
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_mut_context_ptr(),
                 ray as *mut RTCRayHit16,
             );
         }
@@ -573,13 +598,9 @@ impl<'a> Scene<'a> {
     /// * `ray` - The ray to intersect with the scene.
     pub fn occluded<C: AsIntersectContext>(&self, ctx: &mut C, ray: &mut Ray) -> bool {
         unsafe {
-            rtcOccluded1(
-                self.handle,
-                ctx.as_intersect_context_mut_ptr(),
-                ray as *mut RTCRay,
-            );
+            rtcOccluded1(self.handle, ctx.as_mut_context_ptr(), ray as *mut RTCRay);
         }
-        ray.tfar == -f32::INFINITY
+        ray.tfar == f32::NEG_INFINITY
     }
 
     /// Checks for each active ray of a ray packet of size 4 if whether there is
@@ -606,12 +627,12 @@ impl<'a> Scene<'a> {
     ///
     /// Only active rays are processed, and hit data of inactive rays is not
     /// changed.
-    pub fn occluded4(&self, ctx: &mut IntersectContext, ray: &mut Ray4, valid: &[i32; 4]) {
+    pub fn occluded4<C: AsIntersectContext>(&self, ctx: &mut C, ray: &mut Ray4, valid: &[i32; 4]) {
         unsafe {
             rtcOccluded4(
                 valid.as_ptr(),
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_mut_context_ptr(),
                 ray as *mut RTCRay4,
             );
         }
@@ -641,12 +662,12 @@ impl<'a> Scene<'a> {
     ///
     /// Only active rays are processed, and hit data of inactive rays is not
     /// changed.
-    pub fn occluded8(&self, ctx: &mut IntersectContext, ray: &mut Ray8, valid: &[i32; 8]) {
+    pub fn occluded8<C: AsIntersectContext>(&self, ctx: &mut C, ray: &mut Ray8, valid: &[i32; 8]) {
         unsafe {
             rtcOccluded8(
                 valid.as_ptr(),
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_mut_context_ptr(),
                 ray as *mut RTCRay8,
             );
         }
@@ -676,12 +697,17 @@ impl<'a> Scene<'a> {
     ///
     /// Only active rays are processed, and hit data of inactive rays is not
     /// changed.
-    pub fn occluded16(&self, ctx: &mut IntersectContext, ray: &mut Ray16, valid: &[i32; 16]) {
+    pub fn occluded16<C: AsIntersectContext>(
+        &self,
+        ctx: &mut C,
+        ray: &mut Ray16,
+        valid: &[i32; 16],
+    ) {
         unsafe {
             rtcOccluded16(
                 valid.as_ptr(),
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_mut_context_ptr(),
                 ray as *mut RTCRay16,
             );
         }
@@ -714,9 +740,9 @@ impl<'a> Scene<'a> {
     ///   additional data. See [`IntersectContext`] for more information.
     ///
     /// * `rays` - The ray stream to intersect with the scene.
-    pub fn intersect_stream_aos<P: RayHitPacket>(
+    pub fn intersect_stream_aos<P: RayHitPacket, C: AsIntersectContext>(
         &self,
-        ctx: &mut IntersectContext,
+        ctx: &mut C,
         rays: &mut Vec<P>,
     ) {
         let m = rays.len();
@@ -724,7 +750,7 @@ impl<'a> Scene<'a> {
             if P::Ray::LEN == 1 {
                 rtcIntersect1M(
                     self.handle,
-                    ctx as *mut RTCIntersectContext,
+                    ctx.as_mut_context_ptr(),
                     rays.as_mut_ptr() as *mut _,
                     m as u32,
                     mem::size_of::<P>(),
@@ -732,7 +758,7 @@ impl<'a> Scene<'a> {
             } else {
                 rtcIntersectNM(
                     self.handle,
-                    ctx as *mut RTCIntersectContext,
+                    ctx.as_mut_context_ptr(),
                     rays.as_mut_ptr() as *mut _,
                     P::Ray::LEN as u32,
                     m as u32,
@@ -770,13 +796,17 @@ impl<'a> Scene<'a> {
     /// [`IntersectContext`] for more information.
     ///
     /// * `rays` - The ray stream to intersect with the scene.
-    pub fn occluded_stream_aos<P: RayPacket>(&self, ctx: &mut IntersectContext, rays: &mut Vec<P>) {
+    pub fn occluded_stream_aos<P: RayPacket, C: AsIntersectContext>(
+        &self,
+        ctx: &mut C,
+        rays: &mut Vec<P>,
+    ) {
         let m = rays.len();
         unsafe {
             if P::LEN == 1 {
                 rtcOccluded1M(
                     self.handle,
-                    ctx as *mut RTCIntersectContext,
+                    ctx.as_mut_context_ptr(),
                     rays.as_mut_ptr() as *mut RTCRay,
                     m as u32,
                     mem::size_of::<P>(),
@@ -784,7 +814,7 @@ impl<'a> Scene<'a> {
             } else {
                 rtcOccludedNM(
                     self.handle,
-                    ctx as *mut RTCIntersectContext,
+                    ctx.as_mut_context_ptr(),
                     rays.as_mut_ptr() as *mut RTCRayN,
                     P::LEN as u32,
                     m as u32,
@@ -806,13 +836,13 @@ impl<'a> Scene<'a> {
     ///
     /// A ray in a ray stream is considered inactive if its tnear value is
     /// larger than its tfar value.
-    pub fn intersect_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayHitNp) {
+    pub fn intersect_stream_soa<C: AsIntersectContext>(&self, ctx: &mut C, rays: &mut RayHitNp) {
         let n = rays.len();
         unsafe {
             let mut rayhit = rays.as_rayhitnp();
             rtcIntersectNp(
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_mut_context_ptr(),
                 &mut rayhit as *mut RTCRayHitNp,
                 n as u32,
             );
@@ -831,13 +861,13 @@ impl<'a> Scene<'a> {
     ///
     /// A ray in a ray stream is considered inactive if its tnear value is
     /// larger than its tfar value.
-    pub fn occluded_stream_soa(&self, ctx: &mut IntersectContext, rays: &mut RayNp) {
+    pub fn occluded_stream_soa<C: AsIntersectContext>(&self, ctx: &mut C, rays: &mut RayNp) {
         let n = rays.len();
         unsafe {
             let mut r = rays.as_raynp();
             rtcOccludedNp(
                 self.handle,
-                ctx as *mut RTCIntersectContext,
+                ctx.as_mut_context_ptr(),
                 &mut r as *mut RTCRayNp,
                 n as u32,
             );

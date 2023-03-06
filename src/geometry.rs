@@ -4,8 +4,7 @@ use std::{
 
 use crate::{
     sys::*, AsIntersectContext, Bounds, BufferSlice, BufferUsage, BuildQuality, Device, Error,
-    Format, GeometryKind, HitN, IntersectContext, QuaternionDecomposition, RayHitN, RayN, Scene,
-    SubdivisionMode,
+    Format, GeometryKind, HitN, QuaternionDecomposition, RayHitN, RayN, Scene, SubdivisionMode,
 };
 
 use std::{
@@ -141,7 +140,7 @@ impl Default for GeometryData {
 /// start (and end time) of the first (and last) time step can be set using the
 /// rtcSetGeometryTimeRange function. This feature will also allow geometries to
 /// appear and disappear during the camera shutter time if the time range is a
-/// sub range of [0,1].
+/// sub range of \[0,1\].
 ///
 /// The API supports per-geometry filter callback functions (see
 /// [`Geometry::set_intersect_filter_function`]
@@ -485,8 +484,8 @@ impl<'buf> Geometry<'buf> {
         }
     }
 
-    /// Creates a new [`Buffer`] and binds it as a specific attribute for this
-    /// geometry.
+    /// Creates a new [`Buffer`](`crate::Buffer`) and binds it as a specific
+    /// attribute for this geometry.
     ///
     /// Analogous to [`rtcSetNewGeometryBuffer`](https://spec.oneapi.io/oneart/0.5-rev-1/embree-spec.html#rtcsetnewgeometrybuffer).
     ///
@@ -666,9 +665,8 @@ impl<'buf> Geometry<'buf> {
     /// properties are guaranteed, and whether this is the case can be
     /// queried using [`Device::get_property`]. When performing ray queries
     /// using the stream API such as [`Scene::intersect_stream_aos`],
-    /// [`Scene::intersect1Mp`], [`Scene::intersect_stream_soa`], the order
-    /// of rays and ray packet size of the callback function might change to
-    /// either 1, 4, 8, or 16.
+    /// [`Scene::intersect_stream_soa`], the order of rays and ray packet size
+    /// of the callback function might change to either 1, 4, 8, or 16.
     ///
     /// For many usage scenarios, repacking and re-ordering of rays does not
     /// cause difficulties in implementing the callback function. However,
@@ -679,7 +677,7 @@ impl<'buf> Geometry<'buf> {
     where
         D: UserGeometryData,
         C: AsIntersectContext,
-        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidityN<'a>, &mut C, Option<&mut D>),
     {
         let mut geom_data = self.data.lock().unwrap();
         unsafe {
@@ -720,7 +718,7 @@ impl<'buf> Geometry<'buf> {
     where
         D: UserGeometryData,
         C: AsIntersectContext,
-        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidityN<'a>, &mut C, Option<&mut D>),
     {
         let mut geom_data = self.data.lock().unwrap();
         unsafe {
@@ -817,7 +815,7 @@ impl<'buf> Geometry<'buf> {
     /// in instance space using the top element of the stack in context when
     /// rtcPointQuery is called. For a reference implementation of a closest
     /// point traversal of triangle meshes using instancing and user defined
-    /// instancing see the tutorial [ClosestPoint].
+    /// instancing see the tutorial *ClosestPoint*.
     pub unsafe fn set_point_query_function(&mut self, query_fn: RTCPointQueryFunction) {
         rtcSetGeometryPointQueryFunction(self.handle, query_fn);
     }
@@ -862,8 +860,8 @@ impl<'buf> Geometry<'buf> {
     /// Ray masks are disabled in Embree by default at compile time, and can be
     /// enabled through the `EMBREE_RAY_MASK` parameter in CMake. One can query
     /// whether ray masks are enabled by querying the
-    /// [`DeviceProperty::RAY_MASK_SUPPORTED`] device property using
-    /// [`Device::get_property`].
+    /// [`DeviceProperty::RAY_MASK_SUPPORTED`](`crate::DeviceProperty::RAY_MASK_SUPPORTED`)
+    /// device property using [`Device::get_property`].
     pub fn set_mask(&mut self, mask: u32) {
         unsafe {
             rtcSetGeometryMask(self.handle, mask);
@@ -892,25 +890,25 @@ impl<'buf> Geometry<'buf> {
 
     /// Sets the time range for a motion blur geometry.
     ///
-    /// The time range is defined relative to the camera shutter interval [0,1]
-    /// but it can be arbitrary. Thus the `start` time can be smaller,
-    /// equal, or larger 0, indicating a geometry whose animation definition
-    /// start before, at, or after the camera shutter opens.
+    /// The time range is defined relative to the camera shutter interval
+    /// \[0,1\] but it can be arbitrary. Thus the `start` time can be
+    /// smaller, equal, or larger 0, indicating a geometry whose animation
+    /// definition start before, at, or after the camera shutter opens.
     /// Similar the `end` time can be smaller, equal, or larger than 1,
     /// indicating a geometry whose animation definition ends after, at, or
     /// before the camera shutter closes. The `start` time has to be smaller
     /// or equal to the `end` time.
     ///
     /// The default time range when this function is not called is the entire
-    /// camera shutter [0,1]. For best performance at most one time segment
+    /// camera shutter \[0,1\]. For best performance at most one time segment
     /// of the piece wise linear definition of the motion should fall
     /// outside the shutter window to the left and to the right. Thus do not
     /// set the `start` time or `end` time too far outside the
-    /// [0,1] interval for best performance.
+    /// \[0,1\] interval for best performance.
     ///
     /// This time range feature will also allow geometries to appear and
     /// disappear during the camera shutter time if the specified time range
-    /// is a sub range of [0,1].
+    /// is a sub range of \[0,1\].
     ///
     /// Please also have a look at the [`Geometry::set_time_step_count`] to
     /// see how to define the time steps for the specified time range.
@@ -1198,66 +1196,85 @@ impl<'buf> Geometry<'buf> {
 
     /// Sets the callback function to intersect a user geometry.
     ///
+    /// The registered
+    ///   callback function is invoked by intersect-type ray queries to
+    ///   calculate the intersection of a ray packet of variable size with one
+    ///   user-defined primitive.
     /// Only a single callback function can be registered per geometry and
     /// further invocations overwrite the previously set callback function.
     /// Unregister the callback function by calling
     /// [`Geometry::unset_intersect_function`].
     ///
-    /// The registered callback function is invoked by intersect-type ray
-    /// queries to calculate the intersection of a ray packet of variable
-    /// size with one user-defined primitive. The callback function of type
-    /// [`RTCIntersectFunctionN`] gets passed a number of arguments through
-    /// the [`RTCIntersectFunctionNArguments`] structure. The value N
-    /// specifies the ray packet size, valid points to an array of
-    /// integers that specify whether the corresponding ray is valid (-1) or
-    /// invalid (0), the `geometryUserPtr` member points to the geometry
-    /// user data previously set through [`Geometry::set_user_data`], the
-    /// context member points to the intersection context passed to the ray
-    /// query, the rayhit member points to a ray and hit packet of variable
-    /// size N, and the geomID and primID member identifies the geometry ID
-    /// and primitive ID of the primitive to intersect. The ray component of
-    /// the rayhit structure contains valid data, in particular
-    /// the tfar value is the current closest hit distance found. All data
-    /// inside the hit component of the rayhit structure are undefined and
-    /// should not be read by the function.
-    /// The task of the callback function is to intersect each active ray from
-    /// the ray packet with the specified user primitive. If the
-    /// user-defined primitive is missed by a ray of the ray packet, the
-    /// function should return without modifying the ray or hit. If an
-    /// intersection of the user-defined primitive with the ray was found in
-    /// the valid range (from tnear to tfar), it should update the hit distance
-    /// of the ray (tfar member) and the hit (u, v, Ng, instID, geomID,
-    /// primID members). In particular, the currently intersected instance
-    /// is stored in the instID field of the intersection context, which
-    /// must be deep copied into the instID member of the hit.
+    ///
+    /// # Arguments
+    ///
+    /// - `intersect`: The callback function to register. The task of the
+    ///   callback function is to intersect each active ray from the ray packet
+    ///   with the specified user primitive. If the user-defined primitive is
+    ///   missed by a ray of the ray packet, the function should return without
+    ///   modifying the ray or hit. If an intersection of the user-defined
+    ///   primitive with the ray is found in the range `tnear` to `tfar`, it
+    ///   should update the hit distance of the ray (`tfar` member) and the
+    ///   hit(`u`, `v`, `instID`, `geomID`, `primID` members). In particular,
+    ///   the currently intersected instance is stored in the `instID` field of
+    ///   the intersection context, which must be deep-copied into the `instID`
+    ///   member of the hit structure.
+    ///
+    ///   The callback function gets passed a number of arguments:
+    ///     - the ray hit packet of variable size N (see [`RayHitN`]); it
+    ///       contains valid data, in particular the `tfar` value is the current
+    ///       closest hit distance found. All data inside the `hit` component of
+    ///       the ray hit structure are undefined and should **NOT** be read by
+    ///       the function.
+    ///     - the valid masks for each ray in the packet (see [`ValidityN`])
+    ///     - a mutable reference to the intersection context (see
+    ///       [`IntersectContext`](`crate::IntersectContext`) and
+    ///       [`IntersectContextExt`](`crate::IntersectContextExt`))
+    ///     - the geometry ID of the geometry to intersect
+    ///     - the primitive ID of the primitive to intersect
+    ///     - a mutable reference to the user data of the geometry (if any); the
+    ///       user data can be set using [`Geometry::set_user_data`]
+    ///
+    /// The ray component of the ray hit structure contains valid data, in
+    /// particular the tfar value is the current closest hit distance found.
+    /// All data inside the hit component of the [`RayHitN`] structure are
+    /// undefined and should **NOT** be *read* by the function (writing is ok).
     ///
     /// As a primitive might have multiple intersections with a ray, the
     /// intersection filter function needs to be invoked by the user
     /// geometry intersection callback for each encountered intersection, if
     /// filtering of intersections is desired. This can be achieved through
-    /// the rtcFilterIntersection call. Within the user geometry intersect
-    /// function, it is safe to trace new rays and create new scenes and
-    /// geometries. When performing ray queries using rtcIntersect1, it is
-    /// guaranteed that the packet size is 1 when the callback is invoked.
-    /// When performing ray queries using the rtcIntersect4/8/16 functions,
-    /// it is not generally guaranteed that the ray packet size (and order
-    /// of rays inside the packet) passed to the callback matches
-    /// the initial ray packet. However, under some circumstances these
-    /// properties are guaranteed, and whether this is the case can be
-    /// queried using rtcGetDevice- Property. When performing ray queries
-    /// using the stream API such as rtcIntersect1M, rtcIntersect1Mp,
-    /// rtcIntersectNM, or rtcIntersectNp the or- der of rays and ray packet
-    /// size of the callback function might change to either 1, 4, 8, or 16.
-    /// For many usage scenarios, repacking and re-ordering of rays does not
-    /// cause difficulties in implementing the callback function. However,
-    /// algorithms that need to extend the ray with additional data must use
-    /// the rayID component of the ray to identify the original ray to
-    /// access the per-ray data.
+    /// the [`Geometry::set_intersect_filter_function`].
+    ///
+    /// - Within the user geometry intersect function, it is safe to trace new
+    ///   rays and create new scenes and geometries.
+    ///
+    /// - When performing ray queries using [`Scene::intersect`], it is
+    ///   guaranteed that the packet size is 1 when the callback is invoked.
+    ///
+    /// - When performing ray queries using the
+    ///   [`Scene::intersect4`]/[`Scene::intersect8`]/[`Scene::intersect16`]
+    ///   functions, it is **not** generally guaranteed that the ray packet size
+    ///   (and order of rays inside the packet) passed to the callback matches
+    ///   the initial ray packet. However, under some circumstances these
+    ///   properties are guaranteed, and whether this is the case can be queried
+    ///   using [`Device::get_property`].
+    ///
+    /// - When performing ray queries using the stream API such as
+    ///   [`Scene::intersect_stream_soa`], [`Scene::intersect_stream_aos`], the
+    ///   order of rays and ray packet size of the callback function might
+    ///   change to either 1, 4, 8, or 16.
+    ///
+    /// - For many usage scenarios, repacking and re-ordering of rays does not
+    ///   cause difficulties in implementing the callback function. However,
+    ///   algorithms that need to extend the ray with additional data must use
+    ///   the rayID component of the ray to identify the original ray to access
+    ///   the per-ray data.
     pub fn set_intersect_function<F, D, C>(&mut self, intersect: F)
     where
         D: UserGeometryData,
         C: AsIntersectContext,
-        F: for<'a> FnMut(RayHitN<'a>, ValidMasks<'a>, &mut C, u32, u32, Option<&mut D>),
+        F: for<'a> FnMut(RayHitN<'a>, ValidityN<'a>, &mut C, u32, u32, Option<&mut D>),
     {
         match self.kind {
             GeometryKind::USER => unsafe {
@@ -1285,11 +1302,28 @@ impl<'buf> Geometry<'buf> {
     ///
     /// Similar to [`Geometry::set_intersect_function`], but for occlusion
     /// queries.
+    ///
+    /// # Arguments
+    ///
+    /// - `occluded`: The callback function to register, which is invoked by
+    ///   occlusion queries to test whether the rays of a packet of variable
+    ///   size are occluded by a user-defined primitive.  The callback function
+    ///   gets passed a number of arguments:
+    ///
+    ///   - the ray packet of variable size N (see [`RayN`])
+    ///   - the valid masks for each ray in the packet (see [`ValidityN`])
+    ///   - a mutable reference to the intersection context (see
+    ///     [`IntersectContext`](`crate::IntersectContext`) and
+    ///     [`IntersectContextExt`](`crate::IntersectContextExt`))
+    ///   - the geometry ID of the geometry to intersect
+    ///   - the primitive ID of the primitive to intersect
+    ///   - a mutable reference to the user data of the geometry (if any); the
+    ///     user data can be set using [`Geometry::set_user_data`]
     pub fn set_occluded_function<F, D, C>(&mut self, occluded: F)
     where
         D: UserGeometryData,
         C: AsIntersectContext,
-        F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, u32, u32, &mut C, RayN<'a>),
+        F: for<'a> FnMut(RayN<'a>, ValidityN<'a>, &mut C, u32, u32, Option<&mut D>),
     {
         match self.kind {
             GeometryKind::USER => {
@@ -1439,24 +1473,31 @@ impl<'buf> Geometry<'buf> {
     /// Sets the displacement function for a subdivision geometry.
     ///
     /// Only one displacement function can be set per geometry, further calls to
-    /// this will overwrite the previous displacement function.
-    /// Passing `None` will remove the displacement function.
+    /// this will overwrite the previous displacement function. Use
+    /// [`Geometry::unset_displacement_function`] to remove the displacement
+    /// function.
     ///
     /// The registered function is invoked to displace points on the subdivision
     /// geometry during spatial acceleration structure construction,
     /// during the [`Scene::commit`] call.
     ///
-    /// The displacement function is called for each vertex of the subdivision
-    /// geometry. The function is called with the following parameters:
+    /// # Arguments
     ///
-    /// * `geometry`: The geometry handle.
-    /// * `geometry_user_data`: The user data.
-    /// * `prim_id`: The ID of the primitive that contains the vertices to
-    ///   displace.
-    /// * `time_step`: The time step for which the displacement function is
-    ///   evaluated. Important for time dependent displacement and motion blur.
-    /// * `vertices`: The information about the vertices to displace. See
-    ///   [`Vertices`].
+    /// * `displacement`: The displacement function. The displacement function
+    ///   is called for each vertex of the subdivision geometry.
+    ///
+    ///   The function is called with the following parameters:
+    ///
+    ///   * `geometry`: The raw geometry handle [`sys::RTCGeometry`].
+    ///   * `vertices`: The information about the vertices to displace. See
+    ///     [`Vertices`].
+    ///   * `prim_id`: The ID of the primitive that contains the vertices to
+    ///     displace.
+    ///   * `time_step`: The time step for which the displacement function is
+    ///     evaluated. Important for time dependent displacement and motion
+    ///     blur.
+    ///   * `user_data`: The geometry user data. See
+    ///     [`Geometry::set_user_data`].
     ///
     /// # Safety
     ///
@@ -1856,20 +1897,22 @@ fn intersect_filter_function<F, D, C>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
     C: AsIntersectContext,
-    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
+    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidityN<'a>, &mut C, Option<&mut D>),
 {
     unsafe extern "C" fn inner<F, D, C>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
         C: AsIntersectContext,
-        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidityN<'a>, &mut C, Option<&mut D>),
     {
-        let cb_ptr =
-            (*((*args).geometryUserPtr as *mut GeometryData)).intersect_filter_fn as *mut F;
+        let raw_data =
+            &mut *((*args).geometryUserPtr as *mut Mutex<GeometryData>) as &mut Mutex<GeometryData>;
+        let geom_data = raw_data.get_mut().unwrap();
+        let cb_ptr = geom_data.intersect_filter_fn as *mut F;
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                match geom_data.user_data {
                     Some(ref user_data) => {
                         if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
                             None
@@ -1892,7 +1935,7 @@ where
                     len,
                     marker: PhantomData,
                 },
-                ValidMasks {
+                ValidityN {
                     ptr: (*args).valid,
                     len,
                     marker: PhantomData,
@@ -1911,20 +1954,23 @@ fn occluded_filter_function<F, D, C>(_f: &mut F) -> RTCFilterFunctionN
 where
     D: UserGeometryData,
     C: AsIntersectContext,
-    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
+    F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidityN<'a>, &mut C, Option<&mut D>),
 {
     unsafe extern "C" fn inner<F, D, C>(args: *const RTCFilterFunctionNArguments)
     where
         D: UserGeometryData,
         C: AsIntersectContext,
-        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidMasks<'a>, &mut C, Option<&mut D>),
+        F: for<'a> FnMut(RayN<'a>, HitN<'a>, ValidityN<'a>, &mut C, Option<&mut D>),
     {
+        let raw_data =
+            &mut *((*args).geometryUserPtr as *mut Mutex<GeometryData>) as &mut Mutex<GeometryData>;
+        let geom_data = raw_data.get_mut().unwrap();
         let len = (*args).N as usize;
-        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData)).occluded_filter_fn as *mut F;
+        let cb_ptr = geom_data.occluded_filter_fn as *mut F;
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                match geom_data.user_data {
                     Some(ref user_data) => {
                         if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
                             None
@@ -1946,7 +1992,7 @@ where
                     len,
                     marker: PhantomData,
                 },
-                ValidMasks {
+                ValidityN {
                     ptr: (*args).valid,
                     len,
                     marker: PhantomData,
@@ -1971,7 +2017,10 @@ where
         D: UserGeometryData,
         F: FnMut(&mut Bounds, u32, u32, Option<&mut D>),
     {
-        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+        let raw_data =
+            &mut *((*args).geometryUserPtr as *mut Mutex<GeometryData>) as &mut Mutex<GeometryData>;
+        let geom_data = raw_data.get_mut().unwrap();
+        let cb_ptr = geom_data
             .user_fns
             .as_ref()
             .expect(
@@ -1982,7 +2031,7 @@ where
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                match geom_data.user_data {
                     Some(ref user_data) => {
                         if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
                             None
@@ -2011,15 +2060,18 @@ fn intersect_function<F, D, C>(_f: &mut F) -> RTCIntersectFunctionN
 where
     D: UserGeometryData,
     C: AsIntersectContext,
-    F: for<'a> FnMut(RayHitN<'a>, ValidMasks<'a>, &mut C, u32, u32, Option<&mut D>),
+    F: for<'a> FnMut(RayHitN<'a>, ValidityN<'a>, &mut C, u32, u32, Option<&mut D>),
 {
     unsafe extern "C" fn inner<F, D, C>(args: *const RTCIntersectFunctionNArguments)
     where
         D: UserGeometryData,
         C: AsIntersectContext,
-        F: for<'a> FnMut(RayHitN<'a>, ValidMasks<'a>, &mut C, u32, u32, Option<&mut D>),
+        F: for<'a> FnMut(RayHitN<'a>, ValidityN<'a>, &mut C, u32, u32, Option<&mut D>),
     {
-        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+        let raw_data =
+            &mut *((*args).geometryUserPtr as *mut Mutex<GeometryData>) as &mut Mutex<GeometryData>;
+        let geom_data = raw_data.get_mut().unwrap();
+        let cb_ptr = geom_data
             .user_fns
             .as_ref()
             .expect(
@@ -2031,7 +2083,7 @@ where
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                match geom_data.user_data {
                     Some(ref user_data) => {
                         if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
                             None
@@ -2048,7 +2100,7 @@ where
                     len,
                     marker: PhantomData,
                 },
-                ValidMasks {
+                ValidityN {
                     ptr: (*args).valid,
                     len,
                     marker: PhantomData,
@@ -2070,15 +2122,18 @@ fn occluded_function<F, D, C>(_f: &mut F) -> RTCOccludedFunctionN
 where
     D: UserGeometryData,
     C: AsIntersectContext,
-    F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, u32, u32, &mut C, RayN<'a>),
+    F: for<'a> FnMut(RayN<'a>, ValidityN<'a>, &mut C, u32, u32, Option<&mut D>),
 {
     unsafe extern "C" fn inner<F, D, C>(args: *const RTCOccludedFunctionNArguments)
     where
         D: UserGeometryData,
         C: AsIntersectContext,
-        F: for<'a> FnMut(&'a mut [i32], Option<&mut D>, u32, u32, &mut C, RayN<'a>),
+        F: for<'a> FnMut(RayN<'a>, ValidityN<'a>, &mut C, u32, u32, Option<&mut D>),
     {
-        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+        let raw_data =
+            &mut *((*args).geometryUserPtr as *mut Mutex<GeometryData>) as &mut Mutex<GeometryData>;
+        let geom_data = raw_data.get_mut().unwrap();
+        let cb_ptr = geom_data
             .user_fns
             .as_ref()
             .expect(
@@ -2089,7 +2144,7 @@ where
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                match geom_data.user_data {
                     Some(ref user_data) => {
                         if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
                             None
@@ -2101,16 +2156,20 @@ where
                 }
             };
             cb(
-                std::slice::from_raw_parts_mut((*args).valid, (*args).N as usize),
-                user_data,
-                (*args).geomID,
-                (*args).primID,
-                &mut *((*args).context as *mut _ as *mut C),
                 RayN {
                     ptr: (*args).ray,
                     len: (*args).N as usize,
                     marker: PhantomData,
                 },
+                ValidityN {
+                    ptr: (*args).valid,
+                    len: (*args).N as usize,
+                    marker: PhantomData,
+                },
+                &mut *((*args).context as *mut _ as *mut C),
+                (*args).geomID,
+                (*args).primID,
+                user_data,
             )
         }
     }
@@ -2201,7 +2260,10 @@ where
         D: UserGeometryData,
         F: for<'a> FnMut(RTCGeometry, Vertices<'a>, u32, u32, Option<&mut D>),
     {
-        let cb_ptr = (*((*args).geometryUserPtr as *mut GeometryData))
+        let raw_data =
+            &mut *((*args).geometryUserPtr as *mut Mutex<GeometryData>) as &mut Mutex<GeometryData>;
+        let geom_data = raw_data.get_mut().unwrap();
+        let cb_ptr = geom_data
             .subdivision_fns
             .as_ref()
             .expect(
@@ -2212,7 +2274,7 @@ where
         if !cb_ptr.is_null() {
             let cb = &mut *cb_ptr;
             let user_data = {
-                match (*((*args).geometryUserPtr as *mut GeometryData)).user_data {
+                match geom_data.user_data {
                     Some(ref user_data) => {
                         if user_data.data.is_null() || user_data.type_id != TypeId::of::<D>() {
                             None
@@ -2249,39 +2311,46 @@ where
     Some(inner::<F, D>)
 }
 
-/// Struct holding data for valid masks used in the callback function set by
+/// Struct holding data for validity masks used in the callback function set by
 /// [`Geometry::set_intersect_filter_function`],
-/// [`Geometry::set_occluded_filter_function`].
-pub struct ValidMasks<'a> {
+/// [`Geometry::set_occluded_filter_function`],
+/// [`Geometry::set_intersect_function`] and
+/// [`Geometry::set_occluded_function`].
+///
+/// - 0 means it is invalid
+/// - -1 means the ray/hit is valid
+pub struct ValidityN<'a> {
     ptr: *const i32,
     len: usize,
     marker: PhantomData<&'a [i32]>,
 }
 
-pub struct ValidMasksIter<'a, 'b> {
-    inner: &'b ValidMasks<'a>,
+pub struct ValidityNIter<'a, 'b> {
+    inner: &'b ValidityN<'a>,
     cur: usize,
 }
 
-impl<'a> ValidMasks<'a> {
-    pub fn iter<'b>(&'b self) -> ValidMasksIter<'a, 'b> {
-        ValidMasksIter {
+impl<'a> ValidityN<'a> {
+    pub fn iter<'b>(&'b self) -> ValidityNIter<'a, 'b> {
+        ValidityNIter {
             inner: self,
             cur: 0,
         }
     }
 
-    pub fn iter_mut<'b>(&'b mut self) -> ValidMasksIterMut<'a, 'b> {
-        ValidMasksIterMut {
+    pub fn iter_mut<'b>(&'b mut self) -> ValidityNIterMut<'a, 'b> {
+        ValidityNIterMut {
             inner: self,
             cur: 0,
         }
     }
 
     pub const fn len(&self) -> usize { self.len }
+
+    pub const fn is_empty(&self) -> bool { self.len == 0 }
 }
 
-impl<'a> Index<usize> for ValidMasks<'a> {
+impl<'a> Index<usize> for ValidityN<'a> {
     type Output = i32;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -2290,13 +2359,13 @@ impl<'a> Index<usize> for ValidMasks<'a> {
     }
 }
 
-impl<'a> IndexMut<usize> for ValidMasks<'a> {
+impl<'a> IndexMut<usize> for ValidityN<'a> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         unsafe { &mut *(self.ptr.add(index) as *mut i32) }
     }
 }
 
-impl<'a, 'b> Iterator for ValidMasksIter<'a, 'b> {
+impl<'a, 'b> Iterator for ValidityNIter<'a, 'b> {
     type Item = i32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -2312,12 +2381,12 @@ impl<'a, 'b> Iterator for ValidMasksIter<'a, 'b> {
     }
 }
 
-pub struct ValidMasksIterMut<'a, 'b> {
-    inner: &'b mut ValidMasks<'a>,
+pub struct ValidityNIterMut<'a, 'b> {
+    inner: &'b mut ValidityN<'a>,
     cur: usize,
 }
 
-impl<'a, 'b> Iterator for ValidMasksIterMut<'a, 'b> {
+impl<'a, 'b> Iterator for ValidityNIterMut<'a, 'b> {
     type Item = &'a mut i32;
 
     fn next(&mut self) -> Option<Self::Item> {

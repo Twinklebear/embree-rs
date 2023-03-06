@@ -12,19 +12,19 @@ use crate::sys::*;
 pub unsafe trait AsIntersectContext {
     type Ext;
 
-    fn as_intersect_context(&self) -> &IntersectContext;
-    fn as_intersect_context_mut(&mut self) -> &mut IntersectContext;
+    fn as_context(&self) -> &IntersectContext;
+    fn as_mut_context(&mut self) -> &mut IntersectContext;
 
-    fn as_intersect_context_ptr(&self) -> *const IntersectContext {
-        self.as_intersect_context() as *const IntersectContext
+    fn as_context_ptr(&self) -> *const IntersectContext {
+        self.as_context() as *const IntersectContext
     }
 
-    fn as_intersect_context_mut_ptr(&mut self) -> *mut IntersectContext {
-        self.as_intersect_context_mut() as *mut IntersectContext
+    fn as_mut_context_ptr(&mut self) -> *mut IntersectContext {
+        self.as_mut_context() as *mut IntersectContext
     }
 
-    fn as_intersect_context_ext(&self) -> Option<&Self::Ext>;
-    fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext>;
+    fn as_extended(&self) -> Option<&Self::Ext>;
+    fn as_mut_extended(&mut self) -> Option<&mut Self::Ext>;
 }
 
 /// Per ray-query intersection context.
@@ -45,7 +45,7 @@ pub unsafe trait AsIntersectContext {
 /// ## Note
 ///
 /// The support for the context filter function must be enabled for a scene by
-/// using the [`RTCSceneFlags::CONTEXT_FILTER_FUNCTION`] flag.
+/// using the [`SceneFlags::CONTEXT_FILTER_FUNCTION`](`crate::SceneFlags::CONTEXT_FILTER_FUNCTION`) flag.
 ///
 /// In case of instancing this feature has to get enabled also for each
 /// instantiated scene.
@@ -54,9 +54,11 @@ pub unsafe trait AsIntersectContext {
 ///
 /// Best primary ray performance can be obtained by using the ray stream API
 /// and setting the intersect context flag to
-/// [`RTCIntersectContextFlags::COHERENT`]. For secondary rays, it is typically
-/// better to use the [`RTCIntersectContextFlags::INCOHERENT`], unless the rays
-/// are known to be coherent(e.g. for primary transparency rays).
+/// [`IntersectContextFlags::COHERENT`](`crate::IntersectContextFlags`). For
+/// secondary rays, it is typically better to use the
+/// [`IntersectContextFlags::INCOHERENT`](`crate::IntersectContextFlags::INCOHERENT`),
+/// unless the rays are known to be coherent(e.g. for primary transparency
+/// rays).
 pub type IntersectContext = RTCIntersectContext;
 
 impl IntersectContext {
@@ -82,15 +84,17 @@ impl IntersectContext {
 unsafe impl AsIntersectContext for IntersectContext {
     type Ext = ();
 
-    fn as_intersect_context(&self) -> &IntersectContext { self }
+    fn as_context(&self) -> &IntersectContext { self }
 
-    fn as_intersect_context_mut(&mut self) -> &mut IntersectContext { self }
+    fn as_mut_context(&mut self) -> &mut IntersectContext { self }
 
-    fn as_intersect_context_ext(&self) -> Option<&Self::Ext> { None }
+    fn as_extended(&self) -> Option<&Self::Ext> { None }
 
-    fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext> { None }
+    fn as_mut_extended(&mut self) -> Option<&mut Self::Ext> { None }
 }
 
+/// Extended intersection context with additional ray query specific data.
+///
 /// As Embree 3 does not support placing additional data at the end of the ray
 /// structure, and accessing that data inside user geometry callbacks and filter
 /// callback functions, we have to attach the data to the ray query context.
@@ -124,13 +128,13 @@ where
 {
     type Ext = E;
 
-    fn as_intersect_context(&self) -> &IntersectContext { &self.ctx }
+    fn as_context(&self) -> &IntersectContext { &self.ctx }
 
-    fn as_intersect_context_mut(&mut self) -> &mut IntersectContext { &mut self.ctx }
+    fn as_mut_context(&mut self) -> &mut IntersectContext { &mut self.ctx }
 
-    fn as_intersect_context_ext(&self) -> Option<&Self::Ext> { Some(&self.ext) }
+    fn as_extended(&self) -> Option<&Self::Ext> { Some(&self.ext) }
 
-    fn as_intersect_context_ext_mut(&mut self) -> Option<&mut Self::Ext> { Some(&mut self.ext) }
+    fn as_mut_extended(&mut self) -> Option<&mut Self::Ext> { Some(&mut self.ext) }
 }
 
 impl<E> IntersectContextExt<E>

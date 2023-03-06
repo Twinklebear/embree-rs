@@ -25,3 +25,4 @@ exclude = [
 members = [
 	"examples/*",
 ]
+exclude = ["examples/todos"]

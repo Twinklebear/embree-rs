@@ -1,6 +1,6 @@
 use embree::{
-    BufferSlice, BufferUsage, Device, Format, Geometry, GeometryKind, InterpolateInput,
-    InterpolateOutput, IntersectContext, Ray, RayHit, Scene, SceneFlags,
+    BufferSlice, BufferUsage, Device, Format, Geometry, GeometryKind, IntersectContext, Ray,
+    RayHit, Scene, SceneFlags,
 };
 use glam::{vec3, Vec3};
 use support::{
@@ -11,6 +11,7 @@ use support::{
 const EDGE_LEVEL: f32 = 256.0;
 const NUM_INDICES: usize = 24;
 const NUM_FACES: usize = 6;
+#[allow(dead_code)]
 const FACE_SIZE: usize = 4;
 
 const CUBE_VERTICES: Align16Array<f32, 32> = Align16Array([
@@ -48,6 +49,7 @@ fn displacement(p: [f32; 3]) -> f32 {
     dn
 }
 
+#[cfg(feature = "smooth_normals")]
 fn displacement_du_or_dv(p: Vec3, dp_du_or_dp_dv: Vec3) -> f32 {
     let du_or_dv = 0.001;
     (displacement((p + du_or_dv * dp_du_or_dp_dv).into()) - displacement(p.into())) / du_or_dv
@@ -96,7 +98,7 @@ fn create_cube(device: &Device) -> Geometry<'static> {
     .copy_from_slice(&[EDGE_LEVEL; NUM_INDICES]);
     unsafe {
         geom.set_displacement_function(
-            |raw_geom, user_data: Option<&mut ()>, prim_id, _, vertices| {
+            |_raw_geom, vertices, _prim_id, _time_step, _user_data: Option<&mut ()>| {
                 for (_, ng, p) in vertices.into_iter_mut() {
                     let disp = displacement([*p[0], *p[1], *p[2]]);
                     let dp = [disp * ng[0], disp * ng[1], disp * ng[2]];
@@ -193,11 +195,16 @@ fn render_pixel(
 ) -> u32 {
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
     let mut ctx = IntersectContext::coherent();
-    let mut ray_hit = RayHit::from_ray(Ray::new(camera.pos.into(), dir.into()));
+    let mut ray_hit = RayHit::from_ray(Ray::segment(
+        camera.pos.into(),
+        dir.into(),
+        0.0,
+        f32::INFINITY,
+    ));
     scene.intersect(&mut ctx, &mut ray_hit);
 
     let mut color = vec3(0.0, 0.0, 0.0);
-    if ray_hit.is_valid() {
+    if ray_hit.hit.is_valid() {
         let diffuse = if ray_hit.hit.geomID == cube_id {
             vec3(0.9, 0.6, 0.5)
         } else {
@@ -205,34 +212,37 @@ fn render_pixel(
         };
         color += diffuse * 0.5;
 
-        let mut normal = glam::Vec3::from(ray_hit.hit.normal_normalized());
-
-        #[cfg(feature = "smooth_normals")]
-        {
-            let hit_point: glam::Vec3 = ray_hit.hit_point().into();
-            if ray_hit.hit.geomID != ground_id {
-                let mut output = InterpolateOutput::new(3, true, true, false);
-                let cube = scene.get_geometry_unchecked(cube_id).unwrap();
-                cube.interpolate(
-                    InterpolateInput {
-                        prim_id: ray_hit.hit.primID,
-                        u: ray_hit.hit.u,
-                        v: ray_hit.hit.v,
-                        usage: BufferUsage::VERTEX,
-                        slot: 0,
-                    },
-                    &mut output,
-                );
-                let mut dp_du = glam::Vec3::from_slice(output.dp_du().as_ref().unwrap());
-                let mut dp_dv = glam::Vec3::from_slice(output.dp_dv().as_ref().unwrap());
-                let ng = dp_du.cross(dp_dv).normalize();
-                dp_du += ng * displacement_du_or_dv(hit_point, dp_du);
-                dp_dv += ng * displacement_du_or_dv(hit_point, dp_dv);
-                normal = dp_du.cross(dp_dv).normalize();
+        let normal = {
+            let mut n = Vec3::from(ray_hit.hit.unit_normal());
+            #[cfg(feature = "smooth_normals")]
+            {
+                use embree::{InterpolateInput, InterpolateOutput};
+                let hit_point: Vec3 = ray_hit.ray.hit_point().into();
+                if ray_hit.hit.geomID != ground_id {
+                    let mut output = InterpolateOutput::new(3, true, true, false);
+                    let cube = scene.get_geometry_unchecked(cube_id).unwrap();
+                    cube.interpolate(
+                        InterpolateInput {
+                            prim_id: ray_hit.hit.primID,
+                            u: ray_hit.hit.u,
+                            v: ray_hit.hit.v,
+                            usage: BufferUsage::VERTEX,
+                            slot: 0,
+                        },
+                        &mut output,
+                    );
+                    let mut dp_du = Vec3::from_slice(output.dp_du().as_ref().unwrap());
+                    let mut dp_dv = Vec3::from_slice(output.dp_dv().as_ref().unwrap());
+                    let ng = dp_du.cross(dp_dv).normalize();
+                    dp_du += ng * displacement_du_or_dv(hit_point, dp_du);
+                    dp_dv += ng * displacement_du_or_dv(hit_point, dp_dv);
+                    n = dp_du.cross(dp_dv).normalize()
+                }
             }
-        }
+            n
+        };
 
-        let mut shadow_ray = Ray::segment(ray_hit.hit_point(), LIGHT_DIR, 0.001, f32::INFINITY);
+        let mut shadow_ray = Ray::segment(ray_hit.ray.hit_point(), LIGHT_DIR, 0.001, f32::INFINITY);
 
         // Check if the shadow ray is occluded.
         if !scene.occluded(&mut ctx, &mut shadow_ray) {

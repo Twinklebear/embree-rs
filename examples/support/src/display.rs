@@ -9,7 +9,10 @@ use image::RgbaImage;
 use wgpu;
 use winit::{
     dpi::{LogicalSize, Size},
-    event::{ElementState, Event, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent},
+    event::{
+        ElementState, Event, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode,
+        WindowEvent,
+    },
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -20,11 +23,11 @@ type float4 = vec4<f32>;
 type int2 = vec2<i32>;
 
 struct VertexInput {
-    [[builtin(vertex_index)]] index: u32;
+    @builtin(vertex_index) index: u32,
 };
 
 struct VertexOutput {
-    [[builtin(position)]] position: float4;
+    @builtin(position) position: float4,
 };
 
 var<private> coords: array<float2, 4> = array<float2, 4>(
@@ -34,18 +37,18 @@ var<private> coords: array<float2, 4> = array<float2, 4>(
     float2(1.0, 1.0)
 );
 
-[[stage(vertex)]]
+@vertex
 fn vertex_main(vert: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.position = float4(coords[vert.index], 0.0, 1.0);
     return out;
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var image: texture_2d<f32>;
 
-[[stage(fragment)]]
-fn fragment_main(in: VertexOutput) -> [[location(0)]] float4 {
+@fragment
+fn fragment_main(in: VertexOutput) -> @location(0) float4 {
     return textureLoad(image, int2(in.position.xy), 0);
 }
 ";
@@ -54,8 +57,10 @@ fn fragment_main(in: VertexOutput) -> [[location(0)]] float4 {
 pub struct Display {
     window: Window,
     event_loop: EventLoop<()>,
+    #[allow(dead_code)]
     instance: wgpu::Instance,
     surface: wgpu::Surface,
+    #[allow(dead_code)]
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -83,8 +88,12 @@ impl Display {
             .build(&event_loop)
             .unwrap();
 
-        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
-        let surface = unsafe { instance.create_surface(&window) };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            dx12_shader_compiler: Default::default(),
+        });
+        let surface =
+            unsafe { instance.create_surface(&window) }.expect("Failed to create surface");
         let adapter =
             futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -143,13 +152,13 @@ where
     // Porting in my wgpu-rs example just to test set up
     let vertex_module = display
         .device
-        .create_shader_module(&wgpu::ShaderModuleDescriptor {
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(WGSL_SHADERS)),
         });
     let fragment_module = display
         .device
-        .create_shader_module(&wgpu::ShaderModuleDescriptor {
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(WGSL_SHADERS)),
         });
@@ -183,6 +192,7 @@ where
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
     });
 
     let bindgroup_layout =
@@ -241,7 +251,9 @@ where
             format: swap_chain_format,
             width: window_size.width,
             height: window_size.height,
-            present_mode: wgpu::PresentMode::Fifo,
+            present_mode: wgpu::PresentMode::AutoNoVsync,
+            alpha_mode: Default::default(),
+            view_formats: vec![],
         },
     );
 
@@ -277,11 +289,11 @@ where
             fragment: Some(wgpu::FragmentState {
                 module: &fragment_module,
                 entry_point: "fragment_main",
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: swap_chain_format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             multiview: None,
         });
@@ -301,11 +313,13 @@ where
         match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput { input, .. }
-                    if input.virtual_keycode == Some(VirtualKeyCode::Escape) =>
-                {
-                    *control_flow = ControlFlow::Exit
-                }
+                WindowEvent::KeyboardInput { input, .. } => match input {
+                    KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    } => *control_flow = ControlFlow::Exit,
+                    _ => {}
+                },
                 WindowEvent::MouseInput { state, button, .. } => match button {
                     MouseButton::Left => mouse_pressed[0] = state == ElementState::Pressed,
                     MouseButton::Middle => mouse_pressed[1] = state == ElementState::Pressed,
@@ -371,14 +385,14 @@ where
                 {
                     let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: None,
-                        color_attachments: &[wgpu::RenderPassColorAttachment {
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &render_target_view,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(clear_color),
                                 store: true,
                             },
-                        }],
+                        })],
                         depth_stencil_attachment: None,
                     });
 

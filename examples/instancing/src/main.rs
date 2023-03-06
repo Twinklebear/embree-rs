@@ -5,9 +5,12 @@ extern crate support;
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Vector3, Vector4};
 use embree::{
     BufferUsage, BuildQuality, Device, Format, Geometry, Instance, IntersectContext, Ray, RayHit,
-    SceneFlags, INVALID_ID,
+    Scene, SceneFlags, INVALID_ID,
 };
-use support::Camera;
+use support::{
+    rgba_to_u32, Camera, ParallelIterator, RgbaImage, TiledImage, DEFAULT_DISPLAY_WIDTH,
+    TILE_SIZE_X, TILE_SIZE_Y,
+};
 
 const NUM_PHI: usize = 5;
 const NUM_THETA: usize = 2 * NUM_PHI;
@@ -134,8 +137,16 @@ fn create_ground_plane(device: &Device) -> Geometry<'static> {
     geometry
 }
 
-// Animate like the Embree example, returns the (transforms, normal_transforms)
-fn animate_instances(time: f32, num_instances: usize) -> (Vec<Matrix4<f32>>, Vec<Matrix4<f32>>) {
+// Animate like the Embree example.
+fn animate_instances(
+    time: f32,
+    num_instances: usize,
+    transforms: &mut [Matrix4<f32>],
+    normal_transforms: &mut [Matrix4<f32>],
+) {
+    debug_assert!(transforms.len() == num_instances);
+    debug_assert!(normal_transforms.len() == num_instances);
+
     let t0 = 0.7 * time;
     let t1 = 1.5 * time;
 
@@ -145,18 +156,21 @@ fn animate_instances(time: f32, num_instances: usize) -> (Vec<Matrix4<f32>>, Vec
         Vector4::new(-f32::sin(t1), 0.0, f32::cos(t1), 0.0),
         Vector4::new(0.0, 0.0, 0.0, 1.0),
     );
-
-    let mut transforms = Vec::with_capacity(num_instances);
-    let mut normal_transforms = Vec::with_capacity(num_instances);
     for i in 0..num_instances {
         let t = t0 + i as f32 * 2.0 * std::f32::consts::PI / 4.0;
         let trans = Matrix4::<f32>::from_translation(
             2.2 * Vector3::<f32>::new(f32::cos(t), 0.0, f32::sin(t)),
         );
-        transforms.push(trans * rot);
-        normal_transforms.push(transforms[i].invert().unwrap().transpose());
+        transforms[i] = trans * rot;
+        normal_transforms[i] = transforms[i].invert().unwrap().transpose();
     }
-    (transforms, normal_transforms)
+}
+
+struct State {
+    transforms: Vec<Matrix4<f32>>,
+    normal_transforms: Vec<Matrix4<f32>>,
+    ground_plane_id: u32,
+    light_dir: Vector3<f32>,
 }
 
 fn main() {
@@ -200,16 +214,34 @@ fn main() {
     let ground_plane = create_ground_plane(&device);
     let ground_plane_id = scene.attach_geometry(&ground_plane);
 
-    let light_dir = Vector3::new(1.0, 1.0, -1.0).normalize();
-    let mut intersection_ctx = IntersectContext::coherent();
+    let mut state = State {
+        transforms: vec![Matrix4::identity(); instances.len()],
+        normal_transforms: vec![Matrix4::identity(); instances.len()],
+        ground_plane_id,
+        light_dir: Vector3::new(1.0, 1.0, -1.0).normalize(),
+    };
+
+    let mut tiled = TiledImage::new(
+        DEFAULT_DISPLAY_WIDTH,
+        DEFAULT_DISPLAY_WIDTH,
+        TILE_SIZE_X,
+        TILE_SIZE_Y,
+    );
+
+    let mut last_time = 0.0;
 
     support::display::run(display, move |image, camera_pose, time| {
         for p in image.iter_mut() {
             *p = 0;
         }
         // Update scene transformations
-        let (transforms, normal_transforms) = animate_instances(time, instances.len());
-        for (inst, tfm) in instances.iter_mut().zip(transforms.iter()) {
+        animate_instances(
+            time,
+            instances.len(),
+            &mut state.transforms,
+            &mut state.normal_transforms,
+        );
+        for (inst, tfm) in instances.iter_mut().zip(state.transforms.iter()) {
             inst.set_transform(0, tfm.as_ref());
             inst.commit();
         }
@@ -224,50 +256,95 @@ fn main() {
             img_dims,
         );
 
-        // Render the scene
-        for j in 0..img_dims.1 {
-            for i in 0..img_dims.0 {
-                let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let mut ray_hit = RayHit::from_ray(Ray::new(camera.pos.into(), dir.into()));
-                scene.intersect(&mut intersection_ctx, &mut ray_hit);
+        render_frame(&mut tiled, image, time, &scene, &camera, &state);
 
-                if ray_hit.is_valid() {
-                    // Transform the normals of the instances into world space with the
-                    // normal_transforms
-                    let hit = &ray_hit.hit;
-                    let geom_id = hit.geomID;
-                    let inst_id = hit.instID[0];
-                    let mut normal = Vector3::new(hit.Ng_x, hit.Ng_y, hit.Ng_z).normalize();
-                    if inst_id != INVALID_ID {
-                        let v = normal_transforms[inst_id as usize]
-                            * Vector4::new(normal.x, normal.y, normal.z, 0.0);
-                        normal = Vector3::new(v.x, v.y, v.z).normalize()
-                    }
-                    let mut illum = 0.3;
-                    let shadow_pos = camera.pos + dir * ray_hit.ray.tfar;
-                    let mut shadow_ray =
-                        Ray::segment(shadow_pos.into(), light_dir.into(), 0.001, f32::INFINITY);
-                    scene.occluded(&mut intersection_ctx, &mut shadow_ray);
-
-                    if shadow_ray.tfar >= 0.0 {
-                        illum =
-                            support::clamp(illum + f32::max(light_dir.dot(normal), 0.0), 0.0, 1.0);
-                    }
-
-                    let p = image.get_pixel_mut(i, j);
-                    if inst_id == INVALID_ID && geom_id == ground_plane_id {
-                        p[0] = (255.0 * illum) as u8;
-                        p[1] = p[0];
-                        p[2] = p[0];
-                    } else {
-                        // Shade the instances using their color
-                        let color = &COLORS[inst_id as usize][geom_id as usize];
-                        p[0] = (255.0 * illum * color[0]) as u8;
-                        p[1] = (255.0 * illum * color[1]) as u8;
-                        p[2] = (255.0 * illum * color[2]) as u8;
-                    }
-                }
-            }
-        }
+        let elapsed = time - last_time;
+        last_time = time;
+        let fps = 1.0 / elapsed;
+        eprint!("\r{} fps", fps);
     });
+}
+
+fn render_pixel(
+    x: u32,
+    y: u32,
+    pixel: &mut u32,
+    _time: f32,
+    scene: &Scene,
+    camera: &Camera,
+    state: &State,
+) {
+    let mut ctx = IntersectContext::coherent();
+    let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
+    let mut ray_hit = RayHit::from_ray(Ray::segment(
+        camera.pos.into(),
+        dir.into(),
+        0.001,
+        f32::INFINITY,
+    ));
+    scene.intersect(&mut ctx, &mut ray_hit);
+
+    if ray_hit.hit.is_valid() {
+        // Transform the normals of the instances into world space with the
+        // normal_transforms
+        let hit = &ray_hit.hit;
+        let geom_id = hit.geomID;
+        let inst_id = hit.instID[0];
+        let mut normal = Vector3::from(hit.unit_normal());
+        if inst_id != INVALID_ID {
+            let v = state.normal_transforms[inst_id as usize]
+                * Vector4::new(normal.x, normal.y, normal.z, 0.0);
+            normal = Vector3::new(v.x, v.y, v.z).normalize()
+        }
+        let mut illum = 0.3;
+        let shadow_pos = camera.pos + dir * ray_hit.ray.tfar;
+        let mut shadow_ray = Ray::segment(
+            shadow_pos.into(),
+            state.light_dir.into(),
+            0.001,
+            f32::INFINITY,
+        );
+        scene.occluded(&mut ctx, &mut shadow_ray);
+
+        if shadow_ray.tfar >= 0.0 {
+            illum = support::clamp(illum + f32::max(state.light_dir.dot(normal), 0.0), 0.0, 1.0);
+        }
+
+        *pixel = if inst_id == INVALID_ID && geom_id == state.ground_plane_id {
+            rgba_to_u32(
+                (255.0 * illum) as u8,
+                (255.0 * illum) as u8,
+                (255.0 * illum) as u8,
+                255,
+            )
+        } else {
+            // Shade the instances using their color
+            let color = &COLORS[inst_id as usize][geom_id as usize];
+            rgba_to_u32(
+                (255.0 * illum * color[0]) as u8,
+                (255.0 * illum * color[1]) as u8,
+                (255.0 * illum * color[2]) as u8,
+                255,
+            )
+        }
+    }
+}
+
+fn render_frame(
+    tiled: &mut TiledImage,
+    frame: &mut RgbaImage,
+    time: f32,
+    scene: &Scene,
+    camera: &Camera,
+    state: &State,
+) {
+    tiled.reset_pixels();
+    tiled.par_tiles_mut().for_each(|tile| {
+        tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
+            let x = tile.x + (i % tile.w as usize) as u32;
+            let y = tile.y + (i / tile.w as usize) as u32;
+            render_pixel(x, y, pixel, time, scene, camera, &state);
+        });
+    });
+    tiled.write_to_image(frame);
 }
