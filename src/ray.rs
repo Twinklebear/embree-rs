@@ -57,8 +57,8 @@ impl Ray {
             dir_x: direction[0],
             dir_y: direction[1],
             dir_z: direction[2],
-            tfar: far,
             time,
+            tfar: far,
             mask,
             id,
             flags: 0,
@@ -199,6 +199,7 @@ impl RayHit {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for RayHit {
     fn default() -> Self {
         RayHit {

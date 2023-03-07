@@ -8,17 +8,17 @@ pub trait SoARay {
     fn org(&self, i: usize) -> [f32; 3];
     fn set_org(&mut self, i: usize, o: [f32; 3]);
 
-    fn dir(&self, i: usize) -> [f32; 3];
-    fn set_dir(&mut self, i: usize, d: [f32; 3]);
-
     fn tnear(&self, i: usize) -> f32;
     fn set_tnear(&mut self, i: usize, near: f32);
 
-    fn tfar(&self, i: usize) -> f32;
-    fn set_tfar(&mut self, i: usize, far: f32);
+    fn dir(&self, i: usize) -> [f32; 3];
+    fn set_dir(&mut self, i: usize, d: [f32; 3]);
 
     fn time(&self, i: usize) -> f32;
     fn set_time(&mut self, i: usize, time: f32);
+
+    fn tfar(&self, i: usize) -> f32;
+    fn set_tfar(&mut self, i: usize, far: f32);
 
     fn mask(&self, i: usize) -> u32;
     fn set_mask(&mut self, i: usize, mask: u32);
@@ -32,20 +32,33 @@ pub trait SoARay {
 
 pub trait SoAHit {
     fn normal(&self, i: usize) -> [f32; 3];
+
     fn unit_normal(&self, i: usize) -> [f32; 3];
+
     fn set_normal(&mut self, i: usize, n: [f32; 3]);
 
+    fn u(&self, i: usize) -> f32;
+
+    fn v(&self, i: usize) -> f32;
+
     fn uv(&self, i: usize) -> [f32; 2];
+
     fn set_u(&mut self, i: usize, u: f32);
+
     fn set_v(&mut self, i: usize, v: f32);
 
+    fn set_uv(&mut self, i: usize, uv: [f32; 2]);
+
     fn prim_id(&self, i: usize) -> u32;
+
     fn set_prim_id(&mut self, i: usize, id: u32);
 
     fn geom_id(&self, i: usize) -> u32;
+
     fn set_geom_id(&mut self, i: usize, id: u32);
 
     fn inst_id(&self, i: usize) -> u32;
+
     fn set_inst_id(&mut self, i: usize, id: u32);
 
     fn is_valid(&self, i: usize) -> bool { self.geom_id(i) != INVALID_ID }
@@ -209,7 +222,7 @@ impl<'a, T: SoAHit + 'a> SoAHitRef<'a, T> {
     pub fn prim_id(&self) -> u32 { self.hit.prim_id(self.idx) }
     pub fn geom_id(&self) -> u32 { self.hit.geom_id(self.idx) }
     pub fn inst_id(&self) -> u32 { self.hit.inst_id(self.idx) }
-    pub fn hit(&self) -> bool { self.hit.is_valid(self.idx) }
+    pub fn is_valid(&self) -> bool { self.hit.is_valid(self.idx) }
 }
 
 pub struct SoAHitIter<'a, T> {

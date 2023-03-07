@@ -139,35 +139,43 @@ macro_rules! impl_ray_packets {
 
             impl SoARay for $t {
                 fn org(&self, i: usize) -> [f32; 3] { [self.org_x[i], self.org_y[i], self.org_z[i]] }
+
                 fn set_org(&mut self, i: usize, o: [f32; 3]) {
                     self.org_x[i] = o[0];
                     self.org_y[i] = o[1];
                     self.org_z[i] = o[2];
                 }
 
+                fn tnear(&self, i: usize) -> f32 { self.tnear[i] }
+
+                fn set_tnear(&mut self, i: usize, t: f32) { self.tnear[i] = t }
+
                 fn dir(&self, i: usize) -> [f32; 3] { [self.dir_x[i], self.dir_y[i], self.dir_z[i]] }
+
                 fn set_dir(&mut self, i: usize, d: [f32; 3]) {
                     self.dir_x[i] = d[0];
                     self.dir_y[i] = d[1];
                     self.dir_z[i] = d[2];
                 }
 
-                fn tnear(&self, i: usize) -> f32 { self.tnear[i] }
-                fn set_tnear(&mut self, i: usize, t: f32) { self.tnear[i] = t }
-
-                fn tfar(&self, i: usize) -> f32 { self.tfar[i] }
-                fn set_tfar(&mut self, i: usize, t: f32) { self.tfar[i] = t}
-
                 fn time(&self, i: usize) -> f32 { self.time[i] }
+
                 fn set_time(&mut self, i: usize, t: f32) { self.time[i] = t }
 
+                fn tfar(&self, i: usize) -> f32 { self.tfar[i] }
+
+                fn set_tfar(&mut self, i: usize, t: f32) { self.tfar[i] = t}
+
                 fn mask(&self, i: usize) -> u32 { self.mask[i] }
+
                 fn set_mask(&mut self, i: usize, m: u32) { self.mask[i] = m }
 
                 fn id(&self, i: usize) -> u32 { self.id[i] }
+
                 fn set_id(&mut self, i: usize, id: u32) { self.id[i] = id }
 
                 fn flags(&self, i: usize) -> u32 { self.flags[i] }
+
                 fn set_flags(&mut self, i: usize, f: u32) { self.flags[i] = f }
             }
         )*
@@ -193,12 +201,15 @@ macro_rules! impl_hit_packets {
                     }
                 }
                 pub fn any_hit(&self) -> bool { self.iter_validity().any(|h| h) }
+
                 pub fn iter_validity(&self) -> impl Iterator<Item = bool> + '_ {
                     self.geomID.iter().map(|g| *g != INVALID_ID)
                 }
+
                 pub fn iter(&self) -> SoAHitIter<$t> { SoAHitIter::new(self, $n) }
+
                 pub fn iter_hits(&self) -> impl Iterator<Item = SoAHitRef<$t>> {
-                    SoAHitIter::new(self, 4).filter(|h| h.hit())
+                    SoAHitIter::new(self, 4).filter(|h| h.is_valid())
                 }
             }
 
@@ -208,6 +219,7 @@ macro_rules! impl_hit_packets {
 
             impl SoAHit for $t {
                 fn normal(&self, i: usize) -> [f32; 3] { [self.Ng_x[i], self.Ng_y[i], self.Ng_z[i]] }
+
                 fn unit_normal(&self, i: usize) -> [f32; 3] {
                     let n = self.normal(i);
                     let len = n[0] * n[0] + n[1] * n[1] + n[2] * n[2];
@@ -218,23 +230,39 @@ macro_rules! impl_hit_packets {
                         [0.0, 0.0, 0.0]
                     }
                 }
+
                 fn set_normal(&mut self, i: usize, n: [f32; 3]) {
                     self.Ng_x[i] = n[0];
                     self.Ng_y[i] = n[1];
                     self.Ng_z[i] = n[2];
                 }
 
+                fn u(&self, i: usize) -> f32 { self.u[i] }
+
+                fn v(&self, i: usize) -> f32 { self.v[i] }
+
                 fn uv(&self, i: usize) -> [f32; 2] { [self.u[i], self.v[i]] }
+
                 fn set_u(&mut self, i: usize, u: f32) { self.u[i] = u; }
+
                 fn set_v(&mut self, i: usize, v: f32) { self.v[i] = v; }
 
+                fn set_uv(&mut self, i: usize, uv: [f32; 2]) {
+                    self.u[i] = uv[0];
+                    self.v[i] = uv[1];
+                }
+
+
                 fn prim_id(&self, i: usize) -> u32 { self.primID[i] }
+
                 fn set_prim_id(&mut self, i: usize, id: u32) { self.primID[i] = id; }
 
                 fn geom_id(&self, i: usize) -> u32 { self.geomID[i] }
+
                 fn set_geom_id(&mut self, i: usize, id: u32) { self.geomID[i] = id; }
 
                 fn inst_id(&self, i: usize) -> u32 { self.instID[0][i] }
+
                 fn set_inst_id(&mut self, i: usize, id: u32) { self.instID[0][i] = id; }
             }
         )*
@@ -450,6 +478,25 @@ impl<'a> SoAHit for HitN<'a> {
                 *(self.ptr as *const f32).add(3 * self.len + i),
                 *(self.ptr as *const f32).add(4 * self.len + i),
             ]
+        }
+    }
+
+    fn u(&self, i: usize) -> f32 {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe { *(self.ptr as *const f32).add(3 * self.len + i) }
+    }
+
+    fn v(&self, i: usize) -> f32 {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe { *(self.ptr as *const f32).add(4 * self.len + i) }
+    }
+
+    fn set_uv(&mut self, i: usize, uv: [f32; 2]) {
+        debug_assert!(i < self.len, "index out of bounds");
+        unsafe {
+            let ptr = self.ptr as *mut f32;
+            *(ptr).add(3 * self.len + i) = uv[0];
+            *(ptr).add(4 * self.len + i) = uv[1];
         }
     }
 

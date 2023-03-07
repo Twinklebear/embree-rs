@@ -57,7 +57,12 @@ fn main() {
 
             let mut ray_hit = RayHitNp::new(rays);
             scene.intersect_stream_soa(&mut intersection_ctx, &mut ray_hit);
-            for (i, hit) in ray_hit.hit.iter().enumerate().filter(|(_i, h)| h.hit()) {
+            for (i, hit) in ray_hit
+                .hit
+                .iter()
+                .enumerate()
+                .filter(|(_i, h)| h.is_valid())
+            {
                 let p = image.get_pixel_mut(i as u32, j);
                 let uv = hit.uv();
                 p[0] = (uv[0] * 255.0) as u8;

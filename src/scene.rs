@@ -837,14 +837,12 @@ impl<'a> Scene<'a> {
     /// A ray in a ray stream is considered inactive if its tnear value is
     /// larger than its tfar value.
     pub fn intersect_stream_soa<C: AsIntersectContext>(&self, ctx: &mut C, rays: &mut RayHitNp) {
-        let n = rays.len();
         unsafe {
-            let mut rayhit = rays.as_rayhitnp();
             rtcIntersectNp(
                 self.handle,
                 ctx.as_mut_context_ptr(),
-                &mut rayhit as *mut RTCRayHitNp,
-                n as u32,
+                &mut rays.as_raw() as *mut _,
+                rays.len() as u32,
             );
         }
     }
@@ -862,14 +860,12 @@ impl<'a> Scene<'a> {
     /// A ray in a ray stream is considered inactive if its tnear value is
     /// larger than its tfar value.
     pub fn occluded_stream_soa<C: AsIntersectContext>(&self, ctx: &mut C, rays: &mut RayNp) {
-        let n = rays.len();
         unsafe {
-            let mut r = rays.as_raynp();
             rtcOccludedNp(
                 self.handle,
                 ctx.as_mut_context_ptr(),
-                &mut r as *mut RTCRayNp,
-                n as u32,
+                &mut rays.as_raw_mut() as *mut RTCRayNp,
+                rays.len() as u32,
             );
         }
     }
