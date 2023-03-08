@@ -21,7 +21,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
-            - uses: actions-rs/toolchain@v1
             - name: Install Miri
               run: |
                   rustup toolchain install nightly --component miri
