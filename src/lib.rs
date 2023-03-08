@@ -255,7 +255,6 @@ pub type BuildPrimitive = sys::RTCBuildPrimitive;
 pub struct AlignedVector<T> {
     vec: Vec<T>,
     layout: alloc::Layout,
-    marker: PhantomData<T>,
 }
 
 impl<T> AlignedVector<T> {
@@ -271,7 +270,6 @@ impl<T> AlignedVector<T> {
             AlignedVector {
                 vec: Vec::from_raw_parts(alloc::alloc(layout) as *mut T, len, len),
                 layout,
-                marker: PhantomData,
             }
         }
     }
