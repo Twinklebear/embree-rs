@@ -8,7 +8,9 @@ use crate::{
     SoAHit, SoAHitIter, SoAHitRef, SoARay, SoARayIter, SoARayIterMut, INVALID_ID,
 };
 
-/// A ray stream stored in SoA format
+/// A ray stream stored in SoA format.
+///
+/// Each ray component is aligned to 16 bytes.
 pub struct RayNp {
     /// The pointer to the start of the ray stream.
     ptr: NonNull<u8>,
@@ -80,6 +82,15 @@ impl RayNp {
                 id: base_ptr.add(10 * self.aligned_field_size) as *mut u32,
                 flags: base_ptr.add(11 * self.aligned_field_size) as *mut u32,
             }
+        }
+    }
+}
+
+impl Drop for RayNp {
+    fn drop(&mut self) {
+        unsafe {
+            let layout = alloc::Layout::from_size_align(self.aligned_field_size * 12, 16).unwrap();
+            alloc::dealloc(self.ptr.as_ptr() as *mut u8, layout);
         }
     }
 }
@@ -229,6 +240,8 @@ fn test_stream_new_raynp() {
 }
 
 /// A hit stream in SoA format.
+///
+/// Each hit component is aligned to 16 bytes.
 pub struct HitNp {
     /// The pointer to the data.
     ptr: NonNull<u8>,
@@ -297,6 +310,15 @@ impl HitNp {
                 geomID: base_ptr.add(6 * self.aligned_field_size) as *mut u32,
                 instID: [base_ptr.add(7 * self.aligned_field_size) as *mut u32],
             }
+        }
+    }
+}
+
+impl Drop for HitNp {
+    fn drop(&mut self) {
+        unsafe {
+            let layout = alloc::Layout::from_size_align(self.aligned_field_size * 8, 16).unwrap();
+            alloc::dealloc(self.ptr.as_ptr() as *mut u8, layout);
         }
     }
 }

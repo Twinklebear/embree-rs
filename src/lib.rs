@@ -13,7 +13,14 @@
 
 extern crate core;
 
-use std::{alloc, mem};
+use std::{
+    alloc,
+    marker::PhantomData,
+    mem,
+    mem::needs_drop,
+    ops::{Deref, DerefMut},
+    ptr,
+};
 
 mod buffer;
 mod bvh;
@@ -237,32 +244,74 @@ pub type PointQuery = sys::RTCPointQuery;
 /// Primitives that can be used to build a BVH.
 pub type BuildPrimitive = sys::RTCBuildPrimitive;
 
-/// Utility for making specifically aligned vectors
-pub fn aligned_vector<T>(len: usize, align: usize) -> Vec<T> {
-    let t_size = mem::size_of::<T>();
-    let t_align = mem::align_of::<T>();
-    let layout = if t_align >= align {
-        alloc::Layout::from_size_align(t_size * len, t_align).unwrap()
-    } else {
-        alloc::Layout::from_size_align(t_size * len, align).unwrap()
-    };
-    unsafe {
-        let mem = alloc::alloc(layout);
-        assert_eq!((mem as usize) % 16, 0);
-        Vec::<T>::from_raw_parts(mem as *mut T, len, len)
+/// Utility for making specifically aligned vector.
+///
+/// This is a wrapper around `Vec` that ensures the alignment of the vector.
+/// The reason for this is that memory must be deallocated with the
+/// same alignment as it was allocated with. This is not guaranteed if
+/// we allocate a memory block with the alignment then cast it to a
+/// `Vec` of `T` and then drop it, since the `Vec` will deallocate the
+/// memory with the alignment of `T`.
+pub struct AlignedVector<T> {
+    vec: Vec<T>,
+    layout: alloc::Layout,
+    marker: PhantomData<T>,
+}
+
+impl<T> AlignedVector<T> {
+    pub fn new(len: usize, align: usize) -> Self {
+        let t_size = mem::size_of::<T>();
+        let t_align = mem::align_of::<T>();
+        let layout = if t_align >= align {
+            alloc::Layout::from_size_align(t_size * len, t_align).unwrap()
+        } else {
+            alloc::Layout::from_size_align(t_size * len, align).unwrap()
+        };
+        unsafe {
+            AlignedVector {
+                vec: Vec::from_raw_parts(alloc::alloc(layout) as *mut T, len, len),
+                layout,
+                marker: PhantomData,
+            }
+        }
+    }
+
+    pub fn new_init(len: usize, align: usize, init: T) -> Self
+    where
+        T: Copy,
+    {
+        let mut v = Self::new(len, align);
+        for x in v.iter_mut() {
+            *x = init;
+        }
+        v
     }
 }
-pub fn aligned_vector_init<T: Copy>(len: usize, align: usize, init: T) -> Vec<T> {
-    let mut v = aligned_vector::<T>(len, align);
-    for x in v.iter_mut() {
-        *x = init;
+
+impl<T> Deref for AlignedVector<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target { &self.vec }
+}
+
+impl<T> DerefMut for AlignedVector<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.vec }
+}
+
+impl<T> Drop for AlignedVector<T> {
+    fn drop(&mut self) {
+        unsafe {
+            let mut vec = mem::replace(&mut self.vec, Vec::new());
+            let raw = vec.as_mut_ptr() as *mut u8;
+            alloc::dealloc(raw, self.layout);
+            mem::forget(vec);
+        }
     }
-    v
 }
 
 #[test]
 fn test_aligned_vector_alloc() {
-    let v = aligned_vector_init::<f32>(24, 16, 1.0);
+    let v = AlignedVector::<f32>::new_init(24, 16, 1.0);
     for x in v.iter() {
         assert_eq!(*x, 1.0);
     }
