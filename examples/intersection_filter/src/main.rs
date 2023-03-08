@@ -10,12 +10,12 @@
 //! occluder is hit.
 
 use embree::{
-    BufferSlice, BufferUsage, BuildQuality, Device, Format, Geometry, GeometryKind, HitN,
-    IntersectContextExt, Ray, RayHit, RayN, Scene, SoAHit, SoARay, ValidityN, INVALID_ID,
+    AlignedArray, BufferSlice, BufferUsage, BuildQuality, Device, Format, Geometry, GeometryKind,
+    HitN, IntersectContextExt, Ray, RayHit, RayN, Scene, SoAHit, SoARay, ValidityN, INVALID_ID,
 };
 use glam::{vec3, Mat4, Vec3, Vec4};
 use support::{
-    rgba_to_u32, Align16Array, Camera, Mode, ParallelIterator, RgbaImage, Tile, TiledImage,
+    rgba_to_u32, Camera, Mode, ParallelIterator, RgbaImage, Tile, TiledImage,
     DEFAULT_DISPLAY_HEIGHT, DEFAULT_DISPLAY_WIDTH, TILE_SIZE_X, TILE_SIZE_Y,
 };
 
@@ -43,7 +43,7 @@ const COLORS: [[f32; 3]; 12] = [
     [1.0, 1.0, 0.0],
 ];
 
-const CUBE_VERTICES: Align16Array<[f32; 4], CUBE_NUM_VERTICES> = Align16Array([
+const CUBE_VERTICES: AlignedArray<[f32; 4], CUBE_NUM_VERTICES> = AlignedArray([
     [-1.0, -1.0, -1.0, 1.0],
     [-1.0, -1.0, 1.0, 1.0],
     [-1.0, 1.0, -1.0, 1.0],
@@ -55,7 +55,7 @@ const CUBE_VERTICES: Align16Array<[f32; 4], CUBE_NUM_VERTICES> = Align16Array([
 ]);
 
 #[allow(dead_code)]
-const CUBE_QUAD_INDICES: Align16Array<u32, CUBE_NUM_QUAD_INDICES> = Align16Array([
+const CUBE_QUAD_INDICES: AlignedArray<u32, CUBE_NUM_QUAD_INDICES> = AlignedArray([
     0, 1, 3, 2, //
     5, 4, 6, 7, //
     0, 4, 5, 1, //
@@ -64,7 +64,7 @@ const CUBE_QUAD_INDICES: Align16Array<u32, CUBE_NUM_QUAD_INDICES> = Align16Array
     3, 1, 5, 7, //
 ]);
 
-const CUBE_TRI_INDICES: Align16Array<u32, CUBE_NUM_TRI_INDICES> = Align16Array([
+const CUBE_TRI_INDICES: AlignedArray<u32, CUBE_NUM_TRI_INDICES> = AlignedArray([
     0, 1, 3, //
     3, 1, 2, //
     5, 4, 6, //

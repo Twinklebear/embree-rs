@@ -13,7 +13,7 @@ use winit::{
         ElementState, Event, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode,
         WindowEvent,
     },
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::{Window, WindowBuilder},
 };
 
@@ -64,6 +64,9 @@ pub struct Display {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    // egui_ctx: egui::Context,
+    // egui_state: egui_winit::State,
+    // egui_input: egui::RawInput,
 }
 
 #[derive(Debug)]
@@ -80,7 +83,7 @@ impl CameraPose {
 
 impl Display {
     pub fn new(w: u32, h: u32, title: &str) -> Display {
-        let event_loop = EventLoop::new();
+        let event_loop = EventLoopBuilder::<()>::new().build();
         let win_size = Size::Logical(LogicalSize::new(w as f64, h as f64));
         let window = WindowBuilder::new()
             .with_inner_size(win_size)
@@ -112,6 +115,10 @@ impl Display {
         ))
         .expect("Failed to create device");
 
+        // let egui_ctx = egui::Context::default();
+        // let egui_state = egui_winit::State::new(&event_loop);
+        // let egui_input = egui::RawInput::default();
+
         Display {
             window,
             event_loop,
@@ -120,6 +127,9 @@ impl Display {
             adapter,
             device,
             queue,
+            // egui_ctx,
+            // egui_state,
+            // egui_input,
         }
     }
 }

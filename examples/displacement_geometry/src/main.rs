@@ -1,11 +1,11 @@
 use embree::{
-    BufferSlice, BufferUsage, Device, Format, Geometry, GeometryKind, IntersectContext, Ray,
-    RayHit, Scene, SceneFlags,
+    AlignedArray, BufferSlice, BufferUsage, Device, Format, Geometry, GeometryKind,
+    IntersectContext, Ray, RayHit, Scene, SceneFlags,
 };
 use glam::{vec3, Vec3};
 use support::{
-    noise, rgba_to_u32, Align16Array, Camera, ParallelIterator, RgbaImage, TiledImage,
-    DEFAULT_DISPLAY_HEIGHT, DEFAULT_DISPLAY_WIDTH, TILE_SIZE_X, TILE_SIZE_Y,
+    noise, rgba_to_u32, Camera, ParallelIterator, RgbaImage, TiledImage, DEFAULT_DISPLAY_HEIGHT,
+    DEFAULT_DISPLAY_WIDTH, TILE_SIZE_X, TILE_SIZE_Y,
 };
 
 const EDGE_LEVEL: f32 = 256.0;
@@ -14,7 +14,7 @@ const NUM_FACES: usize = 6;
 #[allow(dead_code)]
 const FACE_SIZE: usize = 4;
 
-const CUBE_VERTICES: Align16Array<f32, 32> = Align16Array([
+const CUBE_VERTICES: AlignedArray<f32, 32> = AlignedArray([
     -1.0, -1.0, -1.0, 0.0, // 0
     1.0, -1.0, -1.0, 0.0, // 1
     1.0, -1.0, 1.0, 0.0, // 2

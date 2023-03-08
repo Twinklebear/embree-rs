@@ -555,19 +555,6 @@ pub const G3: [f32; 128 * 4] = [
     0.0,
 ];
 
-#[repr(align(16))]
-pub struct Align16Array<T, const N: usize>(pub [T; N]);
-
-impl<T, const N: usize> Deref for Align16Array<T, N> {
-    type Target = [T; N];
-
-    fn deref(&self) -> &Self::Target { &self.0 }
-}
-
-impl<T, const N: usize> DerefMut for Align16Array<T, N> {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
-}
-
 #[inline(always)]
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 { a + (b - a) * t }
 

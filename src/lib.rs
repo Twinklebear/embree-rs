@@ -246,6 +246,10 @@ pub type BuildPrimitive = sys::RTCBuildPrimitive;
 
 /// Utility for making specifically aligned vector.
 ///
+/// This is a growable, dynamically allocated, arbitrarily aligned container.
+/// Please use [`AlignedArray`] if you only need a 16 bytes aligned, fix-sized
+/// storage.
+///
 /// This is a wrapper around `Vec` that ensures the alignment of the vector.
 /// The reason for this is that memory must be deallocated with the
 /// same alignment as it was allocated with. This is not guaranteed if
@@ -284,6 +288,9 @@ impl<T> AlignedVector<T> {
         }
         v
     }
+
+    /// Returns the alignment of the vector.
+    pub fn alignment(&self) -> usize { self.layout.align() }
 }
 
 impl<T> Deref for AlignedVector<T> {
@@ -315,6 +322,22 @@ fn test_aligned_vector_alloc() {
     }
 }
 
+/// 16 bytes aligned with known size at compile time.
+#[repr(align(16))]
+pub struct AlignedArray<T, const N: usize>(pub [T; N]);
+
+impl<T, const N: usize> Deref for AlignedArray<T, N> {
+    type Target = [T; N];
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl<T, const N: usize> DerefMut for AlignedArray<T, N> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+/// Utility function to normalise a vector.
+#[inline(always)]
 fn normalise_vector3(v: [f32; 3]) -> [f32; 3] {
     let len_sq = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
     let len_inv = if len_sq.is_finite() && len_sq != 0.0 {
