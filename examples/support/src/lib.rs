@@ -6,6 +6,7 @@ pub use common::*;
 
 pub use camera::Camera;
 pub use display::Display;
+pub use egui;
 
 pub use image::{Rgba, RgbaImage};
 pub use rayon::{iter::*, prelude::*, slice::*, vec::*};

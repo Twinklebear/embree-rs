@@ -38,37 +38,41 @@ fn main() {
     scene.attach_geometry(&triangle);
     scene.commit();
 
-    support::display::run(display, move |image, _, _| {
-        let mut intersection_ctx = IntersectContext::coherent();
+    support::display::run(
+        display,
+        move |image, _, _| {
+            let mut intersection_ctx = IntersectContext::coherent();
 
-        let img_dims = image.dimensions();
-        // Render the scene
-        for j in 0..img_dims.1 {
-            let y = -(j as f32 + 0.5) / img_dims.1 as f32 + 0.5;
+            let img_dims = image.dimensions();
+            // Render the scene
+            for j in 0..img_dims.1 {
+                let y = -(j as f32 + 0.5) / img_dims.1 as f32 + 0.5;
 
-            // Try out streams of scanlines across x
-            let mut rays = RayNp::new(img_dims.0 as usize);
-            for (i, mut ray) in rays.iter_mut().enumerate() {
-                let x = (i as f32 + 0.5) / img_dims.0 as f32 - 0.5;
-                let dir_len = f32::sqrt(x * x + y * y + 1.0);
-                ray.set_origin([0.0, 0.5, 2.0]);
-                ray.set_dir([x / dir_len, y / dir_len, -1.0 / dir_len]);
+                // Try out streams of scanlines across x
+                let mut rays = RayNp::new(img_dims.0 as usize);
+                for (i, mut ray) in rays.iter_mut().enumerate() {
+                    let x = (i as f32 + 0.5) / img_dims.0 as f32 - 0.5;
+                    let dir_len = f32::sqrt(x * x + y * y + 1.0);
+                    ray.set_origin([0.0, 0.5, 2.0]);
+                    ray.set_dir([x / dir_len, y / dir_len, -1.0 / dir_len]);
+                }
+
+                let mut ray_hit = RayHitNp::new(rays);
+                scene.intersect_stream_soa(&mut intersection_ctx, &mut ray_hit);
+                for (i, hit) in ray_hit
+                    .hit
+                    .iter()
+                    .enumerate()
+                    .filter(|(_i, h)| h.is_valid())
+                {
+                    let p = image.get_pixel_mut(i as u32, j);
+                    let uv = hit.uv();
+                    p[0] = (uv[0] * 255.0) as u8;
+                    p[1] = (uv[1] * 255.0) as u8;
+                    p[2] = 0;
+                }
             }
-
-            let mut ray_hit = RayHitNp::new(rays);
-            scene.intersect_stream_soa(&mut intersection_ctx, &mut ray_hit);
-            for (i, hit) in ray_hit
-                .hit
-                .iter()
-                .enumerate()
-                .filter(|(_i, h)| h.is_valid())
-            {
-                let p = image.get_pixel_mut(i as u32, j);
-                let uv = hit.uv();
-                p[0] = (uv[0] * 255.0) as u8;
-                p[1] = (uv[1] * 255.0) as u8;
-                p[2] = 0;
-            }
-        }
-    });
+        },
+        |_| {},
+    );
 }

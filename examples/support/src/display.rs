@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use arcball::ArcballCamera;
 use cgmath::{Vector2, Vector3};
 use clock_ticks;
+use egui_wgpu::renderer::ScreenDescriptor;
 use futures;
 use image::RgbaImage;
 use wgpu;
@@ -64,9 +65,6 @@ pub struct Display {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    // egui_ctx: egui::Context,
-    // egui_state: egui_winit::State,
-    // egui_input: egui::RawInput,
 }
 
 #[derive(Debug)]
@@ -88,6 +86,7 @@ impl Display {
         let window = WindowBuilder::new()
             .with_inner_size(win_size)
             .with_title(title)
+            .with_resizable(false)
             .build(&event_loop)
             .unwrap();
 
@@ -115,10 +114,6 @@ impl Display {
         ))
         .expect("Failed to create device");
 
-        // let egui_ctx = egui::Context::default();
-        // let egui_state = egui_winit::State::new(&event_loop);
-        // let egui_input = egui::RawInput::default();
-
         Display {
             window,
             event_loop,
@@ -127,17 +122,16 @@ impl Display {
             adapter,
             device,
             queue,
-            // egui_ctx,
-            // egui_state,
-            // egui_input,
         }
     }
 }
+
 /// The function passed should render and update the image to be displayed in
 /// the window, optionally using the camera pose information passed.
-pub fn run<F>(display: Display, mut render: F)
+pub fn run<F, U>(display: Display, mut render: F, run_ui: U)
 where
-    F: 'static + FnMut(&mut RgbaImage, CameraPose, f32),
+    F: FnMut(&mut RgbaImage, CameraPose, f32) + 'static,
+    U: FnOnce(&egui::Context) + Copy + 'static,
 {
     let window_size = display.window.inner_size();
     let mut embree_target = RgbaImage::new(window_size.width, window_size.height);
@@ -315,48 +309,66 @@ where
         a: 1.0,
     };
 
+    let egui_ctx = egui::Context::default();
+    let mut egui_state = egui_winit::State::new(&display.event_loop);
+    let mut egui_renderer = egui_wgpu::Renderer::new(&display.device, swap_chain_format, None, 1);
+
+    let screen_desc = ScreenDescriptor {
+        size_in_pixels: display.window.inner_size().into(),
+        pixels_per_point: display.window.scale_factor() as f32,
+    };
+
+    let mut fps = 0.0f64;
     let mut mouse_prev = Vector2::new(0.0, 0.0);
     let mut mouse_pressed = [false, false, false];
     let t_start = clock_ticks::precise_time_s();
+    let mut last_frame_time = t_start;
     display.event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput { input, .. } => match input {
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                        ..
-                    } => *control_flow = ControlFlow::Exit,
-                    _ => {}
-                },
-                WindowEvent::MouseInput { state, button, .. } => match button {
-                    MouseButton::Left => mouse_pressed[0] = state == ElementState::Pressed,
-                    MouseButton::Middle => mouse_pressed[1] = state == ElementState::Pressed,
-                    MouseButton::Right => mouse_pressed[2] = state == ElementState::Pressed,
-                    MouseButton::Other(_) => {}
-                },
-                WindowEvent::CursorMoved { position, .. } => {
-                    let mouse_cur = Vector2::new(position.x as f32, position.y as f32);
-                    if mouse_pressed[0] {
-                        arcball_camera.rotate(mouse_prev, mouse_cur);
+            Event::WindowEvent { event, .. } => {
+                if !egui_state.on_event(&egui_ctx, &event).consumed {
+                    match event {
+                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        WindowEvent::KeyboardInput { input, .. } => match input {
+                            KeyboardInput {
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            } => *control_flow = ControlFlow::Exit,
+                            _ => {}
+                        },
+                        WindowEvent::MouseInput { state, button, .. } => match button {
+                            MouseButton::Left => mouse_pressed[0] = state == ElementState::Pressed,
+                            MouseButton::Middle => {
+                                mouse_pressed[1] = state == ElementState::Pressed
+                            }
+                            MouseButton::Right => mouse_pressed[2] = state == ElementState::Pressed,
+                            MouseButton::Other(_) => {}
+                        },
+                        WindowEvent::CursorMoved { position, .. } => {
+                            let mouse_cur = Vector2::new(position.x as f32, position.y as f32);
+                            if mouse_pressed[0] {
+                                arcball_camera.rotate(mouse_prev, mouse_cur);
+                            }
+                            if mouse_pressed[2] {
+                                arcball_camera.pan(mouse_cur - mouse_prev);
+                            }
+                            mouse_prev = mouse_cur;
+                        }
+                        WindowEvent::MouseWheel { delta, .. } => match delta {
+                            MouseScrollDelta::LineDelta(_, y) => {
+                                arcball_camera.zoom(y, 0.1);
+                            }
+                            MouseScrollDelta::PixelDelta(pos) => {
+                                arcball_camera.zoom(pos.y as f32, 0.01);
+                            }
+                        },
+                        _ => (),
                     }
-                    if mouse_pressed[2] {
-                        arcball_camera.pan(mouse_cur - mouse_prev);
-                    }
-                    mouse_prev = mouse_cur;
                 }
-                WindowEvent::MouseWheel { delta, .. } => match delta {
-                    MouseScrollDelta::LineDelta(_, y) => {
-                        arcball_camera.zoom(y, 0.1);
-                    }
-                    MouseScrollDelta::PixelDelta(pos) => {
-                        arcball_camera.zoom(pos.y as f32, 0.01);
-                    }
-                },
-                _ => (),
-            },
+            }
             Event::MainEventsCleared => {
+                let egui_input = egui_state.take_egui_input(&display.window);
                 let cam_pose = CameraPose::new(
                     arcball_camera.eye_pos(),
                     arcball_camera.eye_dir(),
@@ -413,8 +425,74 @@ where
                     render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass.draw_indexed(0..4, 0, 0..1);
                 }
-                display.queue.submit(Some(encoder.finish()));
+
+                let mut ui_encoder =
+                    display
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("egui_encoder"),
+                        });
+                {
+                    let egui_output = egui_ctx.run(egui_input, |ctx: &egui::Context| {
+                        run_ui(ctx);
+                        egui::Window::new("fps").title_bar(false).show(ctx, |ui| {
+                            ui.label(format!("{:3} fps", fps.floor()));
+                        });
+                    });
+                    egui_state.handle_platform_output(
+                        &display.window,
+                        &egui_ctx,
+                        egui_output.platform_output,
+                    );
+                    let primitives = egui_ctx.tessellate(egui_output.shapes);
+                    let _user_cmds = {
+                        for (id, image_delta) in &egui_output.textures_delta.set {
+                            egui_renderer.update_texture(
+                                &display.device,
+                                &display.queue,
+                                *id,
+                                image_delta,
+                            );
+                        }
+                        egui_renderer.update_buffers(
+                            &display.device,
+                            &display.queue,
+                            &mut ui_encoder,
+                            &primitives,
+                            &screen_desc,
+                        )
+                    };
+                    {
+                        let mut render_pass =
+                            ui_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("egui_render_pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &render_target_view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Load,
+                                        store: true,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                            });
+
+                        egui_renderer.render(&mut render_pass, &primitives, &screen_desc);
+                    }
+
+                    for id in &egui_output.textures_delta.free {
+                        egui_renderer.free_texture(id);
+                    }
+                }
+
+                display
+                    .queue
+                    .submit([encoder.finish(), ui_encoder.finish()]);
                 frame.present();
+
+                let elapsed = clock_ticks::precise_time_s() - last_frame_time;
+                last_frame_time = clock_ticks::precise_time_s();
+                fps = 1.0 / elapsed;
             }
             _ => (),
         }

@@ -180,7 +180,6 @@ fn main() {
     colors[id as usize] = Vec3::new(1.0, 1.0, 1.0);
     scene.commit();
 
-    let mut last_time = 0.0;
     let display = support::Display::new(512, 512, "Dynamic Scene");
     let mut tiled = TiledImage::new(
         DEFAULT_DISPLAY_WIDTH,
@@ -188,31 +187,30 @@ fn main() {
         TILE_SIZE_X,
         TILE_SIZE_Y,
     );
-    support::display::run(display, move |image, camera_pose, time| {
-        for p in image.iter_mut() {
-            *p = 0;
-        }
-        let img_dims = image.dimensions();
-        let camera = Camera::look_dir(
-            camera_pose.pos,
-            camera_pose.dir,
-            camera_pose.up,
-            75.0,
-            img_dims,
-        );
+    support::display::run(
+        display,
+        move |image, camera_pose, time| {
+            for p in image.iter_mut() {
+                *p = 0;
+            }
+            let img_dims = image.dimensions();
+            let camera = Camera::look_dir(
+                camera_pose.pos,
+                camera_pose.dir,
+                camera_pose.up,
+                75.0,
+                img_dims,
+            );
 
-        for i in 0..NUM_SPHERES {
-            animate_sphere(&scene, i as u32, positions[i], radii[i], time);
-        }
-        scene.commit();
+            for i in 0..NUM_SPHERES {
+                animate_sphere(&scene, i as u32, positions[i], radii[i], time);
+            }
+            scene.commit();
 
-        render_frame(&mut tiled, image, time, &scene, &camera, &colors);
-
-        let elapsed = time - last_time;
-        last_time = time;
-        let fps = 1.0 / elapsed;
-        eprint!("\r{} fps", fps);
-    });
+            render_frame(&mut tiled, image, time, &scene, &camera, &colors);
+        },
+        |_| {},
+    );
 }
 
 fn render_pixel(

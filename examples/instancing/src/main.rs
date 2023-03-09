@@ -228,41 +228,38 @@ fn main() {
         TILE_SIZE_Y,
     );
 
-    let mut last_time = 0.0;
+    support::display::run(
+        display,
+        move |image, camera_pose, time| {
+            for p in image.iter_mut() {
+                *p = 0;
+            }
+            // Update scene transformations
+            animate_instances(
+                time,
+                instances.len(),
+                &mut state.transforms,
+                &mut state.normal_transforms,
+            );
+            for (inst, tfm) in instances.iter_mut().zip(state.transforms.iter()) {
+                inst.set_transform(0, tfm.as_ref());
+                inst.commit();
+            }
+            scene.commit();
 
-    support::display::run(display, move |image, camera_pose, time| {
-        for p in image.iter_mut() {
-            *p = 0;
-        }
-        // Update scene transformations
-        animate_instances(
-            time,
-            instances.len(),
-            &mut state.transforms,
-            &mut state.normal_transforms,
-        );
-        for (inst, tfm) in instances.iter_mut().zip(state.transforms.iter()) {
-            inst.set_transform(0, tfm.as_ref());
-            inst.commit();
-        }
-        scene.commit();
+            let img_dims = image.dimensions();
+            let camera = Camera::look_dir(
+                camera_pose.pos,
+                camera_pose.dir,
+                camera_pose.up,
+                55.0,
+                img_dims,
+            );
 
-        let img_dims = image.dimensions();
-        let camera = Camera::look_dir(
-            camera_pose.pos,
-            camera_pose.dir,
-            camera_pose.up,
-            55.0,
-            img_dims,
-        );
-
-        render_frame(&mut tiled, image, time, &scene, &camera, &state);
-
-        let elapsed = time - last_time;
-        last_time = time;
-        let fps = 1.0 / elapsed;
-        eprint!("\r{} fps", fps);
-    });
+            render_frame(&mut tiled, image, time, &scene, &camera, &state);
+        },
+        |_| {},
+    );
 }
 
 fn render_pixel(

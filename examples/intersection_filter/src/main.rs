@@ -593,31 +593,29 @@ fn main() {
         DEFAULT_DISPLAY_HEIGHT,
         "Intersection Filter",
     );
-    let mut last_time = 0.0;
     let mut tiled = TiledImage::new(
         DEFAULT_DISPLAY_WIDTH,
         DEFAULT_DISPLAY_HEIGHT,
         TILE_SIZE_X,
         TILE_SIZE_Y,
     );
-    support::display::run(display, move |image, camera_pose, time| {
-        for p in image.iter_mut() {
-            *p = 0;
-        }
-        let img_dims = image.dimensions();
-        let camera = Camera::look_dir(
-            camera_pose.pos,
-            camera_pose.dir,
-            camera_pose.up,
-            75.0,
-            img_dims,
-        );
+    support::display::run(
+        display,
+        move |image, camera_pose, time| {
+            for p in image.iter_mut() {
+                *p = 0;
+            }
+            let img_dims = image.dimensions();
+            let camera = Camera::look_dir(
+                camera_pose.pos,
+                camera_pose.dir,
+                camera_pose.up,
+                75.0,
+                img_dims,
+            );
 
-        render_frame(&mut tiled, image, &camera, &scene);
-
-        let elapsed = time - last_time;
-        last_time = time;
-        let fps = 1.0 / elapsed;
-        eprint!("\r{} fps", fps);
-    });
+            render_frame(&mut tiled, image, &camera, &scene);
+        },
+        |_| {},
+    );
 }

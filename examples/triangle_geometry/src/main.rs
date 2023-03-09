@@ -146,23 +146,21 @@ fn main() {
     state.scene.commit();
 
     let mut tiled = TiledImage::new(DISPLAY_WIDTH, DISPLAY_HEIGHT, TILE_SIZE_X, TILE_SIZE_Y);
-    let mut last_time = 0.0;
-    display::run(display, move |image, camera_pose, time| {
-        let camera = Camera::look_dir(
-            camera_pose.pos,
-            camera_pose.dir,
-            camera_pose.up,
-            75.0,
-            image.dimensions(),
-        );
+    display::run(
+        display,
+        move |image, camera_pose, time| {
+            let camera = Camera::look_dir(
+                camera_pose.pos,
+                camera_pose.dir,
+                camera_pose.up,
+                75.0,
+                image.dimensions(),
+            );
 
-        render_frame(&mut tiled, image, time, &camera, &state);
-
-        let elapsed = time - last_time;
-        last_time = time;
-        let fps = 1.0 / elapsed;
-        eprint!("\r{} fps", fps);
-    });
+            render_frame(&mut tiled, image, time, &camera, &state);
+        },
+        |_ctx| {},
+    );
 }
 
 // Task that renders a single pixel.

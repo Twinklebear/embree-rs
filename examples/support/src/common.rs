@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 pub const DEFAULT_DISPLAY_WIDTH: u32 = 512;
 pub const DEFAULT_DISPLAY_HEIGHT: u32 = 512;
 
