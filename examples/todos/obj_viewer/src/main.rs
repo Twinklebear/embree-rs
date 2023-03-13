@@ -81,7 +81,7 @@ fn main() {
             for i in 0..img_dims.0 {
                 let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
                 let ray = Ray::new(camera.pos, dir);
-                let mut ray_hit = RayHit::new(ray);
+                let mut ray_hit = RayHit::from_ray(ray);
                 rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
                 if ray_hit.hit.hit() {
                     let p = image.get_pixel_mut(i, j);

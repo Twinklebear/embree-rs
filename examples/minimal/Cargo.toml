@@ -1,13 +1,10 @@
 [package]
-name = "triangle_geometry"
+name = "minimal"
 version = "0.1.0"
-authors = ["Will Usher <will@willusher.io>"]
+authors = ["Yang Chen <matthiasychen@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-glam = "0.23.0"
 embree = { path = "../.." }
 support = { path = "../support" }
-
-[profile.release]
-debug = 1
+glam = "0.23.0"

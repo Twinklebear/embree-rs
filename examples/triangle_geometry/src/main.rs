@@ -1,133 +1,209 @@
 #![allow(dead_code)]
 
-extern crate cgmath;
 extern crate embree;
 extern crate support;
 
-use cgmath::{Vector3, Vector4};
-use embree::{Device, Geometry, IntersectContext, QuadMesh, Ray, RayHit, Scene, TriangleMesh};
-use support::Camera;
+use embree::{
+    BufferSlice, BufferUsage, Device, Format, IntersectContext, QuadMesh, Ray, RayHit,
+    TriangleMesh, INVALID_ID,
+};
+use glam::Vec3;
+use support::*;
 
-fn make_cube<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut mesh = TriangleMesh::unanimated(device, 12, 8);
+const DISPLAY_WIDTH: u32 = 512;
+const DISPLAY_HEIGHT: u32 = 512;
+
+fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh<'static> {
+    let mut mesh = TriangleMesh::new(device).unwrap();
     {
-        let mut verts = mesh.vertex_buffer.map();
-        let mut tris = mesh.index_buffer.map();
+        mesh.set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 12, 8)
+            .unwrap()
+            .view_mut::<[f32; 3]>()
+            .unwrap()
+            .copy_from_slice(&[
+                [-1.0, -1.0, -1.0],
+                [-1.0, -1.0, 1.0],
+                [-1.0, 1.0, -1.0],
+                [-1.0, 1.0, 1.0],
+                [1.0, -1.0, -1.0],
+                [1.0, -1.0, 1.0],
+                [1.0, 1.0, -1.0],
+                [1.0, 1.0, 1.0],
+            ]);
+        mesh.set_new_buffer(BufferUsage::INDEX, 0, Format::UINT3, 12, 12)
+            .unwrap()
+            .view_mut::<[u32; 3]>()
+            .unwrap()
+            .copy_from_slice(&[
+                // left side
+                [0, 1, 2],
+                [1, 3, 2],
+                // right side
+                [4, 6, 5],
+                [5, 6, 7],
+                // bottom side
+                [0, 4, 1],
+                [1, 4, 5],
+                // top side
+                [2, 3, 6],
+                [3, 7, 6],
+                // front side
+                [0, 2, 4],
+                [2, 6, 4],
+                // back side
+                [1, 5, 3],
+                [3, 5, 7],
+            ]);
 
-        verts[0] = Vector4::new(-1.0, -1.0, -1.0, 0.0);
-        verts[1] = Vector4::new(-1.0, -1.0, 1.0, 0.0);
-        verts[2] = Vector4::new(-1.0, 1.0, -1.0, 0.0);
-        verts[3] = Vector4::new(-1.0, 1.0, 1.0, 0.0);
-        verts[4] = Vector4::new(1.0, -1.0, -1.0, 0.0);
-        verts[5] = Vector4::new(1.0, -1.0, 1.0, 0.0);
-        verts[6] = Vector4::new(1.0, 1.0, -1.0, 0.0);
-        verts[7] = Vector4::new(1.0, 1.0, 1.0, 0.0);
-
-        // left side
-        tris[0] = Vector3::new(0, 2, 1);
-        tris[1] = Vector3::new(1, 2, 3);
-
-        // right side
-        tris[2] = Vector3::new(4, 5, 6);
-        tris[3] = Vector3::new(5, 7, 6);
-
-        // bottom side
-        tris[4] = Vector3::new(0, 1, 4);
-        tris[5] = Vector3::new(1, 5, 4);
-
-        // top side
-        tris[6] = Vector3::new(2, 6, 3);
-        tris[7] = Vector3::new(3, 6, 7);
-
-        // front side
-        tris[8] = Vector3::new(0, 4, 2);
-        tris[9] = Vector3::new(2, 4, 6);
-
-        // back side
-        tris[10] = Vector3::new(1, 3, 5);
-        tris[11] = Vector3::new(3, 7, 5);
+        mesh.set_vertex_attribute_count(1);
+        mesh.set_buffer(
+            BufferUsage::VERTEX_ATTRIBUTE,
+            0,
+            Format::FLOAT3,
+            BufferSlice::from_slice(vertex_colors, ..8),
+            12,
+            8,
+        )
+        .unwrap(); //.expect("failed to set vertex attribute buffer");
     }
-    let mut mesh = Geometry::Triangle(mesh);
     mesh.commit();
     mesh
 }
-fn make_ground_plane<'a>(device: &'a Device) -> Geometry<'a> {
-    let mut mesh = QuadMesh::unanimated(device, 1, 4);
-    {
-        let mut verts = mesh.vertex_buffer.map();
-        let mut quads = mesh.index_buffer.map();
-        verts[0] = Vector4::new(-10.0, -2.0, -10.0, 0.0);
-        verts[1] = Vector4::new(-10.0, -2.0, 10.0, 0.0);
-        verts[2] = Vector4::new(10.0, -2.0, 10.0, 0.0);
-        verts[3] = Vector4::new(10.0, -2.0, -10.0, 0.0);
 
-        quads[0] = Vector4::new(0, 1, 2, 3);
+fn make_ground_plane(device: &Device) -> QuadMesh<'static> {
+    let mut mesh = QuadMesh::new(device).unwrap();
+    {
+        mesh.set_new_buffer(BufferUsage::VERTEX, 0, Format::FLOAT3, 16, 4)
+            .unwrap()
+            .view_mut::<[f32; 4]>()
+            .unwrap()
+            .copy_from_slice(&[
+                [-10.0, -2.0, -10.0, 0.0],
+                [-10.0, -2.0, 10.0, 0.0],
+                [10.0, -2.0, 10.0, 0.0],
+                [10.0, -2.0, -10.0, 0.0],
+            ]);
+        mesh.set_new_buffer(BufferUsage::INDEX, 0, Format::UINT4, 16, 1)
+            .unwrap()
+            .view_mut::<[u32; 4]>()
+            .unwrap()
+            .copy_from_slice(&[[0, 1, 2, 3]]);
     }
-    let mut mesh = Geometry::Quad(mesh);
     mesh.commit();
     mesh
+}
+
+type State = DebugState<UserState>;
+
+struct UserState {
+    ground_id: u32,
+    cube_id: u32,
+    face_colors: Vec<[f32; 3]>,
+    light_dir: Vec3,
 }
 
 fn main() {
-    let mut display = support::Display::new(512, 512, "triangle geometry");
-    let device = Device::new();
-    let cube = make_cube(&device);
-    let ground = make_ground_plane(&device);
-
-    // TODO: Support for Embree3's new vertex attributes
-    let face_colors = vec![
-        Vector3::new(1.0, 0.0, 0.0),
-        Vector3::new(1.0, 0.0, 0.0),
-        Vector3::new(0.0, 1.0, 0.0),
-        Vector3::new(0.0, 1.0, 0.0),
-        Vector3::new(1.0, 0.0, 1.0),
-        Vector3::new(1.0, 0.0, 1.0),
-        Vector3::new(1.0, 1.0, 1.0),
-        Vector3::new(1.0, 1.0, 1.0),
-        Vector3::new(0.0, 0.0, 1.0),
-        Vector3::new(0.0, 0.0, 1.0),
-        Vector3::new(1.0, 1.0, 0.0),
-        Vector3::new(1.0, 1.0, 0.0),
+    let display = Display::new(DISPLAY_WIDTH, DISPLAY_HEIGHT, "triangle geometry");
+    let device = Device::new().unwrap();
+    device.set_error_function(|err, msg| {
+        println!("{}: {}", err, msg);
+    });
+    let scene = device.create_scene().unwrap();
+    let vertex_colors = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 1.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 0.0],
+        [1.0, 1.0, 1.0],
     ];
 
-    let mut scene = Scene::new(&device);
-    scene.attach_geometry(cube);
-    let ground_id = scene.attach_geometry(ground);
-    let rtscene = scene.commit();
+    let user_state = UserState {
+        face_colors: vec![
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.5, 0.5, 0.5],
+            [0.5, 0.5, 0.5],
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+        ],
+        ground_id: INVALID_ID,
+        cube_id: INVALID_ID,
+        light_dir: Vec3::new(1.0, 1.0, 1.0).normalize(),
+    };
 
-    let mut intersection_ctx = IntersectContext::coherent();
+    let mut state = State {
+        scene: scene.clone(),
+        user: user_state,
+    };
 
-    display.run(|image, camera_pose, _| {
-        for p in image.iter_mut() {
-            *p = 0;
-        }
-        let img_dims = image.dimensions();
-        let camera = Camera::look_dir(
-            camera_pose.pos,
-            camera_pose.dir,
-            camera_pose.up,
-            75.0,
-            img_dims,
+    let cube = make_cube(&device, &vertex_colors);
+    let ground = make_ground_plane(&device);
+    state.user.cube_id = state.scene.attach_geometry(&cube);
+    state.user.ground_id = state.scene.attach_geometry(&ground);
+
+    state.scene.commit();
+
+    display::run(display, state, move |_, _| {}, render_frame, |_| {});
+}
+
+// Task that renders a single pixel.
+fn render_pixel(x: u32, y: u32, _time: f32, camera: &Camera, state: &State) -> u32 {
+    let mut ctx = IntersectContext::coherent();
+    let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
+    let mut ray_hit = RayHit::from_ray(Ray::segment(
+        camera.pos.into(),
+        dir.into(),
+        0.0,
+        f32::INFINITY,
+    ));
+    state.scene.intersect(&mut ctx, &mut ray_hit);
+    let mut pixel = 0;
+    if ray_hit.hit.is_valid() {
+        let diffuse = if ray_hit.hit.geomID == state.user.ground_id {
+            glam::vec3(0.6, 0.6, 0.6)
+        } else {
+            glam::Vec3::from(state.user.face_colors[ray_hit.hit.primID as usize])
+        };
+
+        let mut shadow_ray = Ray::segment(
+            ray_hit.ray.hit_point(),
+            state.user.light_dir.into(),
+            0.001,
+            f32::INFINITY,
         );
-        // Render the scene
-        for j in 0..img_dims.1 {
-            for i in 0..img_dims.0 {
-                let dir = camera.ray_dir((i as f32 + 0.5, j as f32 + 0.5));
-                let ray = Ray::new(camera.pos, dir);
-                let mut ray_hit = RayHit::new(ray);
-                rtscene.intersect(&mut intersection_ctx, &mut ray_hit);
-                if ray_hit.hit.hit() {
-                    let mut p = image.get_pixel_mut(i, j);
-                    let color = if ray_hit.hit.geomID == ground_id {
-                        Vector3::new(0.6, 0.6, 0.6)
-                    } else {
-                        face_colors[ray_hit.hit.primID as usize]
-                    };
-                    p[0] = (color.x * 255.0) as u8;
-                    p[1] = (color.y * 255.0) as u8;
-                    p[2] = (color.z * 255.0) as u8;
-                }
-            }
-        }
+
+        // Check if the shadow ray is occluded.
+        let color = if !state.scene.occluded(&mut ctx, &mut shadow_ray) {
+            diffuse
+        } else {
+            diffuse * 0.5
+        };
+
+        pixel = rgba_to_u32(
+            (color.x * 255.0) as u8,
+            (color.y * 255.0) as u8,
+            (color.z * 255.0) as u8,
+            255,
+        );
+    }
+    pixel
+}
+
+fn render_frame(frame: &mut TiledImage, camera: &Camera, time: f32, state: &mut State) {
+    frame.par_tiles_mut().for_each(|tile| {
+        tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
+            let x = tile.x + (i % tile.w as usize) as u32;
+            let y = tile.y + (i / tile.w as usize) as u32;
+            *pixel = render_pixel(x, y, time, camera, state);
+        });
     });
 }

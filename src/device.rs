@@ -1,36 +1,49 @@
-use std::ffi::CString;
-use std::fmt::{Display, Error, Formatter};
-use std::ptr;
-use std::sync::Arc;
+use crate::{
+    sys::*, Buffer, BufferSize, Bvh, DeviceProperty, Error, Geometry, GeometryKind, Scene,
+    SceneFlags,
+};
+use std::{
+    ffi::CString,
+    fmt::{self, Display, Formatter},
+    ptr,
+};
 
-use crate::sys::*;
-
+/// Handle to an Embree device.
+#[derive(Debug)]
 pub struct Device {
     pub(crate) handle: RTCDevice,
 }
 
+impl Clone for Device {
+    fn clone(&self) -> Self {
+        unsafe { rtcRetainDevice(self.handle) }
+        Self {
+            handle: self.handle,
+        }
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe {
+            rtcReleaseDevice(self.handle);
+        }
+    }
+}
+
+unsafe impl Sync for Device {}
+
 impl Device {
-    pub fn new() -> Arc<Device> {
-        enable_ftz_and_daz();
-        Arc::new(Device {
-            handle: unsafe { rtcNewDevice(ptr::null()) },
-        })
-    }
+    pub fn new() -> Result<Device, Error> { create_device(None) }
 
-    pub fn debug() -> Arc<Device> {
+    pub fn debug() -> Result<Device, Error> {
         let cfg = CString::new("verbose=4").unwrap();
-        enable_ftz_and_daz();
-        Arc::new(Device {
-            handle: unsafe { rtcNewDevice(cfg.as_ptr()) },
-        })
+        create_device(Some(cfg))
     }
 
-    pub fn with_config(config: Config) -> Arc<Device> {
-        enable_ftz_and_daz();
+    pub fn with_config(config: Config) -> Result<Device, Error> {
         let cfg = config.to_c_string();
-        Arc::new(Device {
-            handle: unsafe { rtcNewDevice(cfg.as_ptr()) },
-        })
+        create_device(Some(cfg))
     }
 
     /// Register a callback function to be called when an error occurs.
@@ -44,18 +57,20 @@ impl Device {
     ///
     /// # Arguments
     ///
-    /// * `error_fn` - A callback function that takes an error code and a message.
+    /// * `error_fn` - A callback function that takes an error code and a
+    ///   message.
     ///
-    /// When the callback function is invoked, it gets the error code of the occurred
-    /// error, as well as a message of type `&'static str` that further describes the error.
+    /// When the callback function is invoked, it gets the error code of the
+    /// occurred error, as well as a message of type `&'static str` that
+    /// further describes the error.
     ///
     /// # Example
     ///
     /// ```no_run
     /// use embree::Device;
-    /// let device = Device::new();
+    /// let device = Device::new().unwrap();
     /// device.set_error_function(|error, msg| {
-    ///    println!("Error: {:?} {}", error, msg);
+    ///     println!("Error: {:?} {}", error, msg);
     /// });
     /// ```
     pub fn set_error_function<F>(&self, error_fn: F)
@@ -66,7 +81,7 @@ impl Device {
         unsafe {
             rtcSetDeviceErrorFunction(
                 self.handle,
-                Some(crate::callback::error_function_helper(&mut closure)),
+                error_function(&mut closure),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }
@@ -81,42 +96,49 @@ impl Device {
 
     /// Register a callback function to track memory consumption of the device.
     ///
-    /// Only a single callback function can be registered per device, and further invocations
-    /// overwrite the previously registered callback.
+    /// Only a single callback function can be registered per device, and
+    /// further invocations overwrite the previously registered callback.
     ///
-    /// Once registered, the Embree device will invoke the callback function before or after
-    /// it allocates or frees important memory blocks. The callback function might get called
-    /// from multiple threads concurrently.
+    /// Once registered, the Embree device will invoke the callback function
+    /// before or after it allocates or frees important memory blocks. The
+    /// callback function might get called from multiple threads
+    /// concurrently.
     ///
     /// Unregister with [`Device::unset_memory_monitor_function`].
     ///
     /// # Arguments
+    ///
     /// * `monitor_fn` - A callback function that takes two arguments:
-    ///    * `bytes: isize` - The number of bytes allocated or deallocated
-    /// (> 0 for allocations and < 0 for deallocations). The Embree `Device`
-    ///   atomically accumulating `bytes` input parameter.
-    ///    * `post: bool` - Whether the callback is invoked after the allocation or deallocation took place.
     ///
-    /// Embree will continue its operation normally when the callback function returns `true`. If `false`
-    /// returned, Embree will cancel the current operation with `RTC_ERROR_OUT_OF_MEMORY` error code.
-    /// Issuing multiple cancel requests from different threads is allowed. Cancelling will only happen when
-    /// the callback was called for allocations (bytes > 0), otherwise the cancel request will be ignored.
+    /// * `bytes: isize` - The number of bytes allocated or deallocated (> 0 for
+    ///   allocations and < 0 for deallocations). The Embree `Device` atomically
+    ///   accumulating `bytes` input parameter.
+    /// * `post: bool` - Whether the callback is invoked after the allocation or
+    ///   deallocation took place.
     ///
-    /// If a callback to cancel was invoked before the allocation happens (`post == false`), then
-    /// the `bytes` parameter should not be accumulated, as the allocation will never happen.
-    /// If the callback to cancel was invoked after the allocation happened (`post == true`), then
-    /// the `bytes` parameter should be accumulated, as the allocation properly happened and a
-    /// deallocation will later free that data block.
+    /// Embree will continue its operation normally when the callback function
+    /// returns `true`. If `false` returned, Embree will cancel the current
+    /// operation with `RTC_ERROR_OUT_OF_MEMORY` error code.
+    /// Issuing multiple cancel requests from different threads is allowed.
+    /// Cancelling will only happen when the callback was called for
+    /// allocations (bytes > 0), otherwise the cancel request will be ignored.
+    ///
+    /// If a callback to cancel was invoked before the allocation happens (`post
+    /// == false`), then the `bytes` parameter should not be accumulated, as
+    /// the allocation will never happen. If the callback to cancel was
+    /// invoked after the allocation happened (`post == true`), then
+    /// the `bytes` parameter should be accumulated, as the allocation properly
+    /// happened and a deallocation will later free that data block.
     ///
     /// # Example
     /// ```no_run
     /// use embree::Device;
-    /// let device = Device::new();
+    /// let device = Device::new().unwrap();
     /// device.set_memory_monitor_function(|bytes, post| {
     ///     if bytes > 0 {
-    ///        println!("allocated {} bytes", bytes);
+    ///         println!("allocated {} bytes", bytes);
     ///     } else {
-    ///        println!("deallocated {} bytes", -bytes);
+    ///         println!("deallocated {} bytes", -bytes);
     ///     };
     ///     true
     /// });
@@ -129,9 +151,7 @@ impl Device {
         unsafe {
             rtcSetDeviceMemoryMonitorFunction(
                 self.handle,
-                Some(crate::callback::memory_monitor_function_helper(
-                    &mut closure,
-                )),
+                memory_monitor_function(&mut closure),
                 &mut closure as *mut _ as *mut ::std::os::raw::c_void,
             );
         }
@@ -148,40 +168,62 @@ impl Device {
     ///
     /// # Arguments
     ///
-    /// * `prop` - The property to query. See `RTCDeviceProp` for possible values.
+    /// * `prop` - The property to query. See `RTCDeviceProp` for possible
+    ///   values.
     ///
     /// # Returns
     ///
     /// An integer of type `isize`.
-    pub fn query_property(&self, prop: RTCDeviceProperty) -> isize {
-        unsafe { rtcGetDeviceProperty(self.handle, prop) }
+    pub fn get_property(&self, prop: DeviceProperty) -> Result<isize, Error> {
+        let ret = unsafe { rtcGetDeviceProperty(self.handle, prop) };
+        if ret == 0 {
+            Err(self.get_error())
+        } else {
+            Ok(ret)
+        }
     }
 
     /// Query the error code of the device.
     ///
-    /// Each thread has its own error code per device. If an error occurs when calling
-    /// an API function, this error code is set to the occurred error if it stores no
-    /// previous error. The `error_code` function reads and returns the currently stored
-    /// error and clears the error code. This assures that the returned error code is
-    /// always the first error occurred since the last invocation of `error_code`.
+    /// Each thread has its own error code per device. If an error occurs when
+    /// calling an API function, this error code is set to the occurred
+    /// error if it stores no previous error. The [`Device::get_error`] function
+    /// reads and returns the currently stored error and clears the error
+    /// code. This assures that the returned error code is always the first
+    /// error occurred since the last invocation of [`Device::get_error`].
     ///
     /// # Returns
     ///
-    /// Error code encoded as `RTCError`.
-    pub fn error_code(&self) -> RTCError {
-        unsafe { rtcGetDeviceError(self.handle) }
+    /// Error code encoded as [`Error`].
+    pub fn get_error(&self) -> RTCError { unsafe { rtcGetDeviceError(self.handle) } }
+
+    /// Creates a new scene bound to the device.
+    pub fn create_scene(&self) -> Result<Scene<'static>, Error> { Scene::new(self.clone()) }
+
+    /// Creates a new scene bound to the device with the given configuration.
+    /// It's the same as calling [`Device::create_scene`] and then
+    /// [`Scene::set_flags`].
+    ///
+    /// See [`SceneFlags`] for possible values.
+    pub fn create_scene_with_flags(&self, flags: SceneFlags) -> Result<Scene, Error> {
+        Scene::new_with_flags(self.clone(), flags)
+    }
+
+    /// Creates a new [`Bvh`] object.
+    pub fn create_bvh(&self) -> Result<Bvh, Error> { Bvh::new(self) }
+
+    /// Creates a new data buffer.
+    /// The created buffer is always aligned to 16 bytes.
+    pub fn create_buffer(&self, size: usize) -> Result<Buffer, Error> {
+        Buffer::new(self, BufferSize::new(size).unwrap())
+    }
+
+    /// Creates a [`Geometry`] object bound to the device without any
+    /// buffers attached.
+    pub fn create_geometry<'a>(&self, kind: GeometryKind) -> Result<Geometry<'a>, Error> {
+        Geometry::new(self, kind)
     }
 }
-
-impl Drop for Device {
-    fn drop(&mut self) {
-        unsafe {
-            rtcReleaseDevice(self.handle);
-        }
-    }
-}
-
-unsafe impl Sync for Device {}
 
 /// Instruction Set Architecture.
 #[derive(Debug, Clone, Copy)]
@@ -194,7 +236,7 @@ pub enum Isa {
 }
 
 impl Display for Isa {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             Isa::Sse2 => write!(f, "sse2"),
             Isa::Sse4_2 => write!(f, "sse4.2"),
@@ -219,7 +261,7 @@ pub enum FrequencyLevel {
 }
 
 impl Display for FrequencyLevel {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             FrequencyLevel::Simd128 => write!(f, "simd128"),
             FrequencyLevel::Simd256 => write!(f, "simd256"),
@@ -238,36 +280,41 @@ pub struct Config {
     /// scene commit using `rtcJoinCommitScene`.
     pub user_threads: u32,
 
-    /// Whether build threads are affinitized to hardware threads. This is disabled
-    /// by default on standard CPUs, and enabled by default on Xeon Phi Processors.
+    /// Whether build threads are affinitized to hardware threads. This is
+    /// disabled by default on standard CPUs, and enabled by default on Xeon
+    /// Phi Processors.
     pub set_affinity: bool,
 
-    /// When enabled, the build threads are started upfront. Useful for benchmarking
-    /// to exclude thread creation time. This is disabled by default.
+    /// When enabled, the build threads are started upfront. Useful for
+    /// benchmarking to exclude thread creation time. This is disabled by
+    /// default.
     pub start_threads: bool,
 
     /// ISA selection. By default the ISA is chosen automatically.
     pub isa: Option<Isa>,
 
-    /// Configures the automated ISA selection to use maximally the specified ISA.
+    /// Configures the automated ISA selection to use maximally the specified
+    /// ISA.
     pub max_isa: Isa,
 
-    /// Enables or disables usage of huge pages. Enabled by default under Linux but
-    /// disabled by default on Windows and macOS.
+    /// Enables or disables usage of huge pages. Enabled by default under Linux
+    /// but disabled by default on Windows and macOS.
     pub hugepages: bool,
 
-    /// Enables or disables the SeLockMemoryPrivilege privilege which is required to
-    /// use huge pages on Windows. This option has only effect on Windows and is ignored
-    /// on other platforms.
+    /// Enables or disables the SeLockMemoryPrivilege privilege which is
+    /// required to use huge pages on Windows. This option has only effect
+    /// on Windows and is ignored on other platforms.
     pub enable_selockmemoryprivilege: bool,
 
-    /// Verbosity of the output [0, 1, 2, 3]. No output when set to 0. The higher the
-    /// level, the more the output. By default the output is set to 0.
+    /// Verbosity of the output [0, 1, 2, 3]. No output when set to 0. The
+    /// higher the level, the more the output. By default the output is set
+    /// to 0.
     pub verbose: u32,
 
     /// Frequency level the application want to run on. See [`FrequencyLevel`].
-    /// When some frequency level is specified, Embree will avoid doing optimizations
-    /// that may reduce the frequency level below the level specified.
+    /// When some frequency level is specified, Embree will avoid doing
+    /// optimizations that may reduce the frequency level below the level
+    /// specified.
     pub frequency_level: Option<FrequencyLevel>,
 }
 
@@ -283,8 +330,8 @@ impl Config {
             .map(|frequency_level| format!("frequency_level={}", frequency_level))
             .unwrap_or_default();
         let formated = format!(
-            "threads={},verbose={},set_affinity={},start_threads={},\
-        max_isa={},hugepages={},enable_selockmemoryprivilege={},{}{}",
+            "threads={},verbose={},set_affinity={},start_threads={},max_isa={},hugepages={},\
+             enable_selockmemoryprivilege={},{}{}",
             self.threads,
             self.verbose,
             self.set_affinity as u32,
@@ -318,7 +365,7 @@ impl Default for Config {
 }
 
 /// Set the flush zero and denormals modes from Embrees's perf. recommendations
-/// https://embree.github.io/api.html#performance-recommendations
+/// `<https://embree.github.io/api.html#performance-recommendations>`.
 pub fn enable_ftz_and_daz() {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
@@ -333,4 +380,59 @@ pub fn enable_ftz_and_daz() {
             _mm_setcsr(csr);
         }
     }
+}
+
+/// Default error function.
+fn default_error_function(error: Error, msg: &str) {
+    eprintln!("[Embree] {:?} - {}", error, msg);
+}
+
+/// Helper function to create a new Embree device.
+fn create_device(config: Option<CString>) -> Result<Device, Error> {
+    enable_ftz_and_daz();
+    let config = config.unwrap_or_else(|| Config::default().to_c_string());
+    let handle = unsafe { rtcNewDevice(config.as_ptr()) };
+    if handle.is_null() {
+        Err(unsafe { rtcGetDeviceError(ptr::null_mut()) })
+    } else {
+        let device = Device { handle };
+        device.set_error_function(default_error_function);
+        Ok(device)
+    }
+}
+
+/// Helper function to convert a Rust closure to `RTCErrorFunction` callback.
+fn error_function<F>(_f: &mut F) -> RTCErrorFunction
+where
+    F: FnMut(RTCError, &'static str),
+{
+    unsafe extern "C" fn inner<F>(
+        f: *mut std::os::raw::c_void,
+        error: RTCError,
+        msg: *const std::os::raw::c_char,
+    ) where
+        F: FnMut(RTCError, &'static str),
+    {
+        let cb = &mut *(f as *mut F);
+        cb(error, std::ffi::CStr::from_ptr(msg).to_str().unwrap())
+    }
+
+    Some(inner::<F>)
+}
+
+/// Helper function to convert a Rust closure to `RTCMemoryMonitorFunction`
+/// callback.
+fn memory_monitor_function<F>(_f: &mut F) -> RTCMemoryMonitorFunction
+where
+    F: FnMut(isize, bool) -> bool,
+{
+    unsafe extern "C" fn inner<F>(f: *mut std::os::raw::c_void, bytes: isize, post: bool) -> bool
+    where
+        F: FnMut(isize, bool) -> bool,
+    {
+        let cb = &mut *(f as *mut F);
+        cb(bytes, post)
+    }
+
+    Some(inner::<F>)
 }

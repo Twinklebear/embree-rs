@@ -5,11 +5,16 @@ authors = ["Will Usher <will@willusher.io>"]
 edition = "2021"
 
 [dependencies]
-image = "0.23.0"
+image = "0.24.5"
 arcball = "1.1.0"
 cgmath = "0.18"
 clock_ticks = "0.1.1"
-wgpu = "0.12"
-winit = "0.26"
-futures = {version = "0.3", features = ["executor"]}
+egui = { version = "0.21", features = ["bytemuck"] }
+egui-winit = "0.21"
+egui-wgpu = "0.21"
+embree = { path = "../.." }
+wgpu = "0.15.1"
+winit = "0.28.1"
+futures = { version = "0.3", features = ["executor"]}
+rayon = "1.5"
 

@@ -1,22 +1,29 @@
-use std::iter::{ExactSizeIterator, Iterator};
-use std::marker::PhantomData;
-use std::u32;
+use crate::{normalise_vector3, INVALID_ID};
+use std::{
+    iter::{ExactSizeIterator, Iterator},
+    marker::PhantomData,
+};
 
 pub trait SoARay {
     fn org(&self, i: usize) -> [f32; 3];
     fn set_org(&mut self, i: usize, o: [f32; 3]);
 
-    fn dir(&self, i: usize) -> [f32; 3];
-    fn set_dir(&mut self, i: usize, d: [f32; 3]);
-
     fn tnear(&self, i: usize) -> f32;
     fn set_tnear(&mut self, i: usize, near: f32);
 
-    fn tfar(&self, i: usize) -> f32;
-    fn set_tfar(&mut self, i: usize, far: f32);
+    fn dir(&self, i: usize) -> [f32; 3];
+    fn set_dir(&mut self, i: usize, d: [f32; 3]);
+
+    fn unit_dir(&self, i: usize) -> [f32; 3] {
+        let dir = self.dir(i);
+        normalise_vector3(dir)
+    }
 
     fn time(&self, i: usize) -> f32;
     fn set_time(&mut self, i: usize, time: f32);
+
+    fn tfar(&self, i: usize) -> f32;
+    fn set_tfar(&mut self, i: usize, far: f32);
 
     fn mask(&self, i: usize) -> u32;
     fn set_mask(&mut self, i: usize, mask: u32);
@@ -30,24 +37,36 @@ pub trait SoARay {
 
 pub trait SoAHit {
     fn normal(&self, i: usize) -> [f32; 3];
+
+    fn unit_normal(&self, i: usize) -> [f32; 3];
+
     fn set_normal(&mut self, i: usize, n: [f32; 3]);
 
-    fn uv(&self, i: usize) -> (f32, f32);
+    fn u(&self, i: usize) -> f32;
+
+    fn v(&self, i: usize) -> f32;
+
+    fn uv(&self, i: usize) -> [f32; 2];
+
     fn set_u(&mut self, i: usize, u: f32);
+
     fn set_v(&mut self, i: usize, v: f32);
 
+    fn set_uv(&mut self, i: usize, uv: [f32; 2]);
+
     fn prim_id(&self, i: usize) -> u32;
+
     fn set_prim_id(&mut self, i: usize, id: u32);
 
     fn geom_id(&self, i: usize) -> u32;
+
     fn set_geom_id(&mut self, i: usize, id: u32);
 
     fn inst_id(&self, i: usize) -> u32;
+
     fn set_inst_id(&mut self, i: usize, id: u32);
 
-    fn hit(&self, i: usize) -> bool {
-        self.geom_id(i) != u32::MAX
-    }
+    fn is_valid(&self, i: usize) -> bool { self.geom_id(i) != INVALID_ID }
 }
 
 pub struct SoARayRef<'a, T> {
@@ -56,27 +75,14 @@ pub struct SoARayRef<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> SoARayRef<'a, T> {
-    pub fn origin(&self) -> [f32; 3] {
-        self.ray.org(self.idx)
-    }
-    pub fn dir(&self) -> [f32; 3] {
-        self.ray.dir(self.idx)
-    }
-    pub fn tnear(&self) -> f32 {
-        self.ray.tnear(self.idx)
-    }
-    pub fn tfar(&self) -> f32 {
-        self.ray.tfar(self.idx)
-    }
-    pub fn mask(&self) -> u32 {
-        self.ray.mask(self.idx)
-    }
-    pub fn id(&self) -> u32 {
-        self.ray.id(self.idx)
-    }
-    pub fn flags(&self) -> u32 {
-        self.ray.flags(self.idx)
-    }
+    pub fn origin(&self) -> [f32; 3] { self.ray.org(self.idx) }
+    pub fn dir(&self) -> [f32; 3] { self.ray.dir(self.idx) }
+    pub fn unit_dir(&self) -> [f32; 3] { self.ray.unit_dir(self.idx) }
+    pub fn tnear(&self) -> f32 { self.ray.tnear(self.idx) }
+    pub fn tfar(&self) -> f32 { self.ray.tfar(self.idx) }
+    pub fn mask(&self) -> u32 { self.ray.mask(self.idx) }
+    pub fn id(&self) -> u32 { self.ray.id(self.idx) }
+    pub fn flags(&self) -> u32 { self.ray.flags(self.idx) }
 }
 
 // TODO: Is this going to work well?
@@ -152,13 +158,7 @@ pub struct SoARayIter<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> SoARayIter<'a, T> {
-    pub fn new(ray: &'a T, len: usize) -> SoARayIter<'a, T> {
-        SoARayIter {
-            ray: ray,
-            cur: 0,
-            len: len,
-        }
-    }
+    pub fn new(ray: &'a T, len: usize) -> SoARayIter<'a, T> { SoARayIter { ray, cur: 0, len } }
 }
 
 impl<'a, T: SoARay + 'a> Iterator for SoARayIter<'a, T> {
@@ -169,7 +169,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIter<'a, T> {
             None
         } else {
             let i = self.cur;
-            self.cur = self.cur + 1;
+            self.cur += 1;
             Some(SoARayRef {
                 ray: self.ray,
                 idx: i,
@@ -179,9 +179,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIter<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> ExactSizeIterator for SoARayIter<'a, T> {
-    fn len(&self) -> usize {
-        self.len - self.cur
-    }
+    fn len(&self) -> usize { self.len - self.cur }
 }
 
 pub struct SoARayIterMut<'a, T> {
@@ -192,11 +190,7 @@ pub struct SoARayIterMut<'a, T> {
 
 impl<'a, T: SoARay + 'a> SoARayIterMut<'a, T> {
     pub fn new(ray: &'a mut T, len: usize) -> SoARayIterMut<'a, T> {
-        SoARayIterMut {
-            ray: ray,
-            cur: 0,
-            len: len,
-        }
+        SoARayIterMut { ray, cur: 0, len }
     }
 }
 
@@ -208,7 +202,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIterMut<'a, T> {
             None
         } else {
             let i = self.cur;
-            self.cur = self.cur + 1;
+            self.cur += 1;
             Some(SoARayRefMut {
                 ray: self.ray as *mut T,
                 idx: i,
@@ -219,9 +213,7 @@ impl<'a, T: SoARay + 'a> Iterator for SoARayIterMut<'a, T> {
 }
 
 impl<'a, T: SoARay + 'a> ExactSizeIterator for SoARayIterMut<'a, T> {
-    fn len(&self) -> usize {
-        self.len - self.cur
-    }
+    fn len(&self) -> usize { self.len - self.cur }
 }
 
 pub struct SoAHitRef<'a, T> {
@@ -230,24 +222,13 @@ pub struct SoAHitRef<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> SoAHitRef<'a, T> {
-    pub fn normal(&self) -> [f32; 3] {
-        self.hit.normal(self.idx)
-    }
-    pub fn uv(&self) -> (f32, f32) {
-        self.hit.uv(self.idx)
-    }
-    pub fn prim_id(&self) -> u32 {
-        self.hit.prim_id(self.idx)
-    }
-    pub fn geom_id(&self) -> u32 {
-        self.hit.geom_id(self.idx)
-    }
-    pub fn inst_id(&self) -> u32 {
-        self.hit.inst_id(self.idx)
-    }
-    pub fn hit(&self) -> bool {
-        self.hit.hit(self.idx)
-    }
+    pub fn normal(&self) -> [f32; 3] { self.hit.normal(self.idx) }
+    pub fn unit_normal(&self) -> [f32; 3] { self.hit.unit_normal(self.idx) }
+    pub fn uv(&self) -> [f32; 2] { self.hit.uv(self.idx) }
+    pub fn prim_id(&self) -> u32 { self.hit.prim_id(self.idx) }
+    pub fn geom_id(&self) -> u32 { self.hit.geom_id(self.idx) }
+    pub fn inst_id(&self) -> u32 { self.hit.inst_id(self.idx) }
+    pub fn is_valid(&self) -> bool { self.hit.is_valid(self.idx) }
 }
 
 pub struct SoAHitIter<'a, T> {
@@ -257,13 +238,7 @@ pub struct SoAHitIter<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> SoAHitIter<'a, T> {
-    pub fn new(hit: &'a T, len: usize) -> SoAHitIter<'a, T> {
-        SoAHitIter {
-            hit: hit,
-            cur: 0,
-            len: len,
-        }
-    }
+    pub fn new(hit: &'a T, len: usize) -> SoAHitIter<'a, T> { SoAHitIter { hit, cur: 0, len } }
 }
 
 impl<'a, T: SoAHit + 'a> Iterator for SoAHitIter<'a, T> {
@@ -274,7 +249,7 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIter<'a, T> {
             None
         } else {
             let i = self.cur;
-            self.cur = self.cur + 1;
+            self.cur += 1;
             Some(SoAHitRef {
                 hit: self.hit,
                 idx: i,
@@ -284,9 +259,7 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIter<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> ExactSizeIterator for SoAHitIter<'a, T> {
-    fn len(&self) -> usize {
-        self.len - self.cur
-    }
+    fn len(&self) -> usize { self.len - self.cur }
 }
 
 pub struct SoAHitRefMut<'a, T> {
@@ -300,11 +273,15 @@ impl<'a, T: SoAHit + 'a> SoAHitRefMut<'a, T> {
         let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
         hit.normal(self.idx)
     }
+    pub fn unit_normal(&self) -> [f32; 3] {
+        let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
+        hit.unit_normal(self.idx)
+    }
     pub fn set_normal(&mut self, n: [f32; 3]) {
         let hit = unsafe { self.hit.as_mut().expect("should never be null!") };
         hit.set_normal(self.idx, n)
     }
-    pub fn uv(&self) -> (f32, f32) {
+    pub fn uv(&self) -> [f32; 2] {
         let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
         hit.uv(self.idx)
     }
@@ -342,7 +319,7 @@ impl<'a, T: SoAHit + 'a> SoAHitRefMut<'a, T> {
     }
     pub fn hit(&self) -> bool {
         let hit = unsafe { self.hit.as_ref().expect("should never be null!") };
-        hit.hit(self.idx)
+        hit.is_valid(self.idx)
     }
 }
 
@@ -354,11 +331,7 @@ pub struct SoAHitIterMut<'a, T> {
 
 impl<'a, T: SoAHit + 'a> SoAHitIterMut<'a, T> {
     pub fn new(hit: &'a mut T, len: usize) -> SoAHitIterMut<'a, T> {
-        SoAHitIterMut {
-            hit: hit,
-            cur: 0,
-            len: len,
-        }
+        SoAHitIterMut { hit, cur: 0, len }
     }
 }
 
@@ -370,7 +343,7 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIterMut<'a, T> {
             None
         } else {
             let i = self.cur;
-            self.cur = self.cur + 1;
+            self.cur += 1;
             Some(SoAHitRefMut {
                 hit: self.hit as *mut T,
                 idx: i,
@@ -381,7 +354,5 @@ impl<'a, T: SoAHit + 'a> Iterator for SoAHitIterMut<'a, T> {
 }
 
 impl<'a, T: SoAHit + 'a> ExactSizeIterator for SoAHitIterMut<'a, T> {
-    fn len(&self) -> usize {
-        self.len - self.cur
-    }
+    fn len(&self) -> usize { self.len - self.cur }
 }

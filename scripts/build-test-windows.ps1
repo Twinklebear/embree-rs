@@ -15,14 +15,13 @@ if (!$?) {
 
 # build the examples
 cd examples
-#Get-ChildItem .\ -Directory | ForEach-Object {
-#	Write-Output $_
-	#cd $_
-    cd triangle
+Get-ChildItem .\ -Directory | Where-Object { $_.Name -ne "todos" } | ForEach-Object {
+	Write-Output $_
+	cd $_
 	cargo build
 	if (!$?) {
 		exit 1
 	}
 	cd ..
-#}
+}
 

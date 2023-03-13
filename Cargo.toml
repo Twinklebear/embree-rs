@@ -21,3 +21,8 @@ exclude = [
 	"examples/*"
 ]
 
+[workspace]
+members = [
+	"examples/*",
+]
+exclude = ["examples/todos"]
