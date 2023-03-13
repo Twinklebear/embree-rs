@@ -6,8 +6,8 @@ use embree::{
 };
 use glam::Vec3;
 use support::{
-    rgba_to_u32, Camera, IndexedParallelIterator, ParallelIterator, ParallelSliceMut, RgbaImage,
-    TiledImage, DEFAULT_DISPLAY_HEIGHT, DEFAULT_DISPLAY_WIDTH, TILE_SIZE_X, TILE_SIZE_Y,
+    rgba_to_u32, Camera, DebugState, IndexedParallelIterator, ParallelIterator, ParallelSliceMut,
+    TiledImage,
 };
 
 const NUM_SPHERES: usize = 20;
@@ -181,33 +181,20 @@ fn main() {
     scene.commit();
 
     let display = support::Display::new(512, 512, "Dynamic Scene");
-    let mut tiled = TiledImage::new(
-        DEFAULT_DISPLAY_WIDTH,
-        DEFAULT_DISPLAY_HEIGHT,
-        TILE_SIZE_X,
-        TILE_SIZE_Y,
-    );
+
+    let state = DebugState { scene, user: () };
+
     support::display::run(
         display,
-        move |image, camera_pose, time| {
-            for p in image.iter_mut() {
-                *p = 0;
-            }
-            let img_dims = image.dimensions();
-            let camera = Camera::look_dir(
-                camera_pose.pos,
-                camera_pose.dir,
-                camera_pose.up,
-                75.0,
-                img_dims,
-            );
-
+        state,
+        move |time, state| {
             for i in 0..NUM_SPHERES {
-                animate_sphere(&scene, i as u32, positions[i], radii[i], time);
+                animate_sphere(&state.scene, i as u32, positions[i], radii[i], time);
             }
-            scene.commit();
-
-            render_frame(&mut tiled, image, time, &scene, &camera, &colors);
+            state.scene.commit();
+        },
+        move |image, camera, time, state| {
+            render_frame(image, &camera, time, &colors, state);
         },
         |_| {},
     );
@@ -254,20 +241,17 @@ fn render_pixel(
 }
 
 fn render_frame(
-    tiled: &mut TiledImage,
-    frame: &mut RgbaImage,
-    time: f32,
-    scene: &Scene,
+    frame: &mut TiledImage,
     camera: &Camera,
+    time: f32,
     colors: &[Vec3],
+    state: &mut DebugState<()>,
 ) {
-    tiled.reset_pixels();
-    tiled.par_tiles_mut().for_each(|tile| {
+    frame.par_tiles_mut().for_each(|tile| {
         tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
             let x = tile.x + (i % tile.w as usize) as u32;
             let y = tile.y + (i / tile.w as usize) as u32;
-            render_pixel(x, y, pixel, time, scene, camera, colors);
+            render_pixel(x, y, pixel, time, &state.scene, camera, colors);
         });
     });
-    tiled.write_to_image(frame);
 }

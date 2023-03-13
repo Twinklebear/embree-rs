@@ -1,4 +1,4 @@
-use crate::INVALID_ID;
+use crate::{normalise_vector3, INVALID_ID};
 use std::{
     iter::{ExactSizeIterator, Iterator},
     marker::PhantomData,
@@ -13,6 +13,11 @@ pub trait SoARay {
 
     fn dir(&self, i: usize) -> [f32; 3];
     fn set_dir(&mut self, i: usize, d: [f32; 3]);
+
+    fn unit_dir(&self, i: usize) -> [f32; 3] {
+        let dir = self.dir(i);
+        normalise_vector3(dir)
+    }
 
     fn time(&self, i: usize) -> f32;
     fn set_time(&mut self, i: usize, time: f32);
@@ -72,6 +77,7 @@ pub struct SoARayRef<'a, T> {
 impl<'a, T: SoARay + 'a> SoARayRef<'a, T> {
     pub fn origin(&self) -> [f32; 3] { self.ray.org(self.idx) }
     pub fn dir(&self) -> [f32; 3] { self.ray.dir(self.idx) }
+    pub fn unit_dir(&self) -> [f32; 3] { self.ray.unit_dir(self.idx) }
     pub fn tnear(&self) -> f32 { self.ray.tnear(self.idx) }
     pub fn tfar(&self) -> f32 { self.ray.tfar(self.idx) }
     pub fn mask(&self) -> u32 { self.ray.mask(self.idx) }

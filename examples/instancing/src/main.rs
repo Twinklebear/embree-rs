@@ -5,12 +5,9 @@ extern crate support;
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Vector3, Vector4};
 use embree::{
     BufferUsage, BuildQuality, Device, Format, Geometry, Instance, IntersectContext, Ray, RayHit,
-    Scene, SceneFlags, INVALID_ID,
+    SceneFlags, INVALID_ID,
 };
-use support::{
-    rgba_to_u32, Camera, ParallelIterator, RgbaImage, TiledImage, DEFAULT_DISPLAY_WIDTH,
-    TILE_SIZE_X, TILE_SIZE_Y,
-};
+use support::{rgba_to_u32, Camera, DebugState, ParallelIterator, TiledImage};
 
 const NUM_PHI: usize = 5;
 const NUM_THETA: usize = 2 * NUM_PHI;
@@ -166,7 +163,7 @@ fn animate_instances(
     }
 }
 
-struct State {
+struct UserState {
     transforms: Vec<Matrix4<f32>>,
     normal_transforms: Vec<Matrix4<f32>>,
     ground_plane_id: u32,
@@ -214,50 +211,36 @@ fn main() {
     let ground_plane = create_ground_plane(&device);
     let ground_plane_id = scene.attach_geometry(&ground_plane);
 
-    let mut state = State {
+    let user_state = UserState {
         transforms: vec![Matrix4::identity(); instances.len()],
         normal_transforms: vec![Matrix4::identity(); instances.len()],
         ground_plane_id,
         light_dir: Vector3::new(1.0, 1.0, -1.0).normalize(),
     };
 
-    let mut tiled = TiledImage::new(
-        DEFAULT_DISPLAY_WIDTH,
-        DEFAULT_DISPLAY_WIDTH,
-        TILE_SIZE_X,
-        TILE_SIZE_Y,
-    );
+    let state = DebugState {
+        scene: scene.clone(),
+        user: user_state,
+    };
 
     support::display::run(
         display,
-        move |image, camera_pose, time| {
-            for p in image.iter_mut() {
-                *p = 0;
-            }
+        state,
+        move |time, state| {
             // Update scene transformations
             animate_instances(
                 time,
                 instances.len(),
-                &mut state.transforms,
-                &mut state.normal_transforms,
+                &mut state.user.transforms,
+                &mut state.user.normal_transforms,
             );
-            for (inst, tfm) in instances.iter_mut().zip(state.transforms.iter()) {
+            for (inst, tfm) in instances.iter_mut().zip(state.user.transforms.iter()) {
                 inst.set_transform(0, tfm.as_ref());
                 inst.commit();
             }
-            scene.commit();
-
-            let img_dims = image.dimensions();
-            let camera = Camera::look_dir(
-                camera_pose.pos,
-                camera_pose.dir,
-                camera_pose.up,
-                55.0,
-                img_dims,
-            );
-
-            render_frame(&mut tiled, image, time, &scene, &camera, &state);
+            state.scene.commit();
         },
+        render_frame,
         |_| {},
     );
 }
@@ -267,9 +250,8 @@ fn render_pixel(
     y: u32,
     pixel: &mut u32,
     _time: f32,
-    scene: &Scene,
     camera: &Camera,
-    state: &State,
+    state: &DebugState<UserState>,
 ) {
     let mut ctx = IntersectContext::coherent();
     let dir = camera.ray_dir((x as f32 + 0.5, y as f32 + 0.5));
@@ -279,7 +261,7 @@ fn render_pixel(
         0.001,
         f32::INFINITY,
     ));
-    scene.intersect(&mut ctx, &mut ray_hit);
+    state.scene.intersect(&mut ctx, &mut ray_hit);
 
     if ray_hit.hit.is_valid() {
         // Transform the normals of the instances into world space with the
@@ -289,7 +271,7 @@ fn render_pixel(
         let inst_id = hit.instID[0];
         let mut normal = Vector3::from(hit.unit_normal());
         if inst_id != INVALID_ID {
-            let v = state.normal_transforms[inst_id as usize]
+            let v = state.user.normal_transforms[inst_id as usize]
                 * Vector4::new(normal.x, normal.y, normal.z, 0.0);
             normal = Vector3::new(v.x, v.y, v.z).normalize()
         }
@@ -297,17 +279,21 @@ fn render_pixel(
         let shadow_pos = camera.pos + dir * ray_hit.ray.tfar;
         let mut shadow_ray = Ray::segment(
             shadow_pos.into(),
-            state.light_dir.into(),
+            state.user.light_dir.into(),
             0.001,
             f32::INFINITY,
         );
-        scene.occluded(&mut ctx, &mut shadow_ray);
+        state.scene.occluded(&mut ctx, &mut shadow_ray);
 
         if shadow_ray.tfar >= 0.0 {
-            illum = support::clamp(illum + f32::max(state.light_dir.dot(normal), 0.0), 0.0, 1.0);
+            illum = support::clamp(
+                illum + f32::max(state.user.light_dir.dot(normal), 0.0),
+                0.0,
+                1.0,
+            );
         }
 
-        *pixel = if inst_id == INVALID_ID && geom_id == state.ground_plane_id {
+        *pixel = if inst_id == INVALID_ID && geom_id == state.user.ground_plane_id {
             rgba_to_u32(
                 (255.0 * illum) as u8,
                 (255.0 * illum) as u8,
@@ -328,20 +314,16 @@ fn render_pixel(
 }
 
 fn render_frame(
-    tiled: &mut TiledImage,
-    frame: &mut RgbaImage,
-    time: f32,
-    scene: &Scene,
+    frame: &mut TiledImage,
     camera: &Camera,
-    state: &State,
+    time: f32,
+    state: &mut DebugState<UserState>,
 ) {
-    tiled.reset_pixels();
-    tiled.par_tiles_mut().for_each(|tile| {
+    frame.par_tiles_mut().for_each(|tile| {
         tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
             let x = tile.x + (i % tile.w as usize) as u32;
             let y = tile.y + (i / tile.w as usize) as u32;
-            render_pixel(x, y, pixel, time, scene, camera, &state);
+            render_pixel(x, y, pixel, time, camera, state);
         });
     });
-    tiled.write_to_image(frame);
 }

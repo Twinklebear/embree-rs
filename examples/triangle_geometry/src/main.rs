@@ -4,7 +4,7 @@ extern crate embree;
 extern crate support;
 
 use embree::{
-    BufferSlice, BufferUsage, Device, Format, IntersectContext, QuadMesh, Ray, RayHit, Scene,
+    BufferSlice, BufferUsage, Device, Format, IntersectContext, QuadMesh, Ray, RayHit,
     TriangleMesh, INVALID_ID,
 };
 use glam::Vec3;
@@ -36,23 +36,23 @@ fn make_cube(device: &Device, vertex_colors: &[[f32; 3]]) -> TriangleMesh<'stati
             .unwrap()
             .copy_from_slice(&[
                 // left side
-                [0, 2, 1],
-                [1, 2, 3],
+                [0, 1, 2],
+                [1, 3, 2],
                 // right side
-                [4, 5, 6],
-                [5, 7, 6],
+                [4, 6, 5],
+                [5, 6, 7],
                 // bottom side
-                [0, 1, 4],
-                [1, 5, 4],
+                [0, 4, 1],
+                [1, 4, 5],
                 // top side
-                [2, 6, 3],
-                [3, 6, 7],
+                [2, 3, 6],
+                [3, 7, 6],
                 // front side
-                [0, 4, 2],
-                [2, 4, 6],
+                [0, 2, 4],
+                [2, 6, 4],
                 // back side
-                [1, 3, 5],
-                [3, 7, 5],
+                [1, 5, 3],
+                [3, 5, 7],
             ]);
 
         mesh.set_vertex_attribute_count(1);
@@ -93,12 +93,13 @@ fn make_ground_plane(device: &Device) -> QuadMesh<'static> {
     mesh
 }
 
-struct State {
+type State = DebugState<UserState>;
+
+struct UserState {
     ground_id: u32,
     cube_id: u32,
     face_colors: Vec<[f32; 3]>,
     light_dir: Vec3,
-    scene: Scene<'static>,
 }
 
 fn main() {
@@ -107,6 +108,7 @@ fn main() {
     device.set_error_function(|err, msg| {
         println!("{}: {}", err, msg);
     });
+    let scene = device.create_scene().unwrap();
     let vertex_colors = vec![
         [0.0, 0.0, 0.0],
         [0.0, 0.0, 1.0],
@@ -118,7 +120,7 @@ fn main() {
         [1.0, 1.0, 1.0],
     ];
 
-    let mut state = State {
+    let user_state = UserState {
         face_colors: vec![
             [1.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
@@ -136,31 +138,21 @@ fn main() {
         ground_id: INVALID_ID,
         cube_id: INVALID_ID,
         light_dir: Vec3::new(1.0, 1.0, 1.0).normalize(),
-        scene: device.create_scene().unwrap(),
+    };
+
+    let mut state = State {
+        scene: scene.clone(),
+        user: user_state,
     };
 
     let cube = make_cube(&device, &vertex_colors);
     let ground = make_ground_plane(&device);
-    state.cube_id = state.scene.attach_geometry(&cube);
-    state.ground_id = state.scene.attach_geometry(&ground);
+    state.user.cube_id = state.scene.attach_geometry(&cube);
+    state.user.ground_id = state.scene.attach_geometry(&ground);
+
     state.scene.commit();
 
-    let mut tiled = TiledImage::new(DISPLAY_WIDTH, DISPLAY_HEIGHT, TILE_SIZE_X, TILE_SIZE_Y);
-    display::run(
-        display,
-        move |image, camera_pose, time| {
-            let camera = Camera::look_dir(
-                camera_pose.pos,
-                camera_pose.dir,
-                camera_pose.up,
-                75.0,
-                image.dimensions(),
-            );
-
-            render_frame(&mut tiled, image, time, &camera, &state);
-        },
-        |_ctx| {},
-    );
+    display::run(display, state, move |_, _| {}, render_frame, |_| {});
 }
 
 // Task that renders a single pixel.
@@ -176,15 +168,15 @@ fn render_pixel(x: u32, y: u32, _time: f32, camera: &Camera, state: &State) -> u
     state.scene.intersect(&mut ctx, &mut ray_hit);
     let mut pixel = 0;
     if ray_hit.hit.is_valid() {
-        let diffuse = if ray_hit.hit.geomID == state.ground_id {
+        let diffuse = if ray_hit.hit.geomID == state.user.ground_id {
             glam::vec3(0.6, 0.6, 0.6)
         } else {
-            glam::Vec3::from(state.face_colors[ray_hit.hit.primID as usize])
+            glam::Vec3::from(state.user.face_colors[ray_hit.hit.primID as usize])
         };
 
         let mut shadow_ray = Ray::segment(
             ray_hit.ray.hit_point(),
-            state.light_dir.into(),
+            state.user.light_dir.into(),
             0.001,
             f32::INFINITY,
         );
@@ -206,20 +198,12 @@ fn render_pixel(x: u32, y: u32, _time: f32, camera: &Camera, state: &State) -> u
     pixel
 }
 
-fn render_frame(
-    tiled: &mut TiledImage,
-    frame: &mut RgbaImage,
-    time: f32,
-    camera: &Camera,
-    state: &State,
-) {
-    tiled.reset_pixels();
-    tiled.par_tiles_mut().for_each(|tile| {
+fn render_frame(frame: &mut TiledImage, camera: &Camera, time: f32, state: &mut State) {
+    frame.par_tiles_mut().for_each(|tile| {
         tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
             let x = tile.x + (i % tile.w as usize) as u32;
             let y = tile.y + (i / tile.w as usize) as u32;
             *pixel = render_pixel(x, y, time, camera, state);
         });
     });
-    tiled.write_to_image(frame);
 }

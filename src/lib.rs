@@ -14,12 +14,8 @@
 extern crate core;
 
 use std::{
-    alloc,
-    marker::PhantomData,
-    mem,
-    mem::needs_drop,
+    alloc, mem,
     ops::{Deref, DerefMut},
-    ptr,
 };
 
 mod buffer;
@@ -55,7 +51,7 @@ pub type Bounds = sys::RTCBounds;
 /// For most geometry types the [`BufferUsage::INDEX`] slot is used to assign
 /// an index buffer, while the [`BufferUsage::VERTEX`] is used to assign the
 /// corresponding vertex buffer.
-///
+///car
 /// The [`BufferUsage::VERTEX_ATTRIBUTE`] slot can get used to assign
 /// arbitrary additional vertex data which can get interpolated using the
 /// [`Geometry::interpolate`] and [`Geometry::interpolate_n`] API calls.

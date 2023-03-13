@@ -15,8 +15,8 @@ use embree::{
 };
 use glam::{vec3, Mat4, Vec3, Vec4};
 use support::{
-    rgba_to_u32, Camera, Mode, ParallelIterator, RgbaImage, Tile, TiledImage,
-    DEFAULT_DISPLAY_HEIGHT, DEFAULT_DISPLAY_WIDTH, TILE_SIZE_X, TILE_SIZE_Y,
+    rgba_to_u32, Camera, DebugState, Mode, ParallelIterator, TileMut, TiledImage,
+    DEFAULT_DISPLAY_HEIGHT, DEFAULT_DISPLAY_WIDTH,
 };
 
 const CUBE_NUM_VERTICES: usize = 8;
@@ -180,7 +180,7 @@ fn render_pixel(x: u32, y: u32, camera: &Camera, scene: &Scene) -> u32 {
     )
 }
 
-fn render_tile(tile: &mut Tile, camera: &Camera, scene: &Scene) {
+fn render_tile(tile: &mut TileMut, camera: &Camera, scene: &Scene) {
     tile.pixels.iter_mut().enumerate().for_each(|(i, pixel)| {
         let x = tile.x + (i % tile.w as usize) as u32;
         let y = tile.y + (i / tile.w as usize) as u32;
@@ -188,7 +188,7 @@ fn render_tile(tile: &mut Tile, camera: &Camera, scene: &Scene) {
     });
 }
 
-fn render_tile_stream(tile: &mut Tile, width: u32, height: u32, camera: &Camera, scene: &Scene) {
+fn render_tile_stream(tile: &mut TileMut, width: u32, height: u32, camera: &Camera, scene: &Scene) {
     let tile_x_end = (tile.x + tile.w).min(width);
     let tile_y_end = (tile.y + tile.h).min(height);
     let tile_w = tile_x_end - tile.x;
@@ -325,23 +325,21 @@ fn render_tile_stream(tile: &mut Tile, width: u32, height: u32, camera: &Camera,
     }
 }
 
-fn render_frame(tiled: &mut TiledImage, frame: &mut RgbaImage, camera: &Camera, scene: &Scene) {
-    tiled.reset_pixels();
-    let width = tiled.width;
-    let height = tiled.height;
+fn render_frame(frame: &mut TiledImage, camera: &Camera, scene: &Scene) {
+    let width = frame.width;
+    let height = frame.height;
     match MODE {
         Mode::Normal => {
-            tiled
+            frame
                 .par_tiles_mut()
                 .for_each(|mut tile| render_tile(&mut tile, camera, scene));
         }
         Mode::Stream => {
-            tiled
+            frame
                 .par_tiles_mut()
                 .for_each(|mut tile| render_tile_stream(&mut tile, width, height, camera, scene));
         }
     }
-    tiled.write_to_image(frame);
 }
 
 fn intersect_filter<'a>(
@@ -593,28 +591,18 @@ fn main() {
         DEFAULT_DISPLAY_HEIGHT,
         "Intersection Filter",
     );
-    let mut tiled = TiledImage::new(
-        DEFAULT_DISPLAY_WIDTH,
-        DEFAULT_DISPLAY_HEIGHT,
-        TILE_SIZE_X,
-        TILE_SIZE_Y,
-    );
+
+    let state = DebugState {
+        scene: scene.clone(),
+        user: (),
+    };
+
     support::display::run(
         display,
-        move |image, camera_pose, time| {
-            for p in image.iter_mut() {
-                *p = 0;
-            }
-            let img_dims = image.dimensions();
-            let camera = Camera::look_dir(
-                camera_pose.pos,
-                camera_pose.dir,
-                camera_pose.up,
-                75.0,
-                img_dims,
-            );
-
-            render_frame(&mut tiled, image, &camera, &scene);
+        state,
+        |_, _| {},
+        move |image, camera, _, _| {
+            render_frame(image, &camera, &scene);
         },
         |_| {},
     );

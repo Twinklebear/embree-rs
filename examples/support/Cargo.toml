@@ -12,6 +12,7 @@ clock_ticks = "0.1.1"
 egui = { version = "0.21", features = ["bytemuck"] }
 egui-winit = "0.21"
 egui-wgpu = "0.21"
+embree = { path = "../.." }
 wgpu = "0.15.1"
 winit = "0.28.1"
 futures = { version = "0.3", features = ["executor"]}

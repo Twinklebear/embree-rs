@@ -4,6 +4,7 @@ extern crate embree;
 extern crate support;
 
 use embree::{BufferUsage, Device, Format, IntersectContext, RayHitNp, RayNp, TriangleMesh};
+use support::{rgba_to_u32, DebugState};
 
 fn main() {
     let display = support::Display::new(512, 512, "triangle");
@@ -38,12 +39,17 @@ fn main() {
     scene.attach_geometry(&triangle);
     scene.commit();
 
+    let state = DebugState { scene, user: () };
+
     support::display::run(
         display,
-        move |image, _, _| {
+        state,
+        |_, _| {},
+        move |image, _, _, state| {
             let mut intersection_ctx = IntersectContext::coherent();
+            image.reinterpret_as_none_tiled();
 
-            let img_dims = image.dimensions();
+            let img_dims = (image.width, image.height);
             // Render the scene
             for j in 0..img_dims.1 {
                 let y = -(j as f32 + 0.5) / img_dims.1 as f32 + 0.5;
@@ -58,18 +64,18 @@ fn main() {
                 }
 
                 let mut ray_hit = RayHitNp::new(rays);
-                scene.intersect_stream_soa(&mut intersection_ctx, &mut ray_hit);
+                state
+                    .scene
+                    .intersect_stream_soa(&mut intersection_ctx, &mut ray_hit);
                 for (i, hit) in ray_hit
                     .hit
                     .iter()
                     .enumerate()
                     .filter(|(_i, h)| h.is_valid())
                 {
-                    let p = image.get_pixel_mut(i as u32, j);
+                    let pixel = &mut image.pixels[i + (j * img_dims.0) as usize];
                     let uv = hit.uv();
-                    p[0] = (uv[0] * 255.0) as u8;
-                    p[1] = (uv[1] * 255.0) as u8;
-                    p[2] = 0;
+                    *pixel = rgba_to_u32((uv[0] * 255.0) as u8, (uv[1] * 255.0) as u8, 0, 255);
                 }
             }
         },
